@@ -1,0 +1,30 @@
+# Site-local paths: this cluster, this moment. Never published.
+config/site.local.sh
+
+# Data, assemblies, graphs, intermediates -- none of this is version control's job
+data/
+assemblies/
+graphs/
+*.fasta
+*.fasta.gz
+*.fa
+*.fa.gz
+*.gfa
+*.og
+*.bam
+*.cram
+*.vcf
+*.vcf.gz
+*.sif
+logs/
+*.log
+__pycache__/
+
+# Pipeline outputs: regenerable, and large
+refbias/*/
+!refbias/bin/
+accessory/*/
+!accessory/bin/
+is6110/assets/
+sv2frame/*/
+!sv2frame/bin/
