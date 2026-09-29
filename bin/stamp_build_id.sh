@@ -24,6 +24,20 @@
 # provenance step that fails quietly is worse than one that is absent.
 set -euo pipefail
 
+# --restamp replaces an existing stamp instead of skipping the file. Needed when
+# a field is ADDED to the stamp: the idempotence guard below is keyed on
+# ##MTB_graph_build, so a file stamped by an older version would otherwise keep
+# a stamp that is missing the new fields, silently.
+RESTAMP=0
+_args=()
+for _a in "$@"; do
+    case "$_a" in
+        --restamp) RESTAMP=1 ;;
+        *) _args+=("$_a") ;;
+    esac
+done
+set -- "${_args[@]+"${_args[@]}"}"
+
 _mtb_env=""
 for _c in "${MTB_ENV_FILE:-}" \
           "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)/config/project_env.sh" \
@@ -88,6 +102,13 @@ GRAPH_FP="$(printf '%s' "$GRAPH_BASE" \
 # absent field is honest; a fabricated one is not.
 PANEL_REPO="$(_info panel_repo)"
 PANEL_COMMIT="$(_info panel_commit)"
+PANEL_DIRTY="$(_info panel_dirty)"
+# How that identity was obtained: recorded by the builder, inferred after the
+# fact, or absent. Stamped whenever the build says anything about it, so a
+# reader is never left guessing whether an absent commit means unknown or
+# unasked.
+PANEL_PROV="$(_info panel_provenance)"
+PANEL_BASIS="$(_info panel_commit_basis)"
 [[ -n "$BUILD_ID" ]] || { echo "[stamp] ${BUILD}/build_info.tsv has no build_id" >&2; exit 1; }
 MANIFEST_SHA="-"
 [[ -s "${BUILD}/manifest.tsv" ]] && \
@@ -96,18 +117,22 @@ MANIFEST_SHA="-"
 for vcf in "$@"; do
     [[ -s "$vcf" ]] || { echo "[stamp] missing: $vcf" >&2; exit 1; }
     if "$BCFTOOLS" view -h "$vcf" 2>/dev/null | grep -q '^##MTB_graph_build='; then
-        echo "[stamp] already stamped: $vcf"
-        continue
+        if [[ "$RESTAMP" -eq 0 ]]; then
+            echo "[stamp] already stamped: $vcf"
+            continue
+        fi
+        echo "[stamp] restamping: $vcf"
     fi
     hdr="${vcf}.hdr.$$"
     new="${vcf}.stamped.$$"
-    "$BCFTOOLS" view -h "$vcf" > "$hdr"
+    "$BCFTOOLS" view -h "$vcf" | grep -v '^##MTB_' > "$hdr"
     # Insert before #CHROM. Header lines must precede it, and appending after it
     # would produce a VCF that parsers silently mis-read rather than reject.
     awk -v id="$BUILD_ID" -v g="$GRAPH" -v gs="$GRAPH_SHA" \
         -v ms="$MANIFEST_SHA" -v bd="$BUILD" \
         -v gb="$GRAPH_BASE" -v gf="$GRAPH_FP" \
-        -v pr="$PANEL_REPO" -v pc="$PANEL_COMMIT" '
+        -v pr="$PANEL_REPO" -v pc="$PANEL_COMMIT" -v pd="$PANEL_DIRTY" \
+        -v pp="$PANEL_PROV" -v pbs="$PANEL_BASIS" '
         /^#CHROM/ && !done {
             printf "##MTB_graph_build=%s\n", id
             printf "##MTB_graph=%s\n", g
@@ -118,6 +143,9 @@ for vcf in "$@"; do
             printf "##MTB_p0_manifest_sha256=%s\n", ms
             if (pr != "") printf "##MTB_panel_repo=%s\n", pr
             if (pc != "") printf "##MTB_panel_commit=%s\n", pc
+            if (pd != "") printf "##MTB_panel_tree=%s\n", pd
+            if (pp != "") printf "##MTB_panel_provenance=%s\n", pp
+            if (pbs != "") printf "##MTB_panel_commit_basis=%s\n", pbs
             done = 1
         }
         { print }

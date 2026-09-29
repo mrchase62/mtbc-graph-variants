@@ -104,6 +104,21 @@ step_stamp() {
         echo "graph_bytes\t$(stat -c%s "$OG")"
         echo "created\t$(date -Is)"
         echo "created_by\t${USER:-unknown}"
+        # CARRY THE PANEL REPOSITORY'S IDENTITY FORWARD. pggb_build.sh writes
+        # graph_provenance.tsv beside the graph recording which repository and
+        # commit built it. That is the only place that information exists once
+        # panel construction is a separate repository, so it is copied into the
+        # build stamp here and from there into every VCF header.
+        #
+        # When the sidecar is absent -- any graph built before this existed --
+        # the keys are NOT invented. An explicit marker is written instead, so a
+        # reader can tell "nobody recorded this" from "nobody asked".
+        _gprov="$(dirname "$OG")/graph_provenance.tsv"
+        if [[ -s "$_gprov" ]]; then
+            awk -F'\t' '$1=="panel_repo"||$1=="panel_commit"||$1=="panel_dirty"||$1=="pggb_args"{print $1"\t"$2}' "$_gprov"
+        else
+            echo "panel_provenance\tabsent:graph_predates_provenance_sidecar"
+        fi
     } | sed 's/\\t/\t/g' > "${BUILD}/build_info.tsv"
     _say "stamp: ${BUILD}/build_info.tsv"
     _mark stamp
