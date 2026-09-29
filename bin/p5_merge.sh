@@ -263,6 +263,9 @@ fi
 "$MTB_PY" bin/p5_states.py --sample "$SAMPLE" --reference "$REFID" \
     --keys "$KEYS" --placed "$PLACED" --gvcf "$GVCF" --h37rv "$H37RV_FA" \
     --projected "$PROJ" \
-    --out "${OUTDIR}/${SAMPLE}.states.tsv"
+    --out "${OUTDIR}/${SAMPLE}.states.tsv.tmp"
+# renamed only once complete: the skip above trusts any states file whose
+# checksum matches, so a task killed mid-write must not leave one behind
+mv -f "${OUTDIR}/${SAMPLE}.states.tsv.tmp" "${OUTDIR}/${SAMPLE}.states.tsv"
 # nothing per-sample to remove: the projection is a shared cache
 echo "[P5] ${SAMPLE}: done"

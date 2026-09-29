@@ -201,6 +201,40 @@ class SvReverseStrand(unittest.TestCase):
             self.assertNotEqual(r.returncode, 0)
 
 
+class Importers(unittest.TestCase):
+    """Found regenerating scale200: renaming a p5_states function broke the
+    SV genotyper, which imports it. Every script that imports a sibling must
+    still load."""
+
+    def test_sibling_imports_resolve(self):
+        for rel in ("bin/p5_sv_genotype.py", "bin/p5_matrix.py",
+                    "bin/merge_cohort_vcf.py", "bin/p5_keys.py", "bin/p5_states.py"):
+            r = subprocess.run([sys.executable, "-c",
+                                f"import runpy,sys; sys.argv=['x','--help']; "
+                                f"runpy.run_path('{rel}', run_name='__main__')"],
+                               capture_output=True, text=True)
+            self.assertNotIn("ImportError", r.stderr, rel)
+            self.assertNotIn("ModuleNotFoundError", r.stderr, rel)
+
+
+class ProjectionStore(unittest.TestCase):
+    """Found regenerating scale200: `add` failed for any store path with /../"""
+
+    def test_add_with_dotdot_in_store_path(self):
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "a"))
+            store = os.path.join(d, "a", "..", "store")        # contains /../
+            res = write(os.path.join(d, "r.pos"),
+                        "#h\nR#1#c,9,+\tH#1#h,19,+\t0\t+\t+\n")
+            r = subprocess.run([sys.executable, "bin/proj_store.py", "add",
+                                "--store", store, "--ref", "R", "--result", res],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            got = os.listdir(os.path.join(d, "store", "R"))
+            self.assertEqual(len([f for f in got if f.endswith(".pos")]), 1)
+            self.assertFalse([f for f in got if f.endswith(".tmp")])
+
+
 class RunnerCohortTable(unittest.TestCase):
     """CODE_REVIEW 6.7 and 6.3: blank lines inflated N; --cohort was rejected."""
 

@@ -109,6 +109,41 @@ def load_gvcf(path):
     return blocks, alt_spans, alt_at
 
 
+def load_gvcf_blocks(path):
+    """Sorted (start, end, dp) over EVERY gVCF line, reference or variant.
+
+    The original reader, kept for p5_sv_genotype.py, which imports it: depth
+    across a deletion interval is read coverage whatever the genotype of each
+    line, so counting variant lines is right there. It is NOT evidence of REF
+    at a single key -- p5_states.py itself uses load_gvcf() for that.
+    """
+    blocks = []
+    for line in op(path):
+        if line.startswith("#"):
+            continue
+        f = line.rstrip("\n").split("\t")
+        if len(f) < 10:
+            continue
+        pos = int(f[1])
+        end = pos
+        for kv in f[7].split(";"):
+            if kv.startswith("END="):
+                try:
+                    end = int(kv[4:])
+                except ValueError:
+                    pass
+        keys, vals = f[8].split(":"), f[9].split(":")
+        dp = 0
+        if "DP" in keys:
+            try:
+                dp = int(vals[keys.index("DP")])
+            except (ValueError, IndexError):
+                dp = 0
+        blocks.append((pos, max(end, pos), dp))
+    blocks.sort()
+    return blocks
+
+
 def make_cov(blocks, min_dp):
     starts = [b[0] for b in blocks]
 
