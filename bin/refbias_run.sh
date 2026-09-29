@@ -94,6 +94,10 @@ while [[ $# -gt 0 ]]; do
         --dry-run)  DRY=1; shift ;;
         --throttle) THROTTLE="$2"; shift 2 ;;
         --status)   STATUS=1; shift ;;
+        # README and INPUTS.md document `--cohort <name>`; the positional form
+        # is kept as well so existing invocations do not break.
+        --cohort)   [[ -z "$COHORT_NAME" ]] || die "one cohort at a time"
+                    COHORT_NAME="$2"; shift 2 ;;
         -h|--help)  sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*)         die "unknown option $1" ;;
         *)          [[ -z "$COHORT_NAME" ]] || die "one cohort at a time"
@@ -111,13 +115,36 @@ WORKPFX="$(lookup "$COHORT_NAME" 7)"
 [[ -n "$WORKPFX" ]] || die "cohort '${COHORT_NAME}' has no workprefix in ${REGISTRY}"
 [[ -s "$COHORT" ]] || die "cohort table ${COHORT} does not exist"
 [[ -s "$CRAMS" ]]  || die "CRAM table ${CRAMS} does not exist"
-N=$(( $(grep -vc '^#' "$COHORT") - 1 ))   # minus the header row
+# Every per-sample task reads row TASK_ID+1 of the raw file, so N must count
+# exactly the rows after the header, and nothing but trailing blank lines may
+# sit among them. `grep -vc '^#'` counted blank lines, so a trailing newline
+# gave N+1 tasks and the last one failed with "no cohort row", which afterok
+# turned into a cancelled chain. A blank or comment line BETWEEN rows is worse:
+# every later task would read its neighbour's sample, so it is refused.
+N="$(awk -F'\t' 'NR==1{next} $1!="" && $1!~/^#/{last=NR; n++} END{print n+0}' "$COHORT")"
+_gap="$(awk -F'\t' 'NR==1{next} $1!="" && $1!~/^#/{if(bad){print bad; exit} next}
+                    {if(!bad) bad=NR}' "$COHORT")"
+[[ -z "$_gap" ]] || die "cohort table ${COHORT} has a blank or comment line at line ${_gap} between sample rows; task indices would shift"
 [[ "$N" -gt 0 ]] || die "cohort table ${COHORT} has no rows"
 
 # --- build and graph, from the build record and not from a glob -------------
-BUILD="${MTB_BUILD_DIR:-$(ls -dt "${BUILD_ROOT}"/*/ 2>/dev/null | head -1)}"
+# Not the newest by mtime: re-running any P0 step on an old build rewrites a
+# file in it and made that build "newest", so a chain would run against the
+# old graph. Use MTB_BUILD_DIR when set; otherwise require exactly one build
+# whose manifest step completed, and refuse to guess between several.
+if [[ -n "${MTB_BUILD_DIR:-}" ]]; then
+    BUILD="$MTB_BUILD_DIR"
+else
+    mapfile -t _builds < <(for _b in "${BUILD_ROOT}"/*/; do
+        [[ -s "${_b}logs/manifest.done" ]] && printf '%s\n' "${_b%/}"; done)
+    case "${#_builds[@]}" in
+        1) BUILD="${_builds[0]}" ;;
+        0) die "no completed build (logs/manifest.done) under ${BUILD_ROOT}; run bin/p0_prepare.sh or set MTB_BUILD_DIR" ;;
+        *) die "${#_builds[@]} completed builds under ${BUILD_ROOT} (${_builds[*]}); set MTB_BUILD_DIR to choose one" ;;
+    esac
+fi
 BUILD="${BUILD%/}"
-[[ -d "$BUILD" ]] || die "no build directory under ${BUILD_ROOT}"
+[[ -d "$BUILD" ]] || die "no build directory ${BUILD}"
 INFO="${BUILD}/build_info.tsv"
 [[ -s "$INFO" ]] || die "no build_info.tsv in ${BUILD}; run bin/p0_prepare.sh --step stamp"
 OG="$(awk -F'\t' '$1=="graph"{print $2}' "$INFO")"
@@ -196,20 +223,29 @@ if [[ "$STATUS" -eq 1 ]]; then
         # sample. P2 writes both <sample>.vcf.gz and <sample>.g.vcf.gz, so a
         # bare *.vcf.gz counts every isolate twice -- the same glob mistake
         # that cost two debugging rounds in the IS6110 work on 2026-09-21.
+        # Globs, not `ls | wc -l`: under pipefail an empty directory made ls
+        # fail and --status exited at the first pass with no outputs. And
+        # every pass needs its own case -- p1g onward used to fall through and
+        # reuse p5's pattern.
+        skip=""
         case "$p" in
-            p1)  pat="*.candidates.tsv" ;;
-            p2)  pat="*.vcf.gz" ; skip="*.g.vcf.gz" ;;
-            p3)  pat="*.copynumber.tsv" ;;
-            p4)  pat="*.placed.tsv" ;;
-            p4b) pat="*.sv_placed.tsv" ;;
-            p5)  pat="*.states.tsv" ;;
+            p1)   pat="*.candidates.tsv" ;;
+            p2)   pat="*.vcf.gz" ; skip=".g.vcf.gz" ;;
+            p3)   pat="*.copynumber.tsv" ;;
+            p4)   pat="*.placed.tsv" ;;
+            p4b)  pat="*.sv_placed.tsv" ;;
+            p5)   pat="*.states.tsv" ;;
+            p1g|p1i) pat="*.junctions.tsv" ;;
+            *)    printf "%-5s %-26s %8s %8s\n" "$p" "(cohort-level pass)" "-" "-"
+                  continue ;;
         esac
-        if [[ "${skip:-}" ]]; then
-            n=$(ls "$d"/$pat 2>/dev/null | grep -cv "${skip#\*}" || true)
-            skip=""
-        else
-            n=$(ls "$d"/$pat 2>/dev/null | wc -l)
-        fi
+        n=0
+        shopt -s nullglob
+        for _f in "$d"/$pat; do
+            [[ -n "$skip" && "$_f" == *"$skip" ]] && continue
+            n=$((n + 1))
+        done
+        shopt -u nullglob
         if [[ "$n" -eq "$N" ]]; then note=""
         elif [[ "$n" -lt "$N" ]]; then note="   <-- $((N-n)) missing"
         else note="   <-- $((n-N)) MORE than the cohort; check the pattern"; fi
@@ -238,7 +274,17 @@ DIRS="${DIRS},P6DIR=${OUTROOT}/p6"
 DIRS="${DIRS},P1GDIR=${OUTROOT}/p1g,P1IDIR=${OUTROOT}/p1i"
 DIRS="${DIRS},P1IVCF=${OUTROOT}/p1i/vcf"
 DIRS="${DIRS},P1WORK=${WORKPFX}p1,P2WORK=${WORKPFX}p2"
-EXPORT="ALL,MTB_BUILD_DIR=${BUILD},BUILD_ROOT=${BUILD_ROOT},OG=${OG}"
+# The panel-vs-refs frame table is a build asset (p0_prepare.sh --step frames).
+# Older builds predate that step; they fall back to graph_frame.py's default
+# table, with a warning, rather than failing a chain that ran before.
+FRAMES="${MTB_GRAPH_FRAMES:-${BUILD}/assets/graph_frame_offsets.tsv}"
+if [[ ! -s "$FRAMES" ]]; then
+    echo "WARNING: no frame table at ${FRAMES}; run bin/p0_prepare.sh --step frames." >&2
+    echo "         Falling back to graphframe/results/graph_frame_offsets.tsv." >&2
+    FRAMES="${HERE}/graphframe/results/graph_frame_offsets.tsv"
+    [[ -s "$FRAMES" ]] || die "no frame table there either; run bin/p0_prepare.sh --step frames"
+fi
+EXPORT="ALL,MTB_BUILD_DIR=${BUILD},BUILD_ROOT=${BUILD_ROOT},OG=${OG},MTB_GRAPH_FRAMES=${FRAMES}"
 EXPORT="${EXPORT},COHORT=${COHORT},CRAMMAP=${CRAMS},CRAMS=${CRAMS},REFMAP=${REFMAP}"
 EXPORT="${EXPORT},${DIRS}"
 mkdir -p slurm
@@ -274,8 +320,23 @@ submit() {  # name script extra_export array dep
         echo "DRYRUN_${name}"
         return
     fi
+    # A rejected submission (QOS or submit limit, bad partition) must stop the
+    # chain. Inside the caller's $(...) set -e does not apply, so an sbatch
+    # failure used to return an empty id with status 0; deps() then dropped it
+    # and the next pass went in with NO dependency, running on stale inputs.
+    # Die here, in the subshell, AND print nothing, so the caller's check fails.
     local id
-    id="$(sbatch --parsable "${args[@]}" "$script")"
+    if ! id="$(sbatch --parsable "${args[@]}" "$script")"; then
+        echo "FATAL: sbatch rejected ${name} (${script}); stopping the chain" >&2
+        [[ ${#JOB[@]} -gt 0 ]] && \
+            echo "       already submitted, cancel if unwanted: scancel ${JOB[*]}" >&2
+        return 1
+    fi
+    id="${id%%;*}"                       # --parsable may append ";cluster"
+    if [[ ! "$id" =~ ^[0-9]+$ ]]; then
+        echo "FATAL: sbatch returned no job id for ${name}: '${id}'" >&2
+        return 1
+    fi
     echo "$id"
 }
 
@@ -344,7 +405,10 @@ for p in "${RUN[@]}"; do
         JOB[p5states]=$(submit p5states bin/p5_merge.sh "${P5EX},P5STEP=--states" "1-${N}" "${JOB[p5keys]:-}")
         # --pre only: matrix, validation, sanity, SV matrix, P6. The merged VCF
         # is pass p5vcf, after the two genotyping passes below.
-        JOB[p5]=$(submit p5pre bin/p5_finish.sh "${P5EX},P5FSTEP=--pre" "" "${JOB[p5states]:-}")
+        # --pre also builds sv_matrix.tsv from P4b, and p4 and p4b run in
+        # parallel off p2, so it must wait for BOTH or it reads a partial P4b.
+        JOB[p5]=$(submit p5pre bin/p5_finish.sh "${P5EX},P5FSTEP=--pre" "" \
+                  "$(deps "${JOB[p5states]:-}" "${JOB[p4b]:-}")")
         ;;
       p1g)
         # fixed-reference arm: every isolate against the same cut-down H37Rv.

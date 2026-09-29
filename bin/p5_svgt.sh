@@ -76,7 +76,7 @@ else
     OUTSUF="svgt"
 fi
 OG="${OG:-$(ls graphs/CX333.s10k.k23.K15/*.smooth.final.og 2>/dev/null | head -1)}"
-ODGI="${MTB_ODGI:-/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/odgi/bin/odgi}"
+ODGI="${MTB_ODGI:?MTB_ODGI is unset; see config/project_env.sh}"
 H37RV_PATH="${H37RV_PATH:-GCF_000195955#1#NC_000962.3}"
 PATHS="${BUILD}/assets/paths.txt"
 PROBES="${WORK}/${PROBES_NAME}"
@@ -130,7 +130,14 @@ else
 fi
 [[ -n "${SAMPLE:-}" ]] || { echo "FATAL: no refmap row" >&2; exit 1; }
 OUT="${SVDIR}/${SAMPLE}.${OUTSUF}.tsv"
-[[ -s "$OUT" ]] && { echo "[P5svgt] ${SAMPLE}: already done"; exit 0; }
+# Done only if written AFTER the current probe list. The probes are rebuilt
+# from the SV matrix or interval catalogue by --probes, and SV keys shift when
+# cluster membership changes, so an older per-sample table either fails to join
+# or -- worse -- joins to the wrong cluster. The skip used to test existence.
+if [[ -s "$OUT" && "$OUT" -nt "$PROBES" ]]; then
+    echo "[P5svgt] ${SAMPLE}: already done against the current probes"; exit 0
+fi
+[[ -s "$OUT" ]] && echo "[P5svgt] ${SAMPLE}: output predates ${PROBES}; recomputing"
 
 REFID="$(awk -F'\t' -v s="$SAMPLE" '$1==s{print $5; exit}' "$REFMAP")"
 RPATH="$(grep -m1 "^${REFID}#" "$PATHS" || true)"

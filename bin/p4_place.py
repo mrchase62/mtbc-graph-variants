@@ -65,23 +65,55 @@ def load_vcf(path):
 
 
 def load_intervals(bed):
+    """PE/PPE and other masked intervals, each MERGED and sorted.
+
+    The class is the mask's own first name field (`pe_ppe|PPE1|named`), which
+    build_repeat_mask.py writes for every row; the old test, "PE" anywhere in
+    the upper-cased name, is kept only for a BED without that field, since it
+    also matches unrelated names that merely contain the letters.
+    """
     pe, other = [], []
     for line in open(bed):
         f = line.split()
         if len(f) < 3:
             continue
         s, e = int(f[1]), int(f[2])
-        name = f[3].upper() if len(f) > 3 else ""
-        (pe if ("PE" in name or "PPE" in name) else other).append((s, e))
-    pe.sort(); other.sort()
-    return pe, other
+        name = f[3] if len(f) > 3 else ""
+        klass = name.split("|", 1)[0].lower() if "|" in name else ""
+        is_pe = (klass == "pe_ppe") if klass else ("PE" in name.upper())
+        (pe if is_pe else other).append((s, e))
+    return merge_intervals(pe), merge_intervals(other)
+
+
+def merge_intervals(iv):
+    """Union of half-open intervals, sorted and non-overlapping.
+
+    The mask is heavily nested -- PE_PGRS4 336359-339273 contains
+    336559-339142 -- and a lookup that tests only the last interval starting
+    at or before a position misses every base of the outer interval past the
+    inner one's end: 13% of masked bases were routed as core that way.
+    Merging first makes the single-interval test exact.
+    """
+    out = []
+    for s, e in sorted(iv):
+        if out and s <= out[-1][1]:
+            out[-1][1] = max(out[-1][1], e)
+        else:
+            out.append([s, e])
+    return [tuple(x) for x in out]
 
 
 def make_hit(iv):
+    """Membership test for a 1-based position against 0-based half-open BED.
+
+    BED [s, e) covers 1-based positions s+1 .. e, so the test is s < p <= e.
+    The old `s <= p < e` compared a VCF POS as if it were 0-based, which
+    misassigned the base on each side of every interval. `iv` must be merged.
+    """
     starts = [x[0] for x in iv]
     def hit(p):
-        i = bisect.bisect_right(starts, p) - 1
-        return i >= 0 and iv[i][0] <= p < iv[i][1]
+        i = bisect.bisect_left(starts, p) - 1      # last start strictly < p
+        return i >= 0 and iv[i][0] < p <= iv[i][1]
     return hit
 
 
@@ -141,8 +173,7 @@ def main():
     ap.add_argument("--node-pos", required=True)
     ap.add_argument("--mask", required=True)
     ap.add_argument("--loci", required=True)
-    ap.add_argument("--graph-vcf",
-                    default="graphs/CX333.s10k.k23.K15/all_variants.nolab.vcf.gz",
+    ap.add_argument("--graph-vcf", required=True,
                     help="source of the inherited half of the composed arm")
     ap.add_argument("--acc-tol", type=int, default=50)
     ap.add_argument("--near-tol", type=int, default=50,
@@ -199,7 +230,10 @@ def main():
             return pos_h, ref, alt, "unhandled_shape"
         D, I = ref[1:], alt[1:]
         newpos = pos_h - len(D) - 1
-        if newpos < 1 or newpos + len(D) > len(hseq):
+        # the upper bound needs the H37Rv sequence; without --h37rv every
+        # reverse-strand indel used to fail it (len("") == 0) and was marked
+        # off_the_end rather than handled from R's sequence as documented
+        if newpos < 1 or (hseq and newpos + len(D) > len(hseq)):
             return pos_h, ref, alt, "off_the_end"
         h_anchor = hseq[newpos - 1] if hseq else ""
         r_anchor = (rseq[r_pos + len(D)].translate(comp)
@@ -271,9 +305,14 @@ def main():
 
     # --- composed arm, called half: masked sequence and all off-path ----------
     n_off = 0
+    n_noproj = collections.Counter()
     for (pos, ref, alt, qual), hp, np_ in zip(matched, hpos, npos):
         r_pos = pos      # the matched reference's own coordinate
         if hp is None or np_ is None:
+            # counted, not silently skipped: the 5% guard above covers only
+            # the H37Rv projection, and a record with no NODE projection was
+            # dropped here without appearing in any tally
+            n_noproj["no H37Rv projection" if hp is None else "no node projection"] += 1
             continue
         h, dist, strand = hp[0], hp[1], hp[2] or "+"
         node, off = np_[0], np_[1]
@@ -324,46 +363,48 @@ def main():
     # using in PE/PPE at all, and it is labelled so downstream can weigh it.
     called_at = {r["h37rv_pos"] for r in rows if r["frame"] == "h37rv"}
     n_inh = 0
-    if os.path.exists(a.graph_vcf):
-        hdr = None
+    if not os.path.exists(a.graph_vcf):
+        sys.exit(f"FATAL: --graph-vcf {a.graph_vcf} does not exist; the "
+                 f"inherited half would be silently empty")
+    hdr = None
+    for line in op(a.graph_vcf):
+        if line.startswith("#CHROM"):
+            hdr = line.rstrip("\n").split("\t"); break
+    if hdr and a.reference in hdr[9:]:
+        col = 9 + hdr[9:].index(a.reference)
         for line in op(a.graph_vcf):
-            if line.startswith("#CHROM"):
-                hdr = line.rstrip("\n").split("\t"); break
-        if hdr and a.reference in hdr[9:]:
-            col = 9 + hdr[9:].index(a.reference)
-            for line in op(a.graph_vcf):
-                if line.startswith("#"):
-                    continue
-                f = line.rstrip("\n").split("\t")
-                if len(f) <= col:
-                    continue
-                g = f[col].split(":", 1)[0]
-                if not g.isdigit() or g == "0":
-                    continue
-                pos, ref = int(f[1]), f[3].upper()
-                alts = f[4].upper().split(",")
-                ai = int(g)
-                if ai > len(alts):
-                    continue
-                alt = alts[ai - 1]
-                if set(ref + alt) - set("ACGTN"):
-                    continue
-                if region(pos) == "core" or pos in called_at:
-                    continue
-                n_inh += 1
-                rows.append(dict(
-                    sample=a.sample, reference=a.reference, build_id=a.build_id,
-                    arm="composed", component="inherited", region=region(pos),
-                    frame="h37rv", key=f"h37rv:{pos}", r_pos="", h37rv_pos=pos,
-                    dist_to_ref=0, node="", node_offset="",
-                    frame_strand="+", ref=ref, alt=alt,
-                    kind=classify(ref, alt),
-                    size=abs(len(strip_gap(alt)) - len(strip_gap(ref))),
-                    acc_locus="", qual="."))
-        else:
-            print(f"  WARNING: {a.reference} has no column in {a.graph_vcf}; "
-                  f"the inherited half of the composed arm is EMPTY for this "
-                  f"sample, which understates its recall", file=sys.stderr)
+            if line.startswith("#"):
+                continue
+            f = line.rstrip("\n").split("\t")
+            if len(f) <= col:
+                continue
+            g = f[col].split(":", 1)[0]
+            if not g.isdigit() or g == "0":
+                continue
+            pos, ref = int(f[1]), f[3].upper()
+            alts = f[4].upper().split(",")
+            ai = int(g)
+            if ai > len(alts):
+                continue
+            alt = alts[ai - 1]
+            if set(ref + alt) - set("ACGTN"):
+                continue
+            if region(pos) == "core" or pos in called_at:
+                continue
+            n_inh += 1
+            rows.append(dict(
+                sample=a.sample, reference=a.reference, build_id=a.build_id,
+                arm="composed", component="inherited", region=region(pos),
+                frame="h37rv", key=f"h37rv:{pos}", r_pos="", h37rv_pos=pos,
+                dist_to_ref=0, node="", node_offset="",
+                frame_strand="+", ref=ref, alt=alt,
+                kind=classify(ref, alt),
+                size=abs(len(strip_gap(alt)) - len(strip_gap(ref))),
+                acc_locus="", qual="."))
+    else:
+        print(f"  WARNING: {a.reference} has no column in {a.graph_vcf}; "
+              f"the inherited half of the composed arm is EMPTY for this "
+              f"sample, which understates its recall", file=sys.stderr)
 
     if not rows:
         print("  no records placed -- refusing to emit an empty table",
@@ -375,6 +416,8 @@ def main():
 
     c = collections.Counter((r["arm"], r["component"], r["region"]) for r in rows)
     print(f"  {len(rows)} records placed")
+    for why, n in sorted(n_noproj.items()):
+        print(f"  matched-arm records dropped, {why}: {n}")
     for k in sorted(c):
         print(f"    {k[0]:<9s}{k[1]:<10s}{k[2]:<9s}{c[k]:>7d}")
     n_acc = n_off - n_near

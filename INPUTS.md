@@ -12,6 +12,11 @@ stage-1 inputs to run stage 3 against an existing build.
 
 ## Stage 1 — build the pangenome graph
 
+**The stage-1 scripts are not in this repository.** `pggb_build.sh`, the QC
+scripts in the table below and `QC_PIPELINE.md` belong to the companion
+repository **mtbc-pangenome-graph**, which builds the graph this one consumes.
+They are listed here so the whole input contract is in one place.
+
 `bin/pggb_build.sh <input.fasta.gz> <output-name> [pggb args...]`
 
 | input | form | notes |
@@ -84,7 +89,20 @@ threshold sensitivity: at 200 SNPs the clusters chain and collapse.
 | bwa, GATK | `MTB_BWA`, `MTB_GATK_SIF` | **yes** | |
 
 Output: `refbias/build/<build-id>/assets/` — the panel genomes with bwa indexes,
-the accessory locus catalogue, the repeat mask, the element GFF.
+the accessory locus catalogue, the repeat mask, the element GFF, and
+`graph_frame_offsets.tsv`.
+
+That last one comes from `--step frames`, which runs after `--step refs`. It
+measures, for every accession, how the graph's coordinate frame relates to the
+deposited sequence in `refs/`. For 110 of 333 accessions they differ by a
+rotation, and for 22 also by strand. Every projection reads it.
+`bin/refbias_run.sh` passes it to each job as `MTB_GRAPH_FRAMES`.
+
+    bash bin/p0_prepare.sh                      # cheap steps
+    bash bin/p0_prepare.sh --step gff
+    sbatch --array=1-333 bin/p0_prepare.sh --step refs
+    bash bin/p0_prepare.sh --step frames
+    bash bin/p0_prepare.sh --step manifest
 
 **The repeat mask is generated, not supplied.** `bin/build_repeat_mask.py`
 measures it: 50-mer uniqueness for paralogy and 9-mer recurrence for tandem
@@ -202,10 +220,7 @@ archive; `bin/show_config.sh` tells you when they are missing.
 Assuming a graph and build already exist:
 
     # 1. site paths, once
-    cat > config/site.local.sh <<'EOF'
-    export MTB_CRAM_ROOT=/path/to/collection
-    export MTB_CRAM_REF=/path/to/collection/reference.fasta
-    EOF
+    cp config/site.local.sh.example config/site.local.sh   # then edit it
 
     # 2. check the environment resolves
     bash bin/show_config.sh

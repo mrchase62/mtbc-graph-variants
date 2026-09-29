@@ -58,6 +58,16 @@ mkdir -p "$MTB_PERSIST"/{results,logs,bin,config}
 # mirror four commits behind while the run looked clean. rs() tolerates 24 and
 # nothing else.
 RSYNC=(rsync -ah --info=progress2 --no-inc-recursive "${DRY[@]}")
+# SYNC_BACKUP=1 keeps the durable copy of any file an rsync overwrites, under
+# .sync_backup/<timestamp>/ in the destination. Without it a file that
+# REGRESSED on scratch (truncated, or rewritten by a bad run) silently replaced
+# the good durable copy. Off by default only because it costs space.
+if [[ "${SYNC_BACKUP:-0}" == 1 ]]; then
+    RSYNC+=(--backup --backup-dir=".sync_backup/$(date -u +%Y%m%dT%H%M%SZ)")
+fi
+# Any failure below sets this, and the script then exits nonzero and does not
+# append to .last_sync -- a failed push or copy used to be reported as success.
+SYNC_FAILED=0
 rs() {
     local st=0
     "${RSYNC[@]}" "$@" || st=$?
@@ -136,11 +146,15 @@ echo "--- top-level tracked files"
 if git -C "$MTB_WORK" rev-parse --git-dir >/dev/null 2>&1; then
     # tr -d DELETES the separators and joins every path into one string; the
     # first version of this did that and copied nothing while printing no error.
-    git -C "$MTB_WORK" ls-files --directory -z \
-        | tr '\000' '\n' | grep -v '/' | grep -v '\.md$' \
-        | while read -r _f; do
-            [[ -f "$MTB_WORK/$_f" ]] && rs "$MTB_WORK/$_f" "$MTB_PERSIST/$_f"
-          done || true
+    # The list is built first, tolerating ONLY grep's no-match status, and the
+    # copies then run in this shell so a failed rsync is seen. The old
+    # `... | while ...; done || true` also swallowed every rsync failure.
+    mapfile -t _top < <(git -C "$MTB_WORK" ls-files --directory -z \
+        | tr '\000' '\n' | { grep -v '/' || true; } | { grep -v '\.md$' || true; })
+    for _f in "${_top[@]}"; do
+        [[ -f "$MTB_WORK/$_f" ]] || continue
+        rs "$MTB_WORK/$_f" "$MTB_PERSIST/$_f" || SYNC_FAILED=1
+    done
 fi
 # `|| true` because this runs under `set -e` with pipefail: a grep that matches
 # nothing exits 1 and took the whole script down with it, silently, after the
@@ -302,14 +316,21 @@ if [[ -d "$MTB_WORK/.git" ]]; then
         }
         git -C "$MTB_WORK" remote get-url persist >/dev/null 2>&1 \
             || git -C "$MTB_WORK" remote add persist "$GIT_MIRROR"
-        git -C "$MTB_WORK" push -q persist main \
-            && echo "    pushed $(git -C "$MTB_WORK" rev-parse --short HEAD)" \
-            || echo "    WARNING: git push failed; history is NOT mirrored" >&2
+        if git -C "$MTB_WORK" push -q persist main; then
+            echo "    pushed $(git -C "$MTB_WORK" rev-parse --short HEAD)"
+        else
+            echo "    ERROR: git push failed; history is NOT mirrored" >&2
+            SYNC_FAILED=1
+        fi
     fi
 else
     echo "--- git history: no repository at $MTB_WORK/.git, skipping" >&2
 fi
 
+if [[ "$SYNC_FAILED" -ne 0 ]]; then
+    echo "### FAILED: see the errors above; .last_sync NOT updated" >&2
+    exit 1
+fi
 echo "### done."
 if [[ ${#DRY[@]} -eq 0 ]]; then
     date -u '+%Y-%m-%dT%H:%M:%SZ synced from '"$MTB_WORK" >> "$MTB_PERSIST/.last_sync"

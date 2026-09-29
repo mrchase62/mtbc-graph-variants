@@ -59,14 +59,15 @@ def main():
             dist = int(f[2])
         except (ValueError, IndexError):
             continue
-        by_src.setdefault(src, (rpos, dist))
+        strand = f[3].strip() if len(f) > 3 and f[3].strip() in "+-" else "+"
+        by_src.setdefault(src, (rpos, dist, strand))
     proj = [by_src.get(int(l["pos"])) for l in loci]
     nmiss = sum(1 for x in proj if x is None)
     if nmiss > len(loci) * 0.5:
         print(f"  WARNING: {nmiss} of {len(loci)} anchors have no projection; "
               f"odgi output does not cover the input -- refusing", file=sys.stderr)
         return 1
-    proj = [x if x is not None else (0, 1) for x in proj]
+    proj = [x if x is not None else (0, 1, "+") for x in proj]
 
     depth = {}
     for line in open(a.depth):
@@ -81,7 +82,7 @@ def main():
         print("genome median depth is zero", file=sys.stderr); return 1
 
     rows, unprojected = [], 0
-    for locus, (rpos, dist) in zip(loci, proj):
+    for locus, (rpos, dist, strand) in zip(loci, proj):
         L = int(locus["rep_len"])
         if dist != 0:
             unprojected += 1
@@ -91,7 +92,16 @@ def main():
                              median_depth="", depth_ratio="",
                              copies="", call="no_projection"))
             continue
-        lo, hi = max(1, rpos - a.flank), rpos + L + a.flank
+        # The locus follows its anchor in H37Rv's direction. Where R runs
+        # reverse to H37Rv here (strand `-`), it lies on the OTHER side of the
+        # projected anchor in R, and a window read forward from rpos measured
+        # unrelated flank. The window is L bases plus the flank on each side.
+        # (The forward window is kept exactly as before, so forward-strand
+        # results do not move; the mirror image is used for `-`.)
+        if strand == "-":
+            lo, hi = max(1, rpos - L - a.flank), rpos + a.flank
+        else:
+            lo, hi = max(1, rpos - a.flank), rpos + L + a.flank
         vals = [depth.get(p, 0) for p in range(lo, hi + 1)]
         med = statistics.median(vals) if vals else 0
         ratio = med / genome_median

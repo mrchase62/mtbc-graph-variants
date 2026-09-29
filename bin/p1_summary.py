@@ -98,6 +98,11 @@ def main():
                          "0 disables the tie-break and restores pure "
                          "distance selection.")
     ap.add_argument("--out", default="refbias/p1/refmap.tsv")
+    ap.add_argument("--allow-missing", action="store_true",
+                    help="exit 0 even when some samples have no output. Off by "
+                         "default: a short table silently drops those samples "
+                         "from every later pass, because P5 sizes itself from "
+                         "the refmap")
     a = ap.parse_args()
 
     panel_lin = {}
@@ -260,6 +265,12 @@ def main():
     print(f"    stage 1 on simulated data: 16.1% of nearest references lay "
           f"outside the label")
     print(f"\n  written: {a.out}")
+    if missing and not a.allow_missing:
+        print(f"FATAL: {len(missing)} samples have no usable output "
+              f"({', '.join(missing[:10])}{' ...' if len(missing) > 10 else ''}); "
+              f"rerun them, or pass --allow-missing to accept a partial table",
+              file=sys.stderr)
+        return 2
     return 0
 
 

@@ -53,17 +53,15 @@ insertion records are presence-only and should be treated as such.
 | p1g/p1i | `is6110/bin/` | element-arm references and junction calls |
 | p5svgt | `bin/p5_svgt.sh` | genotype deletion **absence** by depth, so the class is not presence-only |
 | acc | `accessory/bin/locus_presence_one.sh` | accessory locus presence, both instruments |
-| p5vcf | `bin/p5_finish.sh --merge` | one VCF, last, after every arm that contributes |
+| p5vcf | `bin/p5_finish.sh --merge` | one VCF, last, after every arm that contributes; `bin/vcf_gate.sh` then refuses it if standard tools cannot read it |
 
 Run it with `bash bin/refbias_run.sh --cohort <name>`.
 
 ## Setup
 
     # 1. site paths -- gitignored, required, no defaults
-    cat > config/site.local.sh <<'EOF'
-    export MTB_CRAM_ROOT=/path/to/read/collection
-    export MTB_CRAM_REF=/path/to/reference/the/reads/were/encoded/against.fasta
-    EOF
+    cp config/site.local.sh.example config/site.local.sh
+    #    then set MTB_CRAM_ROOT, MTB_CRAM_REF and your tool paths in it
 
     # 2. check everything resolves
     bash bin/show_config.sh

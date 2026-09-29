@@ -28,3 +28,6 @@ accessory/*/
 is6110/assets/
 sv2frame/*/
 !sv2frame/bin/
+
+# Scratch outputs from verification runs against the working tree
+test_runs/

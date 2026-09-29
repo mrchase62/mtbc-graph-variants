@@ -51,8 +51,12 @@ H37RV_ACC="${H37RV_ACC:-GCF_000195955}"
 ASM_DIR="${ASM_DIR:-data/assemblies}"
 NCBI_SUM="${NCBI_SUM:-data/ncbi/assembly_summary_refseq.txt}"
 MASK="${MASK:-data/annotation/H37Rv_repeat_mask.bed}"
+# The FASTA the graph was built from. Its sequences are dnaA-rotated, so for a
+# minority of accessions the graph's coordinate frame differs from refs/; the
+# frames step measures that difference once per build.
+PANEL_FASTA="${PANEL_FASTA:-data/fastas/mtb.complex333.fasta.gz}"
 BWA="${MTB_BWA:-${MTB_QC_BIN}/bwa}"
-GATK_SIF="${MTB_GATK_SIF:-/n/boslfs02/LABS/sfortune_lab/Lab/containers/mtb_gatk.sif}"
+GATK_SIF="${MTB_GATK_SIF:?MTB_GATK_SIF is unset; see config/project_env.sh}"
 gatk_run() { singularity exec -B "${MTB_WORK}:${MTB_WORK}" "$GATK_SIF" gatk "$@"; }
 ACCESSORY_DIR="${ACCESSORY_DIR:-refbias/panel}"
 BUILD_ROOT="${BUILD_ROOT:-refbias/build}"
@@ -87,7 +91,7 @@ if [[ "$LIST" == 1 ]]; then
     echo "graph    : $OG"
     echo "build id : $BUILD_ID"
     echo "build dir: $BUILD"
-    for s in stamp paths accessions gff refs assets manifest; do
+    for s in stamp paths accessions gff refs frames assets manifest; do
         if _done "$s"; then printf "  %-12s done   %s\n" "$s" "$(cat "${BUILD}/logs/$s.done")"
         else printf "  %-12s MISSING\n" "$s"; fi
     done
@@ -219,7 +223,8 @@ step_refs() {
             lock="${fa}.bwaindex.$$"
             cp -f "$fa" "$lock"
             "$BWA" index "$lock" > "${BUILD}/logs/bwa_index.${acc}.log" 2>&1
-            for ext in amb ann bwt pac sa; do
+            # bwt LAST: it is what `[[ -s ${fa}.bwt ]]` treats as "indexed"
+            for ext in amb ann pac sa bwt; do
                 [[ -f "${lock}.${ext}" ]] && mv -f "${lock}.${ext}" "${fa}.${ext}"
             done
             rm -f "$lock"
@@ -244,6 +249,36 @@ step_refs() {
         if [[ "$built" -eq "$want" ]]; then _mark refs
         else echo "[P0] step 'refs' NOT marked done -- ${want} expected, ${built} built" >&2; fi
     fi
+}
+
+# --- step: frames ------------------------------------------------------------
+# The panel-vs-refs coordinate frame of every accession. graph_frame.py reads it
+# to convert a refs-frame coordinate before it is handed to odgi, which
+# interprets coordinates in the PANEL frame. It is a property of this build's
+# graph and refs, so it is measured here and nowhere else; refbias_run.sh points
+# MTB_GRAPH_FRAMES at it. Needs the refs step to have finished.
+step_frames() {
+    _done frames && { _say "frames: already done"; return 0; }
+    _done refs || { echo "FATAL: step 'frames' needs step 'refs' done first" >&2; return 1; }
+    mtb_require_file "$PANEL_FASTA"
+    local out="${BUILD}/assets/graph_frame_offsets.tsv"
+    "$MTB_PY" graphframe/bin/graph_frame_offsets.py \
+        --panel "$PANEL_FASTA" --refs "${BUILD}/refs" \
+        --samtools "$MTB_SAMTOOLS" --out "${out}.tmp"
+    mv -f "${out}.tmp" "$out"
+    # Refuse to mark done if any accession has no strand: graph_frame.py treats
+    # such a row as unknown, which silently drops that accession's projections.
+    # A note other than "ok" with a strand is fine -- some probes hit repeats and
+    # the unique ones agreed.
+    local bad
+    bad=$(awk -F'\t' 'NR>1 && $4==""' "$out" | wc -l)
+    if [[ "$bad" -gt 0 ]]; then
+        echo "[P0] frames: ${bad} accessions unresolved (empty strand) -- see ${out}" >&2
+        echo "[P0] step 'frames' NOT marked done" >&2
+        return 1
+    fi
+    _say "frames: $(( $(wc -l < "$out") - 1 )) accessions -> ${out}"
+    _mark frames
 }
 
 # --- step: assets ------------------------------------------------------------
@@ -318,7 +353,7 @@ step_manifest() {
     # partial build cannot be mistaken for a finished one later.
     local incomplete=""
     local s2
-    for s2 in stamp paths accessions gff refs assets; do
+    for s2 in stamp paths accessions gff refs frames assets; do
         _done "$s2" || incomplete="${incomplete} ${s2}"
     done
     if [[ -n "$incomplete" ]]; then
@@ -336,5 +371,6 @@ else
     _say "cheap steps complete. Remaining, run explicitly:"
     _say "  bash bin/p0_prepare.sh --step gff"
     _say "  sbatch --array=1-\$(wc -l < ${BUILD}/assets/accessions.txt) bin/p0_prepare.sh --step refs"
+    _say "  bash bin/p0_prepare.sh --step frames"
     _say "  bash bin/p0_prepare.sh --step manifest"
 fi

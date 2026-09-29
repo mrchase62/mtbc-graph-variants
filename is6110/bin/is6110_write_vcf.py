@@ -134,8 +134,14 @@ def main():
                     else "one_sided")
         sites[r["sample"]].append(dict(r, evidence=evidence))
 
-    seqs, exc, medlen, hcontig = {}, {}, {}, None
-    _, h37seq = read_fasta_one(a.h37rv)
+    seqs, exc, medlen = {}, {}, {}
+    hcontig, h37seq = read_fasta_one(a.h37rv)
+    # The derived VCF's CHROM is --h37rv-contig, but its bases come from this
+    # FASTA. They agree today (NC_000962.3); make a mismatch an error rather
+    # than a VCF whose CHROM names a different sequence from its REF bases.
+    if hcontig.split()[0] != a.h37rv_contig:
+        sys.exit(f"FATAL: --h37rv-contig {a.h37rv_contig!r} does not match the "
+                 f"H37Rv FASTA's contig {hcontig.split()[0]!r}")
     keys_rows = []
     today = datetime.date.today().strftime("%Y%m%d")
     n_alt = n_ref = n_filt = 0
@@ -231,8 +237,24 @@ def main():
         write(os.path.join(a.outdir, f"{sample}.is6110.h37rv.vcf"),
               a.h37rv_contig, len(h37seq), recs_h)
 
+    # A site with neither an H37Rv position nor a graph node has no identity
+    # in P5's key space. It used to be written as the key "node:", which
+    # is6110_p5_merge.py then skipped without a word: 1,800 gwas1000 rows, 816
+    # of them ALT, because p1i_vcf.sh ran the projection without --all-stacks.
+    # Every stack gets a flank row under --all-stacks, so an empty key now
+    # means an upstream step was skipped -- stop rather than drop sites.
+    unkeyed = [k for k in keys_rows if not k["h37rv_pos"] and not k["node"]]
+    if unkeyed:
+        ex = ", ".join(f'{k["sample"]}@{k["r_pos"]}' for k in unkeyed[:5])
+        sys.exit(f"FATAL: {len(unkeyed)} sites have no H37Rv position and no "
+                 f"graph node (e.g. {ex}); was is6110_project_sites.py run with "
+                 f"--all-stacks?")
+
+    KEY_FIELDS = ["sample", "reference", "build_id", "evidence", "site_class",
+                  "r_pos", "state", "frame", "key", "h37rv_pos", "h37rv_state",
+                  "node", "reads", "ismapper"]
     with open(a.keys_out, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(keys_rows[0]), delimiter="\t")
+        w = csv.DictWriter(fh, fieldnames=KEY_FIELDS, delimiter="\t")
         w.writeheader(); w.writerows(keys_rows)
 
     unplaced = sum(1 for k in keys_rows if k["frame"] == "node")

@@ -100,6 +100,12 @@ def merge_callers(records):
     return events
 
 
+FIELDS = ["sample", "reference", "build_id", "svtype", "svlen", "frame",
+          "key", "h37rv_pos", "h37rv_end", "r_pos", "r_end", "node_pos",
+          "node_end", "src", "n_callers", "sr", "pe", "qual", "filter",
+          "component"]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sample", required=True)
@@ -110,26 +116,27 @@ def main():
     ap.add_argument("--positions", required=True,
                     help="odgi output for every breakpoint, R -> H37Rv")
     ap.add_argument("--mask", required=True)
-    ap.add_argument("--graph-vcf",
-                    default="graphs/CX333.s10k.k23.K15/all_variants.nolab.vcf.gz",
-                    help="source of the INHERITED half, as p4_place.py uses it")
+    ap.add_argument("--graph-vcf", default="",
+                    help="source of the INHERITED half, as p4_place.py uses "
+                         "it. Required unless --no-inherited: a relative "
+                         "default that resolved only from one working "
+                         "directory used to skip the half without a word")
     ap.add_argument("--min-sv", type=int, default=50)
     ap.add_argument("--no-inherited", action="store_true")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
+    if not a.no_inherited and not (a.graph_vcf and os.path.exists(a.graph_vcf)):
+        sys.exit(f"FATAL: --graph-vcf {a.graph_vcf!r} does not exist; pass it, "
+                 f"or --no-inherited to skip the inherited half deliberately")
+
     recs = parse_sv_vcf(a.delly, "delly") + parse_sv_vcf(a.dysgu, "dysgu")
+    # No early return on zero calls. It used to write a header-only table here,
+    # BEFORE the inherited half ran, so R's own large differences from H37Rv --
+    # which need no calls at all -- were dropped for exactly the samples
+    # closest to their reference. Zero calls is zero events; carry on.
     if not recs:
         print(f"  {a.sample}: no SV records to place", file=sys.stderr)
-        # an empty table, not a missing file: a sample with no SVs and a sample
-        # that was never run must not look the same downstream
-        with open(a.out, "w", newline="") as fh:
-            csv.writer(fh, delimiter="\t", lineterminator="\n").writerow(
-                ["sample", "reference", "build_id", "svtype", "svlen", "frame",
-                 "key", "h37rv_pos", "h37rv_end", "r_pos", "r_end", "node_pos",
-                 "node_end", "src", "n_callers", "sr", "pe", "qual", "filter",
-                 "component"])
-        return 0
     events = merge_callers(recs)
 
     # projections keyed by SOURCE position: threaded odgi returns results in
@@ -147,7 +154,11 @@ def main():
             dist = int(f[2])
         except (ValueError, IndexError):
             continue
-        proj.setdefault(src, (tgt, dist))
+        # column 4 is the relation between R's and H37Rv's refs sequences,
+        # restated by frame_convert.py from-panel; `-` means R runs reverse to
+        # H37Rv here, so an event's breakpoints swap sides (see below)
+        strand = f[3].strip() if len(f) > 3 and f[3].strip() in "+-" else "+"
+        proj.setdefault(src, (tgt, dist, strand))
 
     pe_iv = []
     for line in open(a.mask):
@@ -163,16 +174,51 @@ def main():
         callers = sorted({m["caller"] for m in e["members"]})
         ps, pe_ = proj.get(r["pos"]), proj.get(r["end"])
         both = ps is not None and pe_ is not None and ps[1] == 0 and pe_[1] == 0
+        h1 = h2 = None
+        if both:
+            # DIRECTION FROM GEOMETRY, not from the strand label. Column 4 is
+            # the relation between the two whole refs sequences; locally the
+            # graph can run either way (measured: a DEL on the flipped
+            # GCF_965124535 labelled `-` whose breakpoints project increasing).
+            # So when an event has two distinct breakpoints, their projected
+            # order says whether R runs reverse to H37Rv here. The label is
+            # used only for a point insertion, which has one breakpoint.
+            if r["end"] > r["pos"]:
+                reverse = pe_[0] < ps[0]
+            else:
+                reverse = ps[2] == "-"
+            if not reverse:
+                h1, h2 = ps[0], pe_[0]
+            elif r["svtype"] == "INS":
+                # An insertion sits between R's POS and POS+1. Reversed, that
+                # is between f(POS)-1 and f(POS), so its anchor is f(POS)-1.
+                h1 = ps[0] - 1
+                h2 = h1 + (r["end"] - r["pos"])
+                counts["reverse_strand"] += 1
+            else:
+                # Symbolic SVs cover R bases POS+1 .. END (POS is the padding
+                # base). Reversed onto H37Rv they cover f(END) .. f(POS)-1, so
+                # the padding base is f(END)-1 and the last base is f(POS)-1.
+                # Using ps/pe as they came gave start > end, shifted by the
+                # whole event length, and every depth probe landed outside it.
+                h1, h2 = pe_[0] - 1, ps[0] - 1
+                counts["reverse_strand"] += 1
+            # A placed event must keep roughly its called span. Endpoints that
+            # project to distant, unrelated places are not one H37Rv interval.
+            if r["svtype"] != "INS":
+                span_r, span_h = abs(r["end"] - r["pos"]), abs(h2 - h1)
+                if abs(span_h - span_r) > tol(max(span_r, r["svlen"])):
+                    both = False
+                    counts["span_mismatch"] += 1
         if both:
             frame = "h37rv"
-            key = f"sv:{r['svtype']}:{ps[0]}:{pe_[0]}"
-            h1, h2 = ps[0], pe_[0]
+            key = f"sv:{r['svtype']}:{h1}:{h2}"
             counts["placed"] += 1
         else:
-            # one or both breakpoints have no H37Rv equivalent: a breakend pair
+            # one or both breakpoints have no H37Rv equivalent: a breakend pair.
+            # The key is built from R coordinates and the reference; h1/h2 keep
+            # whatever single breakpoint did project, for inspection only.
             frame = "bnd"
-            k1 = ps[0] if ps else "NA"
-            k2 = pe_[0] if pe_ else "NA"
             key = f"bnd:{r['svtype']}:{r['pos']}:{r['end']}:{a.reference}"
             h1, h2 = (ps[0] if ps and ps[1] == 0 else ""), \
                      (pe_[0] if pe_ and pe_[1] == 0 else "")
@@ -208,7 +254,7 @@ def main():
     # `component` says which half a row came from, and `filter` is INHERITED
     # because these carry no caller FILTER of their own.
     n_inh = 0
-    if not a.no_inherited and os.path.exists(a.graph_vcf):
+    if not a.no_inherited:
         called_at = sorted(int(r["h37rv_pos"]) for r in rows
                            if r["frame"] == "h37rv" and r["h37rv_pos"] != "")
         child, hdr = [], None
@@ -281,8 +327,10 @@ def main():
                     sr="", pe="", qual="", filter="INHERITED",
                     component="inherited"))
 
+    # header-only when there is nothing, never an IndexError on rows[0]; an
+    # empty table and a missing file must not look the same downstream
     with open(a.out, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t",
+        w = csv.DictWriter(fh, fieldnames=FIELDS, delimiter="\t",
                            lineterminator="\n")
         w.writeheader(); w.writerows(rows)
     print(f"    inherited: {n_inh} SV records from R's own differences "
@@ -290,9 +338,12 @@ def main():
     print(f"  {a.sample}: {len(recs)} caller records -> {len(events)} events; "
           f"{counts['placed']} placed on the H37Rv path, "
           f"{counts['breakend']} as breakend pairs")
+    for k in ("reverse_strand", "span_mismatch"):
+        if counts[k]:
+            print(f"    {k.replace('_', ' ')}: {counts[k]}")
     agree = sum(1 for r in rows if r["n_callers"] > 1)
     print(f"    both callers agreed on {agree} of {len(rows)} "
-          f"({100*agree/len(rows):.1f}%)")
+          f"({100*agree/max(len(rows), 1):.1f}%)")
     for k in sorted(counts):
         if k.startswith("type_"):
             print(f"    {k[5:]:<8s}{counts[k]}")

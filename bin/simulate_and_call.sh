@@ -33,7 +33,7 @@ SAMTOOLS="${MTB_SAMTOOLS}"
 # GATK is run from the container the Liftover pipeline already uses. The conda
 # gatk wrapper fails on a compute node with "/usr/bin/env: 'python': No such
 # file or directory" -- it needs a python on PATH that is not there under sbatch.
-GATK_SIF="${MTB_GATK_SIF:-/n/boslfs02/LABS/sfortune_lab/Lab/containers/mtb_gatk.sif}"
+GATK_SIF="${MTB_GATK_SIF:?MTB_GATK_SIF is unset; see config/project_env.sh}"
 mtb_require_file "$SRC" "$REF" "$BWA" "$WGSIM" "$SAMTOOLS" "$GATK_SIF"
 gatk_run() { singularity exec -B "${MTB_WORK}:${MTB_WORK}" "$GATK_SIF" gatk "$@"; }
 mkdir -p "$OUTDIR"
@@ -50,6 +50,15 @@ mkdir -p "$OUTDIR"
 FQP="${SIM_FQ_PREFIX:-${OUTDIR}/${PREFIX}}"
 FQ1="${FQP}_1.fq"; FQ2="${FQP}_2.fq"
 SRCPLAIN="${OUTDIR}/${PREFIX}.src.fa"
+# SIM_REQUIRE_FQ=1 forbids the fallback. P1 and P2 pass an isolate's REAL reads
+# this way, with $SRC set to the reference: if either FASTQ were missing, the
+# fallback below would simulate reads FROM THE REFERENCE and call them as the
+# isolate -- a perfect, silent substitution.
+if [[ "${SIM_REQUIRE_FQ:-0}" == 1 && ! ( -s "$FQ1" && -s "$FQ2" ) ]]; then
+    echo "FATAL: SIM_REQUIRE_FQ=1 but ${FQ1} / ${FQ2} are missing or empty;" \
+         "refusing to simulate reads in place of real ones" >&2
+    exit 1
+fi
 if [[ -e "$FQ1" && -e "$FQ2" ]]; then
     echo "[sim] ${PREFIX}: reusing reads ${FQ1} ($(( $(wc -l < "$FQ1") / 4 )) pairs)"
 else
@@ -84,7 +93,7 @@ if [[ ! -f "${REF}.bwt" || "$REF" -nt "${REF}.bwt" ]]; then
     _lock="${REF}.bwaindex.$$"
     cp -f "$REF" "$_lock"
     "$BWA" index "$_lock" >/dev/null 2>&1
-    for ext in amb ann bwt pac sa; do
+    for ext in amb ann pac sa bwt; do   # bwt last: it is the "indexed" signal
         [[ -f "${_lock}.${ext}" ]] && mv -f "${_lock}.${ext}" "${REF}.${ext}"
     done
     rm -f "$_lock"

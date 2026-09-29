@@ -29,12 +29,18 @@ def main():
     a = ap.parse_args()
 
     rows, missing = [], []
-    allev = []
+    allev, inherited = [], []
     for r in rd(a.refmap):
         p = os.path.join(a.dir, f"{r['sample']}.sv_placed.tsv")
         if not os.path.exists(p):
             missing.append(r["sample"]); continue
-        ev = rd(p)
+        # Placement rates are about PROJECTION, so they count the called rows
+        # only. Inherited rows come from the graph VCF already in H37Rv
+        # coordinates and were never projected; counting them overstated the
+        # rate. They are reported separately below.
+        allrows = rd(p)
+        ev = [x for x in allrows if x.get("component", "called") == "called"]
+        inherited.append(len(allrows) - len(ev))
         allev.extend(ev)
         c = collections.Counter(x["svtype"] for x in ev)
         rows.append(dict(sample=r["sample"], reference=r["reference"],
@@ -61,7 +67,12 @@ def main():
     n = len(allev)
     pl = sum(1 for x in allev if x["frame"] == "h37rv")
     bo = sum(1 for x in allev if x["n_callers"] == "2")
-    print(f"\n  pooled {n} events over {len(rows)} isolates")
+    print(f"\n  pooled {n} called events over {len(rows)} isolates, plus "
+          f"{sum(inherited)} inherited rows (not projected, not counted below)")
+    if n == 0:
+        print("  no called events in any isolate")
+        print(f"\n  written: {a.out}")
+        return 0
     print(f"    placed on the H37Rv path   {pl}  ({100*pl/n:.1f}%)")
     print(f"    kept as breakend pairs     {n-pl}  ({100*(n-pl)/n:.1f}%)")
     print(f"    found by BOTH callers      {bo}  ({100*bo/n:.1f}%)")

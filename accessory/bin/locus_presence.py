@@ -67,34 +67,48 @@ def main():
                     help="below this it is called absent; between the two is "
                          "uncertain and says so")
     ap.add_argument("--samtools", default=os.environ.get("MTB_SAMTOOLS", "samtools"))
-    ap.add_argument("--bwa", default=os.environ.get(
-        "MTB_BWA",
-        "/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/mtb_pangenome_qc/bin/bwa"))
+    ap.add_argument("--bwa", default=os.environ.get("MTB_BWA", "bwa"),
+                    help="bwa binary; defaults to MTB_BWA from config/project_env.sh")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
     cat = list(csv.DictReader(open(a.catalogue, newline=""), delimiter="\t"))
     print(f"  {len(cat):,} accessory loci")
+
+    # EVERY SUBPROCESS IS CHECKED. None was: a CRAM that failed to decode, or a
+    # bwa or samtools failure, gave an empty query pool and zero coverage, and
+    # every one of the 802 loci was then written ABSENT -- a measurement of
+    # nothing, stated as absence.
+    def check(rc, what, err=""):
+        if rc != 0:
+            sys.exit(f"FATAL: {a.sample}: {what} exited {rc}"
+                     + (f":\n{err[-2000:]}" if err else ""))
+
     if not os.path.exists(a.fasta + ".bwt"):
-        subprocess.run([a.bwa, "index", a.fasta], capture_output=True)
+        r = subprocess.run([a.bwa, "index", a.fasta], capture_output=True, text=True)
+        check(r.returncode, "bwa index", r.stderr)
 
     # ---- the read route ---------------------------------------------------
     import tempfile
     tmp = tempfile.mkdtemp()
     q = os.path.join(tmp, "q.fa")
-    n_q = 0
+    errf = open(os.path.join(tmp, "stderr.txt"), "w+")   # a file, not a pipe:
+    n_q = 0                                             # no deadlock on volume
+    def err_text():
+        errf.flush(); errf.seek(0); t = errf.read(); errf.seek(0); errf.truncate()
+        return t
     with open(q, "w") as fh:
         p = subprocess.Popen([a.samtools, "view", "--reference", a.h37rv,
                               "-f", "4", a.cram], stdout=subprocess.PIPE,
-                             stderr=subprocess.DEVNULL, text=True)
+                             stderr=errf, text=True)
         for i, line in enumerate(p.stdout):
             f = line.split("\t", 11)
             if len(f) > 9:
                 fh.write(f">u{i}\n{f[9]}\n"); n_q += 1
-        p.wait()
+        check(p.wait(), "samtools view (unmapped pool)", err_text())
         p = subprocess.Popen([a.samtools, "view", "--reference", a.h37rv,
                               "-q", str(a.min_mapq), a.cram],
-                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                             stdout=subprocess.PIPE, stderr=errf,
                              text=True)
         for i, line in enumerate(p.stdout):
             f = line.split("\t", 11)
@@ -107,21 +121,30 @@ def main():
                 fh.write(f">l{i}\n{f[9][:int(parts[0][0])]}\n"); n_q += 1
             if parts[-1][1] == "S" and int(parts[-1][0]) >= a.min_clip:
                 fh.write(f">r{i}\n{f[9][-int(parts[-1][0]):]}\n"); n_q += 1
-        p.wait()
+        check(p.wait(), "samtools view (clipped pool)", err_text())
     print(f"  {n_q:,} query reads from the unmapped and clipped pools")
+    if n_q == 0:
+        # Every real isolate has some unmapped or clipped reads; none at all
+        # means the reads were not read, and every locus would come out ABSENT.
+        sys.exit(f"FATAL: {a.sample}: no query reads from {a.cram}; refusing to "
+                 f"call every locus ABSENT from an empty pool")
 
     bam = os.path.join(tmp, "a.bam")
     m = subprocess.Popen([a.bwa, "mem", "-t", "2", "-k", "19", a.fasta, q],
-                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    subprocess.run([a.samtools, "sort", "-o", bam, "-"], stdin=m.stdout,
-                   capture_output=True)
-    m.wait()
-    subprocess.run([a.samtools, "index", bam], capture_output=True)
+                         stdout=subprocess.PIPE, stderr=errf)
+    r = subprocess.run([a.samtools, "sort", "-o", bam, "-"], stdin=m.stdout,
+                       capture_output=True, text=True)
+    m.stdout.close()
+    check(m.wait(), "bwa mem", err_text())
+    check(r.returncode, "samtools sort", r.stderr)
+    r = subprocess.run([a.samtools, "index", bam], capture_output=True, text=True)
+    check(r.returncode, "samtools index", r.stderr)
 
     cov0, cov20 = {}, {}
     for Q, store in ((0, cov0), (a.min_mapq, cov20)):
         r = subprocess.run([a.samtools, "depth", "-a", "-Q", str(Q), bam],
                            capture_output=True, text=True)
+        check(r.returncode, "samtools depth", r.stderr)
         n, c = collections.Counter(), collections.Counter()
         for line in r.stdout.splitlines():
             f = line.split("\t")

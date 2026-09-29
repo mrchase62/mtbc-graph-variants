@@ -98,7 +98,12 @@ fi
 
 BAM="${OUTDIR}/${SAMPLE}.isclean.bam"
 JUNC="${OUTDIR}/${SAMPLE}.junctions.tsv"
-[[ -s "$JUNC" ]] && { echo "[P1g] ${SAMPLE}: already done"; exit 0; }
+# Done only when EVERY per-sample output exists. The junction table alone
+# was the marker, but it is written first; a task that died in the later steps
+# was then skipped on rerun and left without them.
+if [[ -s "${OUTDIR}/${SAMPLE}.junctions.tsv" && -s "${OUTDIR}/${SAMPLE}.elementdepth.tsv" ]]; then
+    echo "[P1g] ${SAMPLE}: already done"; exit 0
+fi
 
 REL="$(awk -F'\t' -v s="$SAMPLE" '$1==s{print $2}' "$CRAMS" 2>/dev/null || true)"
 [[ -n "$REL" ]] || { echo "FATAL: ${SAMPLE}: no CRAM path in ${CRAMS}" >&2; exit 1; }

@@ -112,7 +112,12 @@ fi
 
 BAM="${OUTDIR}/${SAMPLE}.isclean.bam"
 JUNC="${OUTDIR}/${SAMPLE}.junctions.tsv"
-[[ -s "$JUNC" ]] && { echo "[P1i] ${SAMPLE}: already done"; exit 0; }
+# Done only when EVERY per-sample output exists. The junction table alone
+# was the marker, but it is written first; a task that died in the later steps
+# was then skipped on rerun and left without them.
+if [[ -s "${OUTDIR}/${SAMPLE}.junctions.tsv" && -s "${OUTDIR}/${SAMPLE}.elstacks.tsv" && -s "${OUTDIR}/${SAMPLE}.elementdepth.tsv" ]]; then
+    echo "[P1i] ${SAMPLE}: already done"; exit 0
+fi
 
 REL="$(awk -F'\t' -v s="$SAMPLE" '$1==s{print $2}' "$CRAMS" 2>/dev/null || true)"
 [[ -n "$REL" ]] || { echo "FATAL: ${SAMPLE}: no CRAM path" >&2; exit 1; }
@@ -171,11 +176,13 @@ mv -f "${JUNC}.tmp" "$JUNC"
     --alignment "$BAM" --sample "$SAMPLE" \
     --element-contig "$ELEMENT_CONTIG" --chrom-contig "$CLEAN_CONTIG" \
     --crossmap "${CLEANDIR}/${REFID}.crossmap.tsv" \
-    --out "${OUTDIR}/${SAMPLE}.elstacks.tsv"
+    --out "${OUTDIR}/${SAMPLE}.elstacks.tsv.tmp"
+mv -f "${OUTDIR}/${SAMPLE}.elstacks.tsv.tmp" "${OUTDIR}/${SAMPLE}.elstacks.tsv"
 
 EL=$("$MTB_SAMTOOLS" depth -a -Q 0 -q 0 -r "$ELEMENT_CONTIG" "$BAM" | awk '{s+=$3;n++} END{print (n?s/n:0)}')
 CH=$("$MTB_SAMTOOLS" depth -a -Q 0 -q 0 -r "$CLEAN_CONTIG" "$BAM" | awk '{s+=$3;n++} END{print (n?s/n:0)}')
 printf 'sample\treference\telement_depth\tchrom_depth\telement_ratio\n%s\t%s\t%.3f\t%.3f\t%.4f\n' \
     "$SAMPLE" "$REFID" "$EL" "$CH" "$(awk -v a="$EL" -v b="$CH" 'BEGIN{print (b?a/b:0)}')" \
-    > "${OUTDIR}/${SAMPLE}.elementdepth.tsv"
+    > "${OUTDIR}/${SAMPLE}.elementdepth.tsv.tmp"
+mv -f "${OUTDIR}/${SAMPLE}.elementdepth.tsv.tmp" "${OUTDIR}/${SAMPLE}.elementdepth.tsv"
 echo "[P1i] ${SAMPLE}: done, element/chrom ratio $(awk -v a="$EL" -v b="$CH" 'BEGIN{printf "%.3f", (b?a/b:0)}')"

@@ -11,6 +11,29 @@
 #   MTB_WORK=/some/other/place sbatch bin/pggb_build.sh ...
 # ---------------------------------------------------------------------------
 
+# --- Site file --------------------------------------------------------------
+# A SITE FILE, GITIGNORED, holds the values for whichever cluster this is. That
+# is what keeps the published configuration free of one site's paths while a
+# working checkout still runs.
+#
+# It must be sourced FIRST, before any default below. It used to be sourced
+# after the Roots and working subdirectories were assigned, so a site file that
+# set MTB_WORK moved MTB_WORK alone while MTB_DATA, MTB_GRAPHS, MTB_LOGS and the
+# rest still pointed into the old scratch tree.
+#
+# It is found relative to THIS file, not to the current directory. The old
+# `config/site.local.sh` resolved against $PWD, so sourcing the config from
+# anywhere but the repository root skipped the site file without a word and
+# left MTB_CRAM_ROOT empty.
+_mtb_cfg_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+_mtb_site="${MTB_SITE_FILE:-${_mtb_cfg_dir}/site.local.sh}"
+if [[ -r "$_mtb_site" ]]; then
+    source "$_mtb_site"
+elif [[ -n "${MTB_SITE_FILE:-}" ]]; then
+    echo "[project_env] WARNING: MTB_SITE_FILE=${MTB_SITE_FILE} is not readable" >&2
+fi
+unset _mtb_site
+
 # --- Roots ------------------------------------------------------------------
 
 # Working root: fast scratch. PURGED PERIODICALLY. Nothing here is safe.
@@ -36,13 +59,6 @@
 : "${MTB_SLURM:=${MTB_WORK}/slurm}"
 
 # --- Containers -------------------------------------------------------------
-
-# A SITE FILE, GITIGNORED, holds the values for whichever cluster this is. That
-# is what keeps the published configuration free of one site's paths while a
-# working checkout still runs. It is sourced before the defaults below, so
-# anything it sets wins.
-[[ -r "${MTB_SITE_FILE:-config/site.local.sh}" ]] \
-    && source "${MTB_SITE_FILE:-config/site.local.sh}"
 
 # --- Read source ------------------------------------------------------------
 #
@@ -99,6 +115,12 @@ mtb_require_cram_root() {
 
 # --- External tools (lab installs, not containerised) -----------------------
 
+# Declared here because scripts read them: each used to be defaulted inside the
+# script that needed it, so show_config could not report them and a site file
+# was the only way to learn they existed.
+: "${MTB_GATK_SIF:=${MTB_LAB_CONTAINERS}/mtb_gatk.sif}"
+: "${MTB_DELLY_ENV:=/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/tb-profiler}"
+
 # Python with pandas/numpy/scikit-learn, for the sv_*.py tools.
 : "${MTB_PY:=/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/mtb_pangenome_qc/bin/python}"
 # Python that can import mtbvartools and dendropy, for the association arm's
@@ -131,6 +153,9 @@ mtb_require_cram_root() {
 # project notes but never actually defined here, so anything using it got an
 # empty string and failed with a bare PermissionError.
 : "${MTB_MINIMAP2:=${MTB_QC_BIN}/minimap2}"
+: "${MTB_BWA:=${MTB_QC_BIN}/bwa}"
+: "${MTB_WGSIM:=${MTB_QC_BIN}/wgsim}"
+: "${MTB_TMPBASE:=${TMPDIR:-/tmp}}"
 # paftools.js needs the k8 javascript shell; neither is in the QC env, both ship
 # with minimap2 and live in ~/bin here. Same failure mode again: they were passed
 # by bare name to is6110_pairwise_call.py, which requires them as arguments, so
@@ -275,6 +300,8 @@ mtb_show_config() {
              MTB_REF_FASTA MTB_REF_PATH MTB_H37RV \
              MTB_SNPEFF_JAR MTB_JAVA MTB_SNPEFF_DB MTB_PY MTB_PY_VT MTB_ODGI MTB_MINIMAP2 \
              MTB_SAMTOOLS MTB_BGZIP MTB_TABIX MTB_BEDTOOLS MTB_BCFTOOLS MTB_K8 MTB_PAFTOOLS \
+             MTB_BWA MTB_WGSIM MTB_GATK_SIF MTB_DELLY_ENV \
+             MTB_CRAM_ROOT MTB_CRAM_REF MTB_BUILD_DIR MTB_GRAPH_FRAMES \
              MTB_THREADS MTB_PARTITION; do
         printf '%-18s %s\n' "$v" "${!v}"
     done

@@ -68,8 +68,15 @@ echo "=== stage 1: into P5's key space ==="
 
 echo
 echo "=== stage 2: earn REF for the non-carriers ==="
+# The graph and its path list come from the build, never from the script's
+# defaults, which are a relative glob and a hard-coded build id.
+BUILD="${MTB_BUILD_DIR:?MTB_BUILD_DIR is unset; run through bin/refbias_run.sh}"
+OG="${OG:-$(awk -F'\t' '$1=="graph"{print $2}' "${BUILD}/build_info.tsv")}"
+[[ -s "$OG" ]] || { echo "FATAL: no graph at '${OG}'" >&2; exit 1; }
+[[ -s "${BUILD}/assets/paths.txt" ]] || { echo "FATAL: no ${BUILD}/assets/paths.txt" >&2; exit 1; }
 "$MTB_PY" is6110/bin/is6110_p5_stage2.py \
     --cohort-keys "$KEYTAB" --stage1-states "$OUT1S" --refmap "$REFMAP" \
+    --graph "$OG" --paths "${BUILD}/assets/paths.txt" \
     --isclean-dir "$P1IDIR" --workdir "${P1IDIR}/p5stage2" \
     --out "${OUT2}.tmp"
 mv -f "${OUT2}.tmp" "$OUT2"

@@ -179,8 +179,11 @@ def main():
     for stt in ("ALT", "REF", "ABSENT", "NOCALL"):
         vals = [st[s][stt] for s in samples]
         med = statistics.median(vals)
+        # A fourfold departure either way. |x - med| > 3*med could only fire
+        # ABOVE the median (x > 4*med), so a sample with near-zero REF -- a
+        # broken gVCF, a failed alignment -- was never flagged.
         out = [(s, st[s][stt]) for s in samples
-               if med and abs(st[s][stt] - med) > 3 * med]
+               if med and (st[s][stt] > 4 * med or st[s][stt] < med / 4)]
         print(f"      {stt:<8s} median {med:>8.0f}  range {min(vals)}-{max(vals)}"
               + (f"  OUTLIERS: {out}" if out else ""))
         findings.append(dict(check=f"state_{stt}", value=int(med),

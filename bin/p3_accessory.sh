@@ -76,7 +76,7 @@ PATHS="${BUILD}/assets/paths.txt"
 OG="${OG:-$(ls graphs/CX333.s10k.k23.K15/*.smooth.final.og 2>/dev/null | head -1)}"
 H37RV_PATH="${H37RV_PATH:-GCF_000195955#1#NC_000962.3}"
 BWA="${MTB_BWA:-${MTB_QC_BIN}/bwa}"
-ODGI="${MTB_ODGI:-/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/odgi/bin/odgi}"
+ODGI="${MTB_ODGI:?MTB_ODGI is unset; see config/project_env.sh}"
 NT="${SLURM_CPUS_PER_TASK:-4}"
 
 for f in "$REFMAP" "$LOCI" "$PATHS" "$OG" "$BWA" "$ODGI"; do
@@ -97,18 +97,28 @@ fi
 # work dir. Race-guarded the same way P0 indexes references, since array tasks
 # start together.
 PANEL="${BUILD}/assets/accessory_panel.fasta"
-if [[ ! -s "${PANEL}.bwt" ]]; then
+# COMPLETE MEANS EVERY FILE, and .bwt is moved into place LAST. Other tasks
+# used to take .bwt alone as "indexed", and it was moved before .pac and .sa,
+# so a task starting in that window ran bwa mem on a half-installed index and
+# failed -- and one failed task cancels everything downstream under afterok.
+_panel_ready() {
+    local e
+    [[ -s "$PANEL" ]] || return 1
+    for e in amb ann pac sa fai bwt; do [[ -s "${PANEL}.${e}" ]] || return 1; done
+}
+if ! _panel_ready; then
     lock="${PANEL}.build.$$"
     cat "${BUILD}/assets/accessory_novel.fasta" \
         "${BUILD}/assets/accessory_mosaic.fasta" > "$lock"
     "$BWA" index "$lock" > "${WORK}/panel_index.log" 2>&1
     "$MTB_SAMTOOLS" faidx "$lock"
-    [[ -s "$PANEL" ]] || mv -f "$lock" "$PANEL"
-    for ext in amb ann bwt pac sa fai; do
+    [[ -s "$PANEL" ]] || cp -f "$lock" "$PANEL"
+    for ext in amb ann pac sa fai bwt; do       # bwt last: it is the signal
         [[ -f "${lock}.${ext}" ]] && mv -f "${lock}.${ext}" "${PANEL}.${ext}"
     done
     rm -f "$lock"
 fi
+_panel_ready || { echo "FATAL: accessory panel index incomplete at ${PANEL}" >&2; exit 1; }
 
 if [[ $# -ge 1 ]]; then
     SAMPLE="$1"

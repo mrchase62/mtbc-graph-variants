@@ -75,7 +75,12 @@ echo "=== 2/5 reconcile"
     --summary-out "${RECON%.tsv}_summary.tsv"
 
 echo "=== 3/5 project into the H37Rv frame"
-"$MTB_PY" is6110/bin/is6110_project_sites.py \
+# --all-stacks: project EVERY reconciled stack, not only the A/B tiers. The
+# output is named _all and the writer needs a flank row for every site; without
+# the flag one-sided and unconfirmed two-sided-wide sites got no row, were keyed
+# "node:" and were dropped by the P5 merge (1,800 gwas1000 rows). The pilot and
+# scale100 were run by hand WITH the flag, so this matches what they did.
+"$MTB_PY" is6110/bin/is6110_project_sites.py --all-stacks \
     --reconcile "$RECON" --refmap "$REFMAP" --graph "$OG" \
     --workdir "${WORK:-refbias/work/p1iv}" --out "$H37RV"
 

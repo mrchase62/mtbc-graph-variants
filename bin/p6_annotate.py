@@ -27,7 +27,7 @@ def op(p):
     return gzip.open(p, "rt") if p.endswith(".gz") else open(p)
 
 
-def load_genes(path, want=("gene", "CDS")):
+def load_genes(path, want=("gene", "pseudogene", "CDS")):
     """[(start, end, locus_tag, gene, product)] sorted by start, per contig."""
     by_contig = collections.defaultdict(list)
     prod = {}
@@ -59,11 +59,22 @@ def load_genes(path, want=("gene", "CDS")):
 
 
 def make_lookup(rows):
+    """The gene containing p, preferring the latest-starting one.
+
+    The backward scan used to stop at the first gene that ENDS before p, so a
+    longer, earlier gene still containing p was never reached whenever a short
+    gene sat inside it -- 9,418 genic H37Rv bases came back intergenic. The
+    running maximum of end coordinates bounds the scan correctly: once no
+    earlier gene can reach p, stop.
+    """
     starts = [r[0] for r in rows]
+    reach, m = [], 0
+    for r in rows:
+        m = max(m, r[1]); reach.append(m)
 
     def hit(p):
         i = bisect.bisect_right(starts, p) - 1
-        while i >= 0 and rows[i][1] >= p:
+        while i >= 0 and reach[i] >= p:
             if rows[i][0] <= p <= rows[i][1]:
                 return rows[i]
             i -= 1

@@ -45,6 +45,21 @@ META = {"key", "frame", "region", "kind", "h37rv_pos", "node", "node_offset",
         "svtype", "svlen", "size_band", "n_both_callers", "src", "max_qual",
         "qual_band", "stage11_ppv", "qual_from", "component"}
 
+def read_fasta_seq(path):
+    """The first sequence of a (optionally gzipped) FASTA, upper-cased."""
+    op = gzip.open if path.endswith(".gz") else open
+    name, buf = None, []
+    with op(path, "rt") as fh:
+        for line in fh:
+            if line.startswith(">"):
+                if name is not None:
+                    break
+                name = line[1:].split()[0]
+            else:
+                buf.append(line.strip())
+    return name, "".join(buf).upper()
+
+
 def read_matrix(path):
     if not os.path.exists(path):
         return [], []
@@ -173,6 +188,10 @@ def main():
                          "absent means no AA is emitted")
     ap.add_argument("--h37rv-contig", default="NC_000962.3")
     ap.add_argument("--h37rv-length", type=int, default=4411532)
+    ap.add_argument("--h37rv-fasta", default="",
+                    help="H37Rv FASTA, for the REF base of symbolic records "
+                         "(SV, IS6110, accessory). Without it those records "
+                         "carry REF=N, which does not match the reference")
     ap.add_argument("--cohort-name", required=True)
     ap.add_argument("--build-id", default="7713a8d71d8e")
     ap.add_argument("--bgzip", default=os.environ.get("MTB_BGZIP", "bgzip"))
@@ -206,6 +225,27 @@ def main():
         sys.exit(f"no rows in {a.matrix or a.states_dir}")
     sv_rows, sv_samples = read_matrix(a.sv_matrix) if a.sv_matrix else ([], [])
     order = sorted(set(samples) | set(sv_samples))
+    # THE COHORT IS THE P5 SAMPLE SET, and nothing else may add a column. The
+    # IS6110 tables used to append every sample they named, so a key table from
+    # another cohort (the pilot's, via a fallback in p5_finish.sh) added that
+    # cohort's isolates as extra columns. Rows for samples outside the cohort
+    # are now counted and dropped.
+    cohort = set(order)
+    n_foreign = collections.Counter()
+
+    H37 = ""
+    if a.h37rv_fasta:
+        hname, H37 = read_fasta_seq(a.h37rv_fasta)
+        if hname != a.h37rv_contig:
+            sys.exit(f"FATAL: --h37rv-fasta contig {hname!r} is not "
+                     f"--h37rv-contig {a.h37rv_contig!r}")
+        if len(H37) != a.h37rv_length:
+            sys.exit(f"FATAL: --h37rv-fasta is {len(H37):,} bp, "
+                     f"--h37rv-length says {a.h37rv_length:,}")
+
+    def h37_base(pos):
+        """REF base at a 1-based H37Rv position, or N without the FASTA."""
+        return H37[pos - 1] if H37 and 0 < pos <= len(H37) else "N"
 
     # Resolve the IS6110 key table from the cohort name when it is not given.
     # I have now passed the wrong path three times in one session -- the
@@ -237,11 +277,11 @@ def main():
     if a.is6110_keys and os.path.exists(a.is6110_keys):
         for r in csv.DictReader(open(a.is6110_keys), delimiter="\t"):
             k = r["key"]
+            if r["sample"] not in cohort:
+                n_foreign["IS6110 key table"] += 1
+                continue
             is6110[k][r["sample"]] = r
             is_meta.setdefault(k, r)
-            if r["sample"] not in order:
-                order.append(r["sample"])
-        order = sorted(set(order))
 
     # ---- stage-2 states, if they exist.
     # The arm's key table and P5's key space spell the same site differently:
@@ -268,6 +308,9 @@ def main():
     if a.is6110_states and os.path.exists(a.is6110_states):
         for r in csv.DictReader(open(a.is6110_states), delimiter="\t"):
             k = arm_key(r["key"])
+            if r["sample"] not in cohort:
+                n_foreign["IS6110 stage-2 states"] += 1
+                continue
             if k not in is_meta:
                 n_promoted["key not in the arm's table"] += 1
                 continue
@@ -281,9 +324,6 @@ def main():
             is6110[k][r["sample"]] = dict(prev or is_meta[k],
                                           sample=r["sample"], state=r["state"])
             n_promoted[r["state"]] += 1
-            if r["sample"] not in order:
-                order.append(r["sample"])
-        order = sorted(set(order))
         print(f"  IS6110 stage-2 states from {a.is6110_states}: "
               + ", ".join(f"{k} {v:,}" for k, v in sorted(n_promoted.items())))
     else:
@@ -423,7 +463,14 @@ def main():
             info.append("IS6110PROX")
         cell = "\t".join(f'{STATE_GT.get(st.get(s, ""), ".")}:{st.get(s, "") or "NA"}'
                           for s in order)
-        recs.append((a.h37rv_contig, int(r["start"]), r["interval"], "N",
+        # `start` is the first DELETED base (sv_intervals.py), and a symbolic
+        # VCF deletion is anchored on the base BEFORE it, with END the last
+        # deleted base. Writing POS=start put every deletion one base late and,
+        # without END, a region query inside the deletion missed the record.
+        st0, en0 = int(r["start"]), int(r.get("end") or r["start"])
+        pos = max(st0 - 1, 1)
+        info.append(f"END={en0}")
+        recs.append((a.h37rv_contig, pos, r["interval"], h37_base(pos),
                      [f"<{r.get('svtype','DEL')}>"], info, cell))
         n_iv += 1
     if ivs:
@@ -449,7 +496,9 @@ def main():
             if st != "ALT" and measured.get(s):
                 st = measured[s]
             cell.append(f'{STATE_GT.get(st, ".")}:{st or "NA"}')
-        recs.append((a.h37rv_contig, int(p), r["key"], "N",
+        if svtype == "DEL" and str(r.get("svlen") or "").lstrip("-").isdigit():
+            info.append(f"END={int(p) + abs(int(r['svlen']))}")
+        recs.append((a.h37rv_contig, int(p), r["key"], h37_base(int(p)),
                      [f"<{svtype}>"], info, "\t".join(cell)))
         n_sv += 1
 
@@ -495,8 +544,8 @@ def main():
             if str(m.get("route", "")):
                 info.append(f"ACCROUTE={m['route']}")
             cell = "\t".join(f'{STATE_GT[st[s2]]}:{st[s2]}' for s2 in order)
-            recs.append((a.h37rv_contig, int(m["pos"]), f"acc:{lid}", "N",
-                         ["<INS>"], info, cell))
+            recs.append((a.h37rv_contig, int(m["pos"]), f"acc:{lid}",
+                         h37_base(int(m["pos"])), ["<INS>"], info, cell))
             n_l1 += 1
         t = sum(n_st.values()) or 1
         print(f"  {n_l1:,} level-1 records: "
@@ -538,7 +587,8 @@ def main():
             r = per.get(s)
             st = r["state"] if r else "NOCALL"
             cell.append(f'{STATE_GT.get(st, ".")}:{st}')
-        recs.append((chrom, pos, k, "N", ["<INS:ME:IS6110>"], info,
+        ref_b = h37_base(pos) if chrom == a.h37rv_contig else "N"
+        recs.append((chrom, pos, k, ref_b, ["<INS:ME:IS6110>"], info,
                      "\t".join(cell)))
         n_is += 1
 
@@ -565,10 +615,12 @@ def main():
         w('##ALT=<ID=UNKNOWN,Description="Alternate allele not represented in the '
           'cohort matrix; the genotype and FORMAT/ST still carry the call">\n')
         w('##INFO=<ID=CLASS,Number=1,Type=String,Description="Variant class: '
-          'small, sv or is6110. Accessory-region records are NOT present in this '
-          'file: the presence rule is calibrated on five isolates and 21 positive '
-          'pairs, so a genotype from it would be asserted rather than measured. '
-          'See refbias/ACCESSORY_IN_VCF_PLAN.md">\n')
+          'small, sv, is6110 or accessory_presence. accessory_presence records '
+          'state whether each sample carries a catalogued accessory locus '
+          '(level 1); variation inside those loci is CLASS=small on node '
+          'contigs">\n')
+        w('##INFO=<ID=END,Number=1,Type=Integer,Description="End position of '
+          'a symbolic structural variant: the last deleted base">\n')
         w('##INFO=<ID=FRAME,Number=1,Type=String,Description="h37rv or node. A '
           'node-frame record sits on sequence the H37Rv path does not carry and is '
           'emitted on its own node_<id> contig rather than dropped">\n')
@@ -621,14 +673,25 @@ def main():
           'nothing">\n')
         w("#" + "\t".join(["CHROM", "POS", "ID", "REF", "ALT", "QUAL",
                            "FILTER", "INFO", "FORMAT"] + order) + "\n")
+        n_star_added = 0
         for chrom, pos, ident, ref, alts, info, cells in recs:
+            # GT=2 is the * allele (ABSENT). Every block maps ABSENT to 2, but
+            # only the small-variant block used to add *, so the SV, interval,
+            # accessory and IS6110 records wrote GT=2 against one ALT -- 976
+            # records in scale200, and `bcftools +fill-tags` aborts on the
+            # first. Decide it here, once, from the cells actually written.
+            if "*" not in alts and ("\t" + cells).find("\t2:") != -1:
+                alts = list(alts) + ["*"]
+                n_star_added += 1
             w("\t".join([chrom, str(pos), ident, ref, ",".join(alts), ".",
                          "PASS", ";".join(info), "GT:ST"]) + "\t"
               + cells + "\n")
 
     if a.out.endswith(".gz"):
         subprocess.run([a.bgzip, "-f", tmp], check=True)
-        subprocess.run([a.tabix, "-f", "-p", "vcf", a.out], check=False)
+        # check=True: an index that failed to build left a VCF that region
+        # queries silently cannot read
+        subprocess.run([a.tabix, "-f", "-p", "vcf", a.out], check=True)
 
     print(f"  cohort {a.cohort_name}: {len(order)} samples, {len(recs):,} records")
     print(f"    small variants {n_small:,}   structural {n_sv + n_iv:,} "
@@ -639,6 +702,13 @@ def main():
     print(f"    contigs: {a.h37rv_contig} plus {len(nodes_used):,} node_* contigs")
     print(f"    ancestral allele on {n_aa:,} records, of which {n_inv:,} have "
           f"the reference carrying the derived allele")
+    if n_star_added:
+        print(f"    {n_star_added:,} symbolic records carry * for ABSENT cells")
+    if not H37:
+        print("    WARNING: no --h37rv-fasta; symbolic records carry REF=N")
+    for what, n in sorted(n_foreign.items()):
+        print(f"    {n:,} rows DROPPED from the {what}: sample not in this "
+              f"cohort's P5 sample set")
     if n_unplaced:
         print(f"    {n_unplaced:,} IS6110 sites EXCLUDED: no position in either "
               f"frame, so no VCF record is possible")

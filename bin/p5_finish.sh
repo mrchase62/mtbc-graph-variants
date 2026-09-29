@@ -39,7 +39,15 @@ for _c in "${MTB_ENV_FILE:-}" \
 done
 source "$_mtb_env"
 
-BUILD="${MTB_BUILD_DIR:-$(find refbias/build -mindepth 1 -maxdepth 1 -type d | head -1)}"
+# Exactly one build, or MTB_BUILD_DIR. `find | head -1` picked whichever build
+# the filesystem listed first when there were several, while p4_place.sh
+# refused -- so two passes of one chain could run against different builds.
+BUILD="${MTB_BUILD_DIR:-}"
+if [[ -z "$BUILD" ]]; then
+    mapfile -t _c < <(find "${BUILD_ROOT:-refbias/build}" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
+    [[ "${#_c[@]}" -eq 1 ]] || { echo "FATAL: set MTB_BUILD_DIR (${#_c[@]} builds)" >&2; exit 1; }
+    BUILD="${_c[0]}"
+fi
 export MTB_BUILD_DIR="$BUILD"
 
 # Paths were hard-coded to the pilot layout, so this script silently checked
@@ -180,14 +188,13 @@ _tag="$(basename "$(dirname "$OUTDIR")")"
 COHORT_NAME="${COHORT_NAME:-$_tag}"
 echo "  cohort name: ${COHORT_NAME}"
 
+# NOT resolved here either, for the same reason as IS6110_STATES below. This
+# loop used to fall back to the unprefixed is6110/results/p1i_cohort_keys.tsv
+# -- the PILOT's table -- for any cohort without its own, and because it then
+# passed --is6110-keys explicitly it bypassed the guard in merge_cohort_vcf.py
+# written to stop exactly that. merge_cohort_vcf.py maps the cohort name to its
+# own table and emits no IS6110 block, loudly, when there is none.
 IS6110_KEYS="${IS6110_KEYS:-}"
-if [[ -z "$IS6110_KEYS" ]]; then
-    _kt="$_tag"; [[ "$_kt" == "pilot" ]] && _kt=""
-    for _c in "is6110/results/${_kt}_p1i_cohort_keys.tsv" \
-              "is6110/results/p1i_cohort_keys.tsv"; do
-        [[ -s "$_c" ]] && { IS6110_KEYS="$_c"; break; }
-    done
-fi
 # The two state tables that turn presence-only blocks into genotypes. Both are
 # optional and the merge says so loudly when one is absent, because without
 # them the SV and IS6110 blocks carry no REF at all and nothing downstream that
@@ -249,8 +256,17 @@ else
     echo "  carry within-insert variation only, with no presence character"
 fi
 
+# REF bases and the build id come from the build, not from the merge's
+# defaults: symbolic records used to carry REF=N, and --build-id defaulted to a
+# hard-coded id that any rebuild would have silently kept.
+H37RV_FASTA="${BUILD}/refs/GCF_000195955.fasta"
+[[ -s "$H37RV_FASTA" ]] || { echo "FATAL: no H37Rv FASTA at ${H37RV_FASTA}" >&2; exit 1; }
+BUILD_ID="$(awk -F'\t' '$1=="build_id"{print $2}' "${BUILD}/build_info.tsv")"
+[[ -n "$BUILD_ID" ]] || { echo "FATAL: no build_id in ${BUILD}/build_info.tsv" >&2; exit 1; }
+
 "$MTB_PY" bin/merge_cohort_vcf.py \
     --matrix "${OUTDIR}/matrix.tsv" --sv-matrix "${OUTDIR}/sv_matrix.tsv" \
+    --h37rv-fasta "$H37RV_FASTA" --build-id "$BUILD_ID" \
     ${IS6110_KEYS:+--is6110-keys "$IS6110_KEYS"} \
     ${IS6110_STATES:+--is6110-states "$IS6110_STATES"} \
     ${SV_STATES:+--sv-states "$SV_STATES"} \
@@ -271,6 +287,12 @@ fi
 # carries the pggb fingerprint parsed from the graph filename, which is the part
 # that actually identifies the graph.
 bash bin/stamp_build_id.sh "${OUTDIR}/merged.vcf.gz"
+
+# THE DELIVERABLE MUST BE READABLE BY STANDARD TOOLS, checked here and not by a
+# consumer months later. bin/vcf_gate.sh fails on a GT index above the ALT
+# count, a record bcftools cannot parse, a REF that does not match H37Rv, or an
+# unsorted contig -- each of which the pipeline's own readers tolerated.
+bash bin/vcf_gate.sh "${OUTDIR}/merged.vcf.gz" "$H37RV_FASTA"
 
 echo
 echo "=== chain rebuilt from one generation ==="

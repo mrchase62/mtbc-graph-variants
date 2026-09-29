@@ -56,6 +56,22 @@ def orig_to_clean(cm, pos):
     return pos - (cm[i - 1][1] if i else 0)
 
 
+# map the stage-1 key back to the same short form the carrier table uses.
+# Stage-1 keys are  h37rv:<pos>:<ref>><alt>  and  node:<id>:<off>:<ref>><alt>
+# (mtb_norm), and the carrier table's `node` column is already "<id>:<off>",
+# so the node short form MUST keep the offset. It used to drop it
+# ("node:<id>:"), which never matched "node:<id>:<off>:", so no node-frame
+# key found a carrier and every node-frame NOCALL was written ABSENT --
+# 446,005 cells in gwas1000.
+def short(k):
+    f = k.split(":")
+    if f[0] == "h37rv":
+        return f"h37rv:{f[1]}:"
+    if f[0] == "node" and len(f) >= 3:
+        return f"node:{f[1]}:{f[2]}:"
+    raise ValueError(f"unrecognised stage-1 key {k!r}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cohort-keys", default="is6110/results/p1i_cohort_keys.tsv")
@@ -94,11 +110,6 @@ def main():
         src.setdefault((x["sample"], x["reference"], int(x["r_pos"])), []).append(k)
 
     states = list(csv.DictReader(open(a.stage1_states, newline=""), delimiter="\t"))
-    # map the stage-1 key back to the same short form the carrier table uses
-    def short(k):
-        f = k.split(":")
-        return f'{f[0]}:{f[1]}:' if f[0] == "h37rv" else f'node:{f[1]}:'
-
     need = collections.defaultdict(set)     # target sample -> short keys
     for r in states:
         if r["state"] == "NOCALL":
@@ -132,6 +143,11 @@ def main():
             continue
         p = subprocess.run([a.odgi, "position", "-i", og, "-F", qf, "-r", tpath,
                             "-t", "4"], capture_output=True, text=True)
+        # A failed odgi call returns no rows, and every key for this target
+        # would then read as unprojected. Stop instead.
+        if p.returncode != 0:
+            sys.exit(f"FATAL: odgi position failed for {tref} "
+                     f"(exit {p.returncode}):\n{p.stderr[-2000:]}")
         got = {}
         for line in p.stdout.split("\n"):
             if not line or line.startswith("#"):
@@ -148,6 +164,8 @@ def main():
         for k, cref, cpos in order:
             v = got.get((paths[cref], fr.to_panel(cref, cpos - 1)))
             if v is None:
+                # odgi answered but returned no row for this query: nothing
+                # was measured, which is not evidence of absence
                 proj[(tref, k)] = (None, -1)
             else:
                 tp, dist = v
@@ -194,6 +212,11 @@ def main():
         bam = os.path.join(a.isclean_dir, f"{sample}.isclean.bam")
         r = subprocess.run([a.samtools, "depth", "-a", "-b", bed, bam],
                            capture_output=True, text=True)
+        # a failed call would otherwise read as depth 0 everywhere -> NOCALL
+        # for the whole sample, with nothing said
+        if r.returncode != 0:
+            sys.exit(f"FATAL: samtools depth failed on {bam} "
+                     f"(exit {r.returncode}):\n{r.stderr[-2000:]}")
         for line in r.stdout.split("\n"):
             f = line.split("\t")
             if len(f) == 3:
@@ -213,6 +236,9 @@ def main():
         if os.path.exists(bam) and s not in contig_of:
             r = subprocess.run([a.samtools, "idxstats", bam],
                                capture_output=True, text=True)
+            if r.returncode != 0:
+                sys.exit(f"FATAL: samtools idxstats failed on {bam} "
+                         f"(exit {r.returncode}):\n{r.stderr[-2000:]}")
             for line in r.stdout.split("\n"):
                 f = line.split("\t")
                 if len(f) > 1 and f[0].endswith("_isclean"):
@@ -227,9 +253,14 @@ def main():
             continue
         s = r["sample"]; R = ref_of[s]; k = short(r["key"])
         pos, dist = proj.get((R, k), (None, -1))
-        if pos is None or dist != 0:
-            verdict[i] = ("ABSENT", "no projection" if pos is None
-                          else f"off the path, dist {dist}")
+        # ABSENT only from a projection that was actually made and landed off
+        # the target's path. No projection at all -- target or carrier path not
+        # in the graph, no carrier for the key, or odgi returned nothing -- is
+        # "not measured", which is NOCALL.
+        if pos is None:
+            verdict[i] = ("NOCALL", "no projection")
+        elif dist != 0:
+            verdict[i] = ("ABSENT", f"off the path, dist {dist}")
         elif R not in cm_of or s not in contig_of:
             verdict[i] = ("NOCALL", "no crossmap or no element-free alignment")
         else:
@@ -271,11 +302,15 @@ def main():
                         allele=r["allele"] if st == r["state"] else "",
                         evidence=ev))
 
+    # header-only on empty input, never an IndexError on out[0]
+    fields = list(out[0]) if out else (list(states[0]) + ["evidence"] if states
+                                       else ["sample", "key", "state", "allele",
+                                             "evidence"])
     with open(a.out, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(out[0]), delimiter="\t",
+        w = csv.DictWriter(fh, fieldnames=fields, delimiter="\t",
                            lineterminator="\n")
         w.writeheader(); w.writerows(out)
-    n = sum(counts.values())
+    n = sum(counts.values()) or 1
     print(f"\n  {n} cells after stage 2")
     for k in ("ALT", "REF", "ABSENT", "NOCALL"):
         if counts[k]:

@@ -67,7 +67,7 @@ P2DIR="${P2DIR:-refbias/p2}"
 OUTDIR="${OUTDIR:-refbias/p5}"
 WORK="${WORK:-refbias/work/p5}"
 OG="${OG:-$(ls graphs/CX333.s10k.k23.K15/*.smooth.final.og 2>/dev/null | head -1)}"
-ODGI="${MTB_ODGI:-/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/odgi/bin/odgi}"
+ODGI="${MTB_ODGI:?MTB_ODGI is unset; see config/project_env.sh}"
 H37RV_PATH="${H37RV_PATH:-GCF_000195955#1#NC_000962.3}"
 H37RV_FA="${BUILD}/refs/GCF_000195955.fasta"
 PATHS="${BUILD}/assets/paths.txt"
@@ -127,7 +127,21 @@ PLACED="${P4DIR}/${SAMPLE}.placed.tsv"
 for f in "$GVCF" "$PLACED"; do
     [[ -s "$f" ]] || { echo "FATAL: ${SAMPLE}: missing ${f}" >&2; exit 1; }
 done
-[[ -s "${OUTDIR}/${SAMPLE}.states.tsv" ]] && { echo "[P5] ${SAMPLE}: already done"; exit 0; }
+# "Already done" means done AGAINST THIS KEY SET. The skip used to test only
+# that a states file existed, so after the keys changed every task reported
+# done and p5_finish.sh then refused the stale files -- to be deleted by hand.
+# The sparse header carries the checksum of the key list it was written
+# against; compare it with keys.tsv and redo the sample on a mismatch.
+_st="${OUTDIR}/${SAMPLE}.states.tsv"
+if [[ -s "$_st" ]]; then
+    _have="$(awk -F'\t' '$1=="#keys_sha1"{print $2; exit} !/^#/{exit}' "$_st")"
+    _want="$("$MTB_PY" -c 'import csv,sys; sys.path.insert(0,"bin"); import p5_states_io as io; print(io.keys_sha1(list(csv.DictReader(open(sys.argv[1]),delimiter="\t"))))' "$KEYS")"
+    if [[ -n "$_have" && "$_have" == "$_want" ]]; then
+        echo "[P5] ${SAMPLE}: already done against this key set"; exit 0
+    fi
+    echo "[P5] ${SAMPLE}: states file is from a different key set" \
+         "(${_have:-no checksum} vs ${_want}); recomputing"
+fi
 
 
 # WHICH FRAME IS THIS SAMPLE'S INPUT IN? Measured, not assumed. P1 and P2 align
