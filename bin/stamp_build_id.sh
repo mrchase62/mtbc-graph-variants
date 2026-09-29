@@ -60,6 +60,34 @@ _info() { awk -F'\t' -v k="$1" '$1==k{print $2; exit}' "${BUILD}/build_info.tsv"
 BUILD_ID="$(_info build_id)"
 GRAPH="$(_info graph)"
 GRAPH_SHA="$(_info graph_sha256)"
+
+# THE GRAPH FINGERPRINT, and why a path is not enough.
+#
+# `graph` in build_info.tsv is an absolute path on whichever cluster built it.
+# That is useless as provenance in two situations that now both apply: the graph
+# is built by a SEPARATE REPOSITORY, so its identity is no longer anywhere in
+# this repository's history, and the path points into scratch, which is purged.
+#
+# pggb encodes the component versions and parameters that produced a graph into
+# the filename as three dot-separated hashes -- wfmash, seqwish, smoothxg -- for
+# example
+#   mtb.complex333.fasta.gz.f4f5ee2.11fba48.36e68b6.smooth.final.og
+#                           ^^^^^^^^^^^^^^^^^^^^^^^
+# Those hashes ARE the graph's identity in a way the path is not: rebuild with
+# different versions and they change, and every coordinate projection taken from
+# the old graph becomes invalid. So they are stamped as a field of their own,
+# alongside the basename, which is site-independent where the path is not.
+GRAPH_BASE="$(basename "${GRAPH:-}")"
+GRAPH_FP="$(printf '%s' "$GRAPH_BASE" \
+    | grep -oE '([0-9a-f]{7,}\.){2}[0-9a-f]{7,}' | head -1 || true)"
+[[ -n "$GRAPH_FP" ]] || GRAPH_FP="unparsed"
+
+# Which repository and commit built the graph. Nothing produces these yet -- the
+# panel repository would have to write them into build_info.tsv -- so they are
+# stamped only when present and are otherwise omitted rather than guessed. An
+# absent field is honest; a fabricated one is not.
+PANEL_REPO="$(_info panel_repo)"
+PANEL_COMMIT="$(_info panel_commit)"
 [[ -n "$BUILD_ID" ]] || { echo "[stamp] ${BUILD}/build_info.tsv has no build_id" >&2; exit 1; }
 MANIFEST_SHA="-"
 [[ -s "${BUILD}/manifest.tsv" ]] && \
@@ -77,13 +105,19 @@ for vcf in "$@"; do
     # Insert before #CHROM. Header lines must precede it, and appending after it
     # would produce a VCF that parsers silently mis-read rather than reject.
     awk -v id="$BUILD_ID" -v g="$GRAPH" -v gs="$GRAPH_SHA" \
-        -v ms="$MANIFEST_SHA" -v bd="$BUILD" '
+        -v ms="$MANIFEST_SHA" -v bd="$BUILD" \
+        -v gb="$GRAPH_BASE" -v gf="$GRAPH_FP" \
+        -v pr="$PANEL_REPO" -v pc="$PANEL_COMMIT" '
         /^#CHROM/ && !done {
             printf "##MTB_graph_build=%s\n", id
             printf "##MTB_graph=%s\n", g
+            printf "##MTB_graph_basename=%s\n", gb
+            printf "##MTB_graph_fingerprint=%s\n", gf
             printf "##MTB_graph_sha256=%s\n", gs
             printf "##MTB_p0_build_dir=%s\n", bd
             printf "##MTB_p0_manifest_sha256=%s\n", ms
+            if (pr != "") printf "##MTB_panel_repo=%s\n", pr
+            if (pc != "") printf "##MTB_panel_commit=%s\n", pc
             done = 1
         }
         { print }
@@ -94,5 +128,5 @@ for vcf in "$@"; do
     mv -f "$new" "$vcf"
     rm -f "$hdr" "${hdr}.new"
     if [[ -s "${vcf}.tbi" && -x "$TABIX" ]]; then "$TABIX" -f -p vcf "$vcf"; fi
-    echo "[stamp] ${vcf}: build ${BUILD_ID}"
+    echo "[stamp] ${vcf}: build ${BUILD_ID}, graph fingerprint ${GRAPH_FP}"
 done

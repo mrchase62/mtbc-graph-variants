@@ -259,5 +259,18 @@ fi
     --cohort-name "$COHORT_NAME" \
     --out "${OUTDIR}/merged.vcf.gz"
 
+# STAMP THE GRAPH PROVENANCE. bin/stamp_build_id.sh existed and was called by
+# p2_call.sh for the per-sample caller VCFs, but never here -- so the cohort
+# deliverable, the one file anybody actually uses, carried no record of which
+# graph produced its coordinates. Both merged VCFs in the tree on 2026-09-29 had
+# zero ##MTB headers.
+#
+# This matters more now that the graph is built by a separate repository: its
+# identity is no longer anywhere in this repository's history, and the path
+# recorded in build_info.tsv points into scratch, which is purged. The stamp
+# carries the pggb fingerprint parsed from the graph filename, which is the part
+# that actually identifies the graph.
+bash bin/stamp_build_id.sh "${OUTDIR}/merged.vcf.gz"
+
 echo
 echo "=== chain rebuilt from one generation ==="
