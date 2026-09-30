@@ -81,7 +81,8 @@ esac
 STAGE1DIR="${P1IDIR}/p5stage1"
 STAGE2=("$MTB_PY" is6110/bin/is6110_p5_stage2.py
     --cohort-keys "$KEYTAB" --stage1-dir "$STAGE1DIR" --refmap "$REFMAP"
-    --isclean-dir "$P1IDIR" --workdir "${P1IDIR}/p5stage2" --out "$OUT2")
+    --isclean-dir "$P1IDIR" --workdir "${P1IDIR}/p5stage2" --out "$OUT2"
+    --threads "${SLURM_CPUS_PER_TASK:-1}")
 
 if [[ "$P1ISSTEP" == "--all" || "$P1ISSTEP" == "--stage1" ]]; then
     echo "=== stage 1: into P5's key space ==="

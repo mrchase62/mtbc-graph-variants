@@ -62,6 +62,9 @@ REFMAP="${REFMAP:-${P1DIR}/refmap.tsv}"
 COHORT="${COHORT:-refbias/cohort.pilot.tsv}"
 export P1DIR P2DIR P4DIR P4BDIR OUTDIR REFMAP COHORT
 
+# the step, read here as well as below: the freshness guard depends on it
+P5FSTEP="${1:-${P5FSTEP:---all}}"
+
 # --- freshness guard --------------------------------------------------------
 # EVERY find HERE IS -maxdepth 1. Without it they recurse, and refbias/p5
 # contains with_is6110/, a subdirectory of state files from an earlier
@@ -90,7 +93,11 @@ fi
 # than a warning: the matrix would otherwise be built on 41% of the input.
 # Compared against the script's own mtime, because P4b has no later stage to
 # be older than.
-if [[ -d "$P4BDIR" ]]; then
+# Only the steps that READ P4b need this: --pre builds sv_matrix.tsv from it.
+# The merge reads sv_matrix.tsv, not P4b, so refusing it here blocked a VCF
+# rebuild for every cohort whenever p4b_place_sv.py changed, even when the SV
+# matrix was deliberately being kept.
+if [[ -d "$P4BDIR" && ( "$P5FSTEP" == "--all" || "$P5FSTEP" == "--pre" ) ]]; then
     stale_p4b=$(find "$P4BDIR" -maxdepth 1 -name '*.sv_placed.tsv' \
         ! -newer bin/p4b_place_sv.py 2>/dev/null | wc -l)
     if [[ "$stale_p4b" -gt 0 ]]; then

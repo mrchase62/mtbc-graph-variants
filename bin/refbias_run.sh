@@ -297,9 +297,16 @@ deps() {  # join the job ids that exist, for --dependency=afterok:a:b:c
     printf '%s' "$out"
 }
 
-submit() {  # name script extra_export array dep
-    local name="$1" script="$2" extra="$3" array="$4" dep="$5"
+submit() {  # name script extra_export array dep [resources]
+    # resources, optional: sbatch options such as "-c 1 --mem=2G". They override
+    # the script's own #SBATCH lines, which were sized for the heaviest use and
+    # billed every task for it: the per-sample IS6110 tasks asked for 4 cores
+    # and 16 GB to run one samtools call.
+    local name="$1" script="$2" extra="$3" array="$4" dep="$5" res="${6:-}"
     local -a args=(-J "rb_${COHORT_NAME}_${name}")
+    if [[ -n "$res" ]]; then
+        local -a _r; read -r -a _r <<< "$res"; args+=("${_r[@]}")
+    fi
     # %N goes on the array spec, never on a non-array job: sbatch rejects
     # `--array=%50` outright, and the summary steps are submitted with an
     # empty array argument.
@@ -434,7 +441,7 @@ for p in "${RUN[@]}"; do
         # because each reads the previous one's whole-cohort table and there is
         # nothing per-sample left to parallelise.
         EX="OUTDIR=${OUTROOT}/p1i,WORK=${WORKPFX}p1iv,P1IVCF=${OUTROOT}/p1i/vcf"
-        JOB[p1iv]=$(submit p1iv bin/p1i_vcf.sh "$EX" "" "${JOB[p1i]:-}") ;;
+        JOB[p1iv]=$(submit p1iv bin/p1i_vcf.sh "$EX" "" "${JOB[p1i]:-}" "-c 2 --mem=4G") ;;
       p1is)
         # Put the IS6110 arm into P5's key space and earn a REF for every
         # isolate that did not report a site. Both scripts existed and were
@@ -447,13 +454,16 @@ for p in "${RUN[@]}"; do
         EX="P1IDIR=${OUTROOT}/p1i,COHORT_NAME=${COHORT_NAME}"
         NACC="$(wc -l < "${BUILD}/assets/accessions.txt" 2>/dev/null || echo "$N")"
         NPROJ=$(( N < NACC ? N : NACC ))
-        JOB[p1is1]=$(submit p1is1 bin/p1i_p5states.sh "${EX},P1ISSTEP=--stage1" "" "${JOB[p1iv]:-}")
+        # Sized from measured use: odgi holds the graph in about 0.7 GB, and
+        # more odgi threads bought 1.6x speed for 2.5x the CPU, so one core.
+        JOB[p1is1]=$(submit p1is1 bin/p1i_p5states.sh "${EX},P1ISSTEP=--stage1" "" \
+                "${JOB[p1iv]:-}" "-c 1 --mem=2G")
         JOB[p1isp]=$(submit p1isproj bin/p1i_p5states.sh "${EX},P1ISSTEP=--project" \
-                "1-${NPROJ}" "${JOB[p1is1]}")
+                "1-${NPROJ}" "${JOB[p1is1]}" "-c 1 --mem=3G")
         JOB[p1iss]=$(submit p1issample bin/p1i_p5states.sh "${EX},P1ISSTEP=--sample" \
-                "1-${N}" "${JOB[p1isp]}")
+                "1-${N}" "${JOB[p1isp]}" "-c 1 --mem=2G")
         JOB[p1is]=$(submit p1ismerge bin/p1i_p5states.sh "${EX},P1ISSTEP=--merge" "" \
-                "${JOB[p1iss]}") ;;
+                "${JOB[p1iss]}" "-c 1 --mem=2G") ;;
       p5svgt)
         # Measure deletion absence, so the SV block is not presence-only.
         # Needs sv_matrix.tsv, which p5 --pre writes.
@@ -483,12 +493,15 @@ for p in "${RUN[@]}"; do
         SH="${VCF_SHARDS:-$(( (N + 499) / 500 ))}"
         if [[ "$SH" -gt 1 ]]; then
             P5EX="${P5EX},VCF_SHARDS=${SH}"
+            # a shard peaked at 2.2 GB at 997 isolates in 4 shards
             JOB[p5vcfsh]=$(submit p5vcfshard bin/p5_finish.sh \
-                    "${P5EX},P5FSTEP=--merge-shard" "1-${SH}" "$_up")
+                    "${P5EX},P5FSTEP=--merge-shard" "1-${SH}" "$_up" "-c 1 --mem=8G")
             JOB[p5vcf]=$(submit p5vcf bin/p5_finish.sh \
-                    "${P5EX},P5FSTEP=--merge-assemble" "" "${JOB[p5vcfsh]}")
+                    "${P5EX},P5FSTEP=--merge-assemble" "" "${JOB[p5vcfsh]}" "-c 1 --mem=4G")
         else
-            JOB[p5vcf]=$(submit p5vcf bin/p5_finish.sh "${P5EX},P5FSTEP=--merge" "" "$_up")
+            # one process peaked at 0.8 GB at 200 isolates
+            JOB[p5vcf]=$(submit p5vcf bin/p5_finish.sh "${P5EX},P5FSTEP=--merge" "" \
+                    "$_up" "-c 1 --mem=8G")
         fi ;;
       archive|restore)
         # Not part of the default chain: run with --only archive after a

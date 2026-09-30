@@ -49,12 +49,17 @@ RES="${RES:-is6110/results}"
 OG="${OG:-$(awk -F'\t' '$1=="graph"{print $2}' "${MTB_BUILD_DIR:-refbias/build/7713a8d71d8e}/build_info.tsv")}"
 mkdir -p "$VCFDIR" "$RES"
 
+# The PILOT's tables are unprefixed (p1i_cohort_keys.tsv and so on), and that
+# is what p1i_p5states.sh and merge_cohort_vcf.py read for it. Writing
+# pilot_p1i_cohort_keys.tsv here meant a pilot rerun left the old table in
+# place and stage 2 silently used it. Every other cohort is <tag>_.
+PFX="${TAG}_"; [[ "$TAG" == "pilot" ]] && PFX=""
 SITES="${RES}/sites_${TAG}_p1i.tsv"
 CALLS="${RES}/calls_${TAG}_p1i.tsv"
-RECON="${RES}/${TAG}_p1i_reconcile.tsv"
-FLANK="${RES}/${TAG}_p1i_sites_flank_all.tsv"
-H37RV="${RES}/${TAG}_p1i_sites_h37rv_all.tsv"
-KEYS="${RES}/${TAG}_p1i_cohort_keys.tsv"
+RECON="${RES}/${PFX}p1i_reconcile.tsv"
+FLANK="${RES}/${PFX}p1i_sites_flank_all.tsv"
+H37RV="${RES}/${PFX}p1i_sites_h37rv_all.tsv"
+KEYS="${RES}/${PFX}p1i_cohort_keys.tsv"
 
 echo "=== p1iv: cohort ${TAG}, stacks in ${P1IDIR}"
 n=$(ls "${P1IDIR}"/*.elstacks.tsv 2>/dev/null | wc -l)
