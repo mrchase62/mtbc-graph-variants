@@ -460,8 +460,15 @@ for p in "${RUN[@]}"; do
         EX="OUTDIR=${OUTROOT}/p5,WORK=${WORKPFX}p5svgt,SVDIR=${OUTROOT}/p5/svgt"
         JOB[svgtp]=$(submit p5svgtprobes bin/p5_svgt.sh \
                 "${EX},SVGTSTEP=--probes" "" "${JOB[p5]:-}")
+        # Projection once per reference, then the per-sample genotyping. The
+        # per-sample tasks used to fill the projection store themselves, and
+        # every sample of a new reference projected it at the same moment.
+        NACC="$(wc -l < "${BUILD}/assets/accessions.txt" 2>/dev/null || echo "$N")"
+        NPROJ=$(( N < NACC ? N : NACC ))
+        JOB[svgtr]=$(submit p5svgtproj bin/p5_svgt.sh \
+                "${EX},SVGTSTEP=--project" "1-${NPROJ}" "${JOB[svgtp]}")
         JOB[svgta]=$(submit p5svgt bin/p5_svgt.sh \
-                "${EX},SVGTSTEP=--states" "1-${N}" "${JOB[svgtp]}")
+                "${EX},SVGTSTEP=--states" "1-${N}" "${JOB[svgtr]}")
         JOB[p5svgt]=$(submit p5svgtmerge bin/p5_svgt.sh \
                 "${EX},SVGTSTEP=--merge" "" "${JOB[svgta]}") ;;
       p5vcf)

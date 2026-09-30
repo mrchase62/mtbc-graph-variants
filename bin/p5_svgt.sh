@@ -83,6 +83,63 @@ PROBES="${WORK}/${PROBES_NAME}"
 NT="${SLURM_CPUS_PER_TASK:-4}"
 mkdir -p "$OUTDIR" "$WORK" "$SVDIR" slurm
 
+# THE STORE IS KEYED ON (REFERENCE, POSITION) AND LIVES UNDER THE BUILD, so it
+# is cohort-independent by construction. The per-cohort cache this replaced was
+# keyed on the reference plus a checksum of the probe LIST, under
+# ${WORK}/proj -- which meant scale200 and gwas1000 could not share a single
+# projection even where they select the same reference and use the same
+# catalogue. Measured: 81 of gwas1000's 150 references were already projected
+# for scale200 with the identical interval-mode probe set, and the old cache
+# would have rebuilt all 150 at about 134 CPU-minutes each. 181 CPU-hours of
+# duplicated odgi.
+#
+# bin/proj_store.py says how it stays consistent: append-only part files, and
+# readers take the first value for each position, so two tasks projecting the
+# same reference at once cannot corrupt it.
+PROJSTORE="${PROJSTORE:-${BUILD}/proj}"
+PROJDIR="${WORK}/proj"; mkdir -p "$PROJDIR" "$PROJSTORE"
+
+
+# Fill the projection store for one reference: ask it what it is missing
+# from the probe list, project only that with odgi, fold it back.
+#   fill_store <refid> <rpath> <log label>
+fill_store() {
+    local REFID="$1" RPATH="$2" _lab="$3"
+    # Ask the store what it is missing, project only that, fold it back, then emit
+    # the whole probe set from the store.
+    MISS="${PROJDIR}/${REFID}.miss.$$"
+    "$MTB_PY" bin/proj_store.py missing --store "$PROJSTORE" --ref "$REFID" \
+        --need "$PROBES" --out "$MISS"
+    if [[ -s "$MISS" ]]; then
+        echo "[P5svgt] ${_lab}: projecting $(grep -c . "$MISS") new positions for ${REFID}"
+        "$MTB_PY" graphframe/bin/frame_convert.py to-panel \
+            < "$MISS" > "${MISS}.panel"
+        "$ODGI" position -i "$OG" -F "${MISS}.panel" -r "$RPATH" -t "$NT" \
+            2> "${WORK}/${_lab}.odgi.log" \
+          | "$MTB_PY" graphframe/bin/frame_convert.py from-panel \
+            > "${MISS}.pos"
+        # AN EMPTY RESULT IS NOT A FAILURE HERE, and treating it as one cost 12
+        # tasks. odgi legitimately drops positions that do not project into a given
+        # path -- 0.19% of them -- and the store asks for exactly the positions it
+        # does not yet have, so once every remaining one is undroppable the request
+        # comes back with nothing. GCF_965121955 sat at 39,620 of 39,685 stored and
+        # died on the last 65 every time. The real gate is the emit floor below,
+        # which asks whether the store can now answer the whole probe set well
+        # enough; that is the question that matters, and 39,620 of 39,685 is 99.8%.
+        if [[ -s "${MISS}.pos" ]]; then
+            "$MTB_PY" bin/proj_store.py add --store "$PROJSTORE" --ref "$REFID" \
+                --result "${MISS}.pos"
+        else
+            echo "[P5svgt] ${_lab}: none of those positions project into ${REFID};"\
+                 " the emit floor decides whether that matters"
+        fi
+        rm -f "${MISS}.panel" "${MISS}.pos"
+    else
+        echo "[P5svgt] ${_lab}: ${REFID} fully covered by the store"
+    fi
+    rm -f "$MISS"
+}
+
 STEP="${1:-${SVGTSTEP:-}}"
 case "$STEP" in
   --probes)
@@ -117,8 +174,27 @@ print(f"  {len(files)} samples, {t:,} SV cells  " +
 print(f"  -> {out}")
 PY
     ;;
+  --project)
+    # ONE TASK PER REFERENCE, BEFORE THE PER-SAMPLE ARRAY. Filling the store
+    # from inside the per-sample tasks made every sample of an as-yet
+    # unprojected reference project it at the same time: on scale200 49 of 139
+    # projections repeated one another, about a third of the pass's CPU. Task i
+    # fills the store for the i-th distinct reference of the refmap (sorted);
+    # tasks past the last reference exit at once. The --states step still
+    # fills anything missing, so it is a no-op there when this step ran.
+    [[ -s "$PROBES" ]] || { echo "FATAL: run --probes first" >&2; exit 1; }
+    I="${SLURM_ARRAY_TASK_ID:?--project is an array step}"
+    mapfile -t _refs < <(awk -F'\t' 'NR>1 && $5!=""{print $5}' "$REFMAP" | sort -u)
+    if [[ "$I" -gt "${#_refs[@]}" ]]; then
+        echo "[P5svgt] task ${I}: only ${#_refs[@]} references; nothing to do"; exit 0
+    fi
+    REFID="${_refs[$((I - 1))]}"
+    RPATH="$(grep -m1 "^${REFID}#" "$PATHS" || true)"
+    [[ -n "$RPATH" ]] || { echo "FATAL: ${REFID} not a graph path" >&2; exit 1; }
+    fill_store "$REFID" "$RPATH" "ref_${REFID}"
+    exit 0 ;;
   --states) ;;
-  *) echo "usage: $0 --probes | --states | --merge   (or SVGTSTEP=...)" >&2; exit 2 ;;
+  *) echo "usage: $0 --probes | --project | --states | --merge   (or SVGTSTEP=...)" >&2; exit 2 ;;
 esac
 
 [[ -s "$PROBES" ]] || { echo "FATAL: run --probes first" >&2; exit 1; }
@@ -185,56 +261,8 @@ NPROBE="$(grep -c . "$PROBES")"
 MINFRAC="${MINFRAC:-95}"
 NMIN=$(( NPROBE * MINFRAC / 100 ))
 
-# THE STORE IS KEYED ON (REFERENCE, POSITION) AND LIVES UNDER THE BUILD, so it
-# is cohort-independent by construction. The per-cohort cache this replaced was
-# keyed on the reference plus a checksum of the probe LIST, under
-# ${WORK}/proj -- which meant scale200 and gwas1000 could not share a single
-# projection even where they select the same reference and use the same
-# catalogue. Measured: 81 of gwas1000's 150 references were already projected
-# for scale200 with the identical interval-mode probe set, and the old cache
-# would have rebuilt all 150 at about 134 CPU-minutes each. 181 CPU-hours of
-# duplicated odgi.
-#
-# bin/proj_store.py says how it stays consistent: append-only part files, and
-# readers take the first value for each position, so two tasks projecting the
-# same reference at once cannot corrupt it.
-PROJSTORE="${PROJSTORE:-${BUILD}/proj}"
-PROJDIR="${WORK}/proj"; mkdir -p "$PROJDIR" "$PROJSTORE"
 POS="${PROJDIR}/${REFID}.$(sha1sum "$PROBES" | cut -c1-16).pos"
-
-# Ask the store what it is missing, project only that, fold it back, then emit
-# the whole probe set from the store.
-MISS="${PROJDIR}/${REFID}.miss.$$"
-"$MTB_PY" bin/proj_store.py missing --store "$PROJSTORE" --ref "$REFID" \
-    --need "$PROBES" --out "$MISS"
-if [[ -s "$MISS" ]]; then
-    echo "[P5svgt] ${SAMPLE}: projecting $(grep -c . "$MISS") new positions for ${REFID}"
-    "$MTB_PY" graphframe/bin/frame_convert.py to-panel \
-        < "$MISS" > "${MISS}.panel"
-    "$ODGI" position -i "$OG" -F "${MISS}.panel" -r "$RPATH" -t "$NT" \
-        2> "${WORK}/${SAMPLE}.odgi.log" \
-      | "$MTB_PY" graphframe/bin/frame_convert.py from-panel \
-        > "${MISS}.pos"
-    # AN EMPTY RESULT IS NOT A FAILURE HERE, and treating it as one cost 12
-    # tasks. odgi legitimately drops positions that do not project into a given
-    # path -- 0.19% of them -- and the store asks for exactly the positions it
-    # does not yet have, so once every remaining one is undroppable the request
-    # comes back with nothing. GCF_965121955 sat at 39,620 of 39,685 stored and
-    # died on the last 65 every time. The real gate is the emit floor below,
-    # which asks whether the store can now answer the whole probe set well
-    # enough; that is the question that matters, and 39,620 of 39,685 is 99.8%.
-    if [[ -s "${MISS}.pos" ]]; then
-        "$MTB_PY" bin/proj_store.py add --store "$PROJSTORE" --ref "$REFID" \
-            --result "${MISS}.pos"
-    else
-        echo "[P5svgt] ${SAMPLE}: none of those positions project into ${REFID};"\
-             " the emit floor decides whether that matters"
-    fi
-    rm -f "${MISS}.panel" "${MISS}.pos"
-else
-    echo "[P5svgt] ${SAMPLE}: ${REFID} fully covered by the store"
-fi
-rm -f "$MISS"
+fill_store "$REFID" "$RPATH" "$SAMPLE"
 "$MTB_PY" bin/proj_store.py emit --store "$PROJSTORE" --ref "$REFID" \
     --need "$PROBES" --allow-missing --out "${POS}.$$"
 _got="$(grep -vc '^#' "${POS}.$$" || true)"

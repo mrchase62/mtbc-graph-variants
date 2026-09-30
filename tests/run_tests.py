@@ -358,6 +358,25 @@ class Is6110Stage2Split(unittest.TestCase):
             self.assertIn("no stage-2 table for B", r.stderr)
 
 
+class SvMatrixReader(unittest.TestCase):
+    """SV genotyping keeps one sample's column, not the whole matrix."""
+
+    def test_keeps_only_its_own_sample(self):
+        g = load("p5_sv_genotype", "bin/p5_sv_genotype.py")
+        with tempfile.TemporaryDirectory() as d:
+            m = write(os.path.join(d, "m.tsv"),
+                      "key\tsvtype\th37rv_pos\tsvlen\tS1\tS2\tS3\n"
+                      "sv:DEL:10:100\tDEL\t10\t100\tALT\tNOCALL\tABSENT\n")
+            rows, samples = g.read_sv_matrix(m, keep_sample="S2")
+            self.assertEqual(samples, ["S1", "S2", "S3"])
+            self.assertEqual(rows[0], {"key": "sv:DEL:10:100", "svtype": "DEL",
+                                       "h37rv_pos": "10", "svlen": "100", "S2": "NOCALL"})
+            rows, _ = g.read_sv_matrix(m)                 # the probe step
+            self.assertNotIn("S1", rows[0])
+            rows, _ = g.read_sv_matrix(m, keep_sample="S9")   # not in the matrix
+            self.assertEqual(rows[0].get("S9", "NOCALL"), "NOCALL")
+
+
 class ProjectionStore(unittest.TestCase):
     """Found regenerating scale200: `add` failed for any store path with /../"""
 
