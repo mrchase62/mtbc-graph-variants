@@ -84,7 +84,11 @@ def make_lookup(rows):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--matrix", default="refbias/p5/matrix.tsv")
+    ap.add_argument("--matrix", default="refbias/p5/matrix.tsv",
+                    help="legacy input; --sites is read instead when given")
+    ap.add_argument("--sites", default="",
+                    help="sites.tsv from p5_matrix.py: the same per-site "
+                         "columns as the dense matrix, without the samples")
     ap.add_argument("--refmap", default="refbias/p1/refmap.tsv")
     ap.add_argument("--p4-dir", default="refbias/p4")
     ap.add_argument("--build", required=True)
@@ -156,7 +160,9 @@ def main():
 
     rows = []
     counts = collections.Counter()
-    with open(a.matrix, newline="") as fh:
+    # Only the per-site columns are read, so sites.tsv serves exactly as the
+    # dense matrix did, at a fraction of the size.
+    with open(a.sites or a.matrix, newline="") as fh:
         rd = csv.reader(fh, delimiter="\t")
         hdr = next(rd)
         fixed = hdr.index("n_nocall") + 1

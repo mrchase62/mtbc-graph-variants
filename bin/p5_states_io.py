@@ -63,6 +63,58 @@ def load_states(state_dir, keys, samples, quiet=False):
     return M
 
 
+# ---- the cohort states array ------------------------------------------------
+#
+# Written ONCE by p5_matrix.py, read by every cohort-level consumer. Each of
+# them used to rebuild the same information from the dense text matrix, or from
+# the 10,000 sparse files, which at 10,000 isolates is hundreds of millions of
+# lines parsed per consumer. Saved as an uncompressed .npy it is memory-mapped:
+# a consumer that needs a slice of keys -- one shard of the merged VCF -- touches
+# only those rows, and nothing is parsed at all.
+#
+# Row i is keys.tsv row i; column j is the j-th sample in the meta file. The
+# meta file carries the key count and the key-list checksum, and open_array
+# refuses a mismatch for the same reason the sparse files do.
+ARRAY_NAME = "states.u8.npy"
+ARRAY_META = "states.meta.tsv"
+
+
+def save_array(out_dir, M, samples, keys):
+    """Write M (keys x samples, uint8 CODE values) and its meta file."""
+    tmp = os.path.join(out_dir, "." + ARRAY_NAME + ".tmp")
+    with open(tmp, "wb") as fh:
+        np.save(fh, np.ascontiguousarray(M, dtype=np.uint8))
+    os.replace(tmp, os.path.join(out_dir, ARRAY_NAME))
+    tmp = os.path.join(out_dir, "." + ARRAY_META + ".tmp")
+    with open(tmp, "w") as fh:
+        fh.write(f"#n_keys\t{len(keys)}\n#keys_sha1\t{keys_sha1(keys)}\n"
+                 f"#n_samples\t{len(samples)}\n")
+        for s in samples:
+            fh.write(s + "\n")
+    os.replace(tmp, os.path.join(out_dir, ARRAY_META))
+
+
+def open_array(array_dir, keys):
+    """(memory-mapped keys x samples uint8 array, samples), checked against keys."""
+    meta, samples = {}, []
+    with open(os.path.join(array_dir, ARRAY_META)) as fh:
+        for line in fh:
+            line = line.rstrip("\n")
+            if line.startswith("#"):
+                k, _, v = line[1:].partition("\t")
+                meta[k] = v
+            elif line:
+                samples.append(line)
+    if meta.get("keys_sha1") != keys_sha1(keys) or int(meta.get("n_keys", -1)) != len(keys):
+        sys.exit(f"FATAL: {array_dir}/{ARRAY_NAME} was written against a "
+                 f"different key set; re-run p5 --matrix")
+    M = np.load(os.path.join(array_dir, ARRAY_NAME), mmap_mode="r")
+    if M.shape != (len(keys), len(samples)):
+        sys.exit(f"FATAL: {ARRAY_NAME} is {M.shape}, expected "
+                 f"({len(keys)}, {len(samples)})")
+    return M, samples
+
+
 def samples_in(state_dir, order):
     return [s for s in order
             if os.path.exists(os.path.join(state_dir, f"{s}.states.tsv"))]

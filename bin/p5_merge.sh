@@ -104,8 +104,15 @@ case "$STEP" in
     exit 0
     ;;
   --matrix)
+    # The dense keys x samples text matrix is NOT written by default: at
+    # 10,000 isolates it is about 23 GB, and every cohort consumer now reads
+    # the states array and sites.tsv instead. P5_DENSE_MATRIX=1 still writes
+    # it, for anything outside this repository that reads matrix.tsv.
+    _dense=(--no-dense)
+    [[ "${P5_DENSE_MATRIX:-0}" == 1 ]] && _dense=()
     exec "$MTB_PY" bin/p5_matrix.py --refmap "$REFMAP" --keys "$KEYS" \
-        --dir "$OUTDIR" --out "${OUTDIR}/matrix.tsv"
+        --dir "$OUTDIR" --out "${OUTDIR}/matrix.tsv" \
+        --sites-out "${OUTDIR}/sites.tsv" "${_dense[@]}"
     ;;
   --states) ;;
   *) echo "usage: $0 --keys | --states | --matrix   (or P5STEP=...)" >&2; exit 2 ;;

@@ -457,8 +457,20 @@ for p in "${RUN[@]}"; do
         # a genotype to it. Depending on only some of these is how a merged VCF
         # came to be written with no insertion sites in it at all.
         P5EX="OUTDIR=${OUTROOT}/p5,WORK=${WORKPFX}p5,COHORT_NAME=${COHORT_NAME}"
-        JOB[p5vcf]=$(submit p5vcf bin/p5_finish.sh "${P5EX},P5FSTEP=--merge" "" \
-                "$(deps "${JOB[p5]:-}" "${JOB[p5svgt]:-}" "${JOB[p1is]:-}")") ;;
+        _up="$(deps "${JOB[p5]:-}" "${JOB[p5svgt]:-}" "${JOB[p1is]:-}")"
+        # Sharded by genome region above a few hundred isolates: one shard per
+        # 500 isolates by default (VCF_SHARDS overrides), so a 10,000-isolate
+        # cohort runs 20 shards each holding a twentieth of the records.
+        SH="${VCF_SHARDS:-$(( (N + 499) / 500 ))}"
+        if [[ "$SH" -gt 1 ]]; then
+            P5EX="${P5EX},VCF_SHARDS=${SH}"
+            JOB[p5vcfsh]=$(submit p5vcfshard bin/p5_finish.sh \
+                    "${P5EX},P5FSTEP=--merge-shard" "1-${SH}" "$_up")
+            JOB[p5vcf]=$(submit p5vcf bin/p5_finish.sh \
+                    "${P5EX},P5FSTEP=--merge-assemble" "" "${JOB[p5vcfsh]}")
+        else
+            JOB[p5vcf]=$(submit p5vcf bin/p5_finish.sh "${P5EX},P5FSTEP=--merge" "" "$_up")
+        fi ;;
       *) die "no rule for pass '${p}'" ;;
     esac
     # P5 submits three jobs rather than an array plus a summary, so the

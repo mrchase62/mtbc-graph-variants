@@ -217,6 +217,114 @@ class Importers(unittest.TestCase):
             self.assertNotIn("ModuleNotFoundError", r.stderr, rel)
 
 
+class ShardedMerge(unittest.TestCase):
+    """Item 2 of the scaling plan: the merged VCF built in shards and
+    assembled must be the single-process VCF, byte for byte once decompressed,
+    with shard boundaries falling inside both the H37Rv range and the node
+    contigs. Also checks the states array round-trips the sparse files."""
+
+    def setUp(self):
+        self.bgzip = os.environ.get("MTB_BGZIP", "")
+        self.tabix = os.environ.get("MTB_TABIX", "")
+        if not (self.bgzip and self.tabix and os.path.exists(self.bgzip)):
+            self.skipTest("MTB_BGZIP/MTB_TABIX not set; source config/project_env.sh")
+
+    def build(self, d):
+        import hashlib
+        samples = ["S1", "S2", "S3", "S4", "S5"]
+        keys = []
+        for pos in (100, 900_000, 1_800_000, 2_700_000, 3_600_000, 4_411_000):
+            keys.append(dict(key=f"h37rv:{pos}:A>G", frame="h37rv", h37rv_pos=pos,
+                             node="", node_offset="", canonical_ref="A",
+                             canonical_alt="G", region="core", kind="SNP",
+                             acc_locus=""))
+        for nid in ("5", "12", "300", "4001"):
+            keys.append(dict(key=f"node:{nid}:0:C>T", frame="node", h37rv_pos="",
+                             node=nid, node_offset="0", canonical_ref="C",
+                             canonical_alt="T", region="off_path_near",
+                             kind="SNP", acc_locus=""))
+        cols = list(keys[0])
+        with open(os.path.join(d, "keys.tsv"), "w") as fh:
+            fh.write("\t".join(cols) + "\n")
+            for k in keys:
+                fh.write("\t".join(str(k[c]) for c in cols) + "\n")
+        sha = hashlib.sha1("\n".join(k["key"] for k in keys).encode()).hexdigest()
+        states = {"S1": {0: "ALT", 6: "ALT", 3: "ABSENT"}, "S2": {1: "ALT", 7: "ALT"},
+                  "S3": {2: "ALT", 8: "ALT", 4: "NOCALL"}, "S4": {3: "ALT", 9: "ALT"},
+                  "S5": {4: "ALT", 5: "ALT", 0: "NOCALL"}}
+        for sm in samples:
+            with open(os.path.join(d, f"{sm}.states.tsv"), "w") as fh:
+                fh.write(f"#format\tsparse-v1\n#sample\t{sm}\n#default\tREF\n"
+                         f"#n_keys\t{len(keys)}\n#keys_sha1\t{sha}\n"
+                         "idx\tstate\tallele\n")
+                for i, st in sorted(states[sm].items()):
+                    fh.write(f"{i}\t{st}\t\n")
+        with open(os.path.join(d, "refmap.tsv"), "w") as fh:
+            fh.write("sample\treference\n" + "".join(f"{sm}\tR\n" for sm in samples))
+        subprocess.run([sys.executable, "bin/p5_matrix.py", "--refmap",
+                        os.path.join(d, "refmap.tsv"), "--keys", os.path.join(d, "keys.tsv"),
+                        "--dir", d, "--out", os.devnull, "--no-dense",
+                        "--graph-vcf", os.path.join(d, "none.vcf.gz")],
+                       check=True, capture_output=True)
+        return samples, keys
+
+    def merge(self, d, *extra):
+        r = subprocess.run([sys.executable, "bin/merge_cohort_vcf.py",
+                            "--states-array", d, "--keys", os.path.join(d, "keys.tsv"),
+                            "--cohort-name", "t", "--ancestral", "",
+                            "--bgzip", self.bgzip, "--tabix", self.tabix, *extra],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+
+    def body(self, path):
+        import gzip
+        with gzip.open(path, "rt") as fh:
+            return [l for l in fh if not l.startswith("##fileDate")]
+
+    def test_array_round_trip(self):
+        p5io = load("p5_states_io", "bin/p5_states_io.py")
+        with tempfile.TemporaryDirectory() as d:
+            samples, keys = self.build(d)
+            M, got = p5io.open_array(d, rows(os.path.join(d, "keys.tsv")))
+            self.assertEqual(got, samples)
+            ref = p5io.load_states(d, rows(os.path.join(d, "keys.tsv")), samples, quiet=True)
+            self.assertTrue((M == ref).all())
+
+    def test_sharded_equals_unsharded(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.build(d)
+            one = os.path.join(d, "one.vcf.gz")
+            self.merge(d, "--out", one)
+            for n in (2, 3, 5):
+                pre = os.path.join(d, f"p{n}")
+                for i in range(n):
+                    self.merge(d, "--n-shards", str(n), "--shard", str(i),
+                               "--part-prefix", pre, "--out", os.devnull)
+                out = os.path.join(d, f"sh{n}.vcf.gz")
+                self.merge(d, "--assemble", "--n-shards", str(n),
+                           "--part-prefix", pre, "--out", out)
+                self.assertEqual(self.body(one), self.body(out), f"{n} shards")
+            recs = [l for l in self.body(one) if not l.startswith("#")]
+            self.assertEqual(len(recs), 10)            # every key has an ALT carrier
+
+    def test_assemble_refuses_missing_shard(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.build(d)
+            pre = os.path.join(d, "p")
+            self.merge(d, "--n-shards", "3", "--shard", "0", "--part-prefix", pre,
+                       "--out", os.devnull)
+            r = subprocess.run([sys.executable, "bin/merge_cohort_vcf.py", "--assemble",
+                                "--n-shards", "3", "--part-prefix", pre, "--cohort-name",
+                                "t", "--out", os.path.join(d, "x.vcf.gz")],
+                               capture_output=True, text=True)
+            self.assertNotEqual(r.returncode, 0)
+
+
+def rows(p):
+    with open(p, newline="") as fh:
+        return list(csv.DictReader(fh, delimiter="\t"))
+
+
 class ProjectionStore(unittest.TestCase):
     """Found regenerating scale200: `add` failed for any store path with /../"""
 

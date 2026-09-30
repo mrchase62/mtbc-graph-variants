@@ -125,24 +125,34 @@ echo
 # sites were simply missing from it.
 #
 #   --pre     matrix, validation, sanity, SV matrix, P6 annotation
-#   --merge   the merged cohort VCF
+#   --merge   the merged cohort VCF; with VCF_SHARDS > 1, every shard in turn
+#             and then the assembly, in this one job (for running by hand)
+#   --merge-shard     one shard of the merged VCF: shard SLURM_ARRAY_TASK_ID-1
+#                     of VCF_SHARDS (or VCF_SHARD), written under vcf_parts/
+#   --merge-assemble  join the VCF_SHARDS shards into merged.vcf.gz, then
+#                     stamp and gate it
 #   --all     both, the default, for running it by hand
 P5FSTEP="${1:-${P5FSTEP:---all}}"
 case "$P5FSTEP" in
-  --all|--pre|--merge) ;;
-  *) echo "usage: $0 [--all|--pre|--merge]" >&2; exit 2 ;;
+  --all|--pre|--merge|--merge-shard|--merge-assemble) ;;
+  *) echo "usage: $0 [--all|--pre|--merge|--merge-shard|--merge-assemble]" >&2; exit 2 ;;
 esac
 
-if [[ "$P5FSTEP" != "--merge" ]]; then
+if [[ "$P5FSTEP" == "--all" || "$P5FSTEP" == "--pre" ]]; then
 echo "=== matrix ==="
 bash bin/p5_merge.sh --matrix
 echo
 echo "=== lineage recovery (the pilot's endpoint check) ==="
-"$MTB_PY" bin/p5_validate.py --matrix "${OUTDIR}/matrix.tsv" \
+# Every cohort consumer below reads the memory-mapped states array and the
+# per-site table that --matrix just wrote, not a dense keys x samples text
+# matrix: at 10,000 isolates that matrix is about 23 GB, and the sanity check
+# and the old merge each held all of it in memory.
+ARR=(--states-array "$OUTDIR" --keys "${OUTDIR}/keys.tsv" --sites "${OUTDIR}/sites.tsv")
+"$MTB_PY" bin/p5_validate.py "${ARR[@]}" \
     --refmap "$REFMAP" --out "${OUTDIR}/validation.tsv"
 echo
 echo "=== sanity checks ==="
-"$MTB_PY" bin/p5_sanity.py --matrix "${OUTDIR}/matrix.tsv" \
+"$MTB_PY" bin/p5_sanity.py "${ARR[@]}" \
     --refmap "$REFMAP" --cohort "$COHORT" \
     --p2-summary "${P2DIR}/p2_summary.tsv" --out "${OUTDIR}/sanity.tsv"
 echo
@@ -161,8 +171,12 @@ echo "=== P6 annotation ==="
 # table -- or, as happened on 2026-09-23, the pilot overwrote scale100's.
 P6DIR="${P6DIR:-refbias/p6}"
 mkdir -p "$P6DIR"
+# --p4-dir is passed too. It was not, so P6 read its default, the PILOT's
+# refbias/p4: for any other cohort every off-path site was annotated from the
+# pilot's carriers, or -- where that directory was absent -- from none at all
+# (11,533 scale200 sites came out offpath_no_carrier).
 "$MTB_PY" bin/p6_annotate.py --build "$BUILD" \
-    --matrix "${OUTDIR}/matrix.tsv" --refmap "$REFMAP" \
+    --sites "${OUTDIR}/sites.tsv" --refmap "$REFMAP" --p4-dir "$P4DIR" \
     --out "${P6DIR}/annotated.tsv"
 fi   # end --pre
 
@@ -264,16 +278,63 @@ H37RV_FASTA="${BUILD}/refs/GCF_000195955.fasta"
 BUILD_ID="$(awk -F'\t' '$1=="build_id"{print $2}' "${BUILD}/build_info.tsv")"
 [[ -n "$BUILD_ID" ]] || { echo "FATAL: no build_id in ${BUILD}/build_info.tsv" >&2; exit 1; }
 
-"$MTB_PY" bin/merge_cohort_vcf.py \
-    --matrix "${OUTDIR}/matrix.tsv" --sv-matrix "${OUTDIR}/sv_matrix.tsv" \
+# The small-variant block comes from the states array --matrix wrote. A cohort
+# finished before the array existed still has matrix.tsv, which is used then.
+if [[ -s "${OUTDIR}/states.u8.npy" && -s "${OUTDIR}/states.meta.tsv" ]]; then
+    SMALL=(--states-array "$OUTDIR" --keys "${OUTDIR}/keys.tsv")
+elif [[ -s "${OUTDIR}/matrix.tsv" ]]; then
+    echo "  no states array in ${OUTDIR}; reading the legacy matrix.tsv"
+    SMALL=(--matrix "${OUTDIR}/matrix.tsv" --keys "${OUTDIR}/keys.tsv")
+else
+    echo "FATAL: neither states.u8.npy nor matrix.tsv in ${OUTDIR}; run --pre" >&2
+    exit 1
+fi
+MERGE=("$MTB_PY" bin/merge_cohort_vcf.py "${SMALL[@]}" \
+    --sv-matrix "${OUTDIR}/sv_matrix.tsv" \
     --h37rv-fasta "$H37RV_FASTA" --build-id "$BUILD_ID" \
     ${IS6110_KEYS:+--is6110-keys "$IS6110_KEYS"} \
     ${IS6110_STATES:+--is6110-states "$IS6110_STATES"} \
     ${SV_STATES:+--sv-states "$SV_STATES"} \
     "${IV_ARGS[@]}" \
     "${ACC_ARGS[@]}" \
-    --cohort-name "$COHORT_NAME" \
-    --out "${OUTDIR}/merged.vcf.gz"
+    --cohort-name "$COHORT_NAME")
+
+# SHARDED BY GENOME REGION. One process holds every record's cells before it
+# writes: 8.5 GB at 997 isolates, about 260 GB projected at 10,000. Each shard
+# owns a contiguous H37Rv range and a contiguous range of node contigs, loads
+# only its own rows of every input, and writes record-only parts; the assembly
+# streams them after one header. The assembled file is byte-identical to the
+# single-process one (tests/run_tests.py checks it).
+VCF_SHARDS="${VCF_SHARDS:-1}"
+PARTS="${OUTDIR}/vcf_parts/s"
+mkdir -p "${OUTDIR}/vcf_parts"
+case "$P5FSTEP" in
+  --merge-shard)
+    I="${VCF_SHARD:-$(( ${SLURM_ARRAY_TASK_ID:?--merge-shard needs an array task or VCF_SHARD} - 1 ))}"
+    "${MERGE[@]}" --n-shards "$VCF_SHARDS" --shard "$I" --part-prefix "$PARTS" \
+        --out /dev/null
+    exit 0 ;;
+  --merge-assemble|--merge|--all)
+    if [[ "$VCF_SHARDS" -gt 1 ]]; then
+        if [[ "$P5FSTEP" != "--merge-assemble" ]]; then
+            for ((I = 0; I < VCF_SHARDS; I++)); do
+                "${MERGE[@]}" --n-shards "$VCF_SHARDS" --shard "$I" \
+                    --part-prefix "$PARTS" --out /dev/null
+            done
+        fi
+        # parts from an earlier generation must not be assembled with this one
+        stale=$(find "${OUTDIR}/vcf_parts" -maxdepth 1 -name 's.*.meta.json' \
+                ! -newer "${OUTDIR}/states.meta.tsv" 2>/dev/null | wc -l)
+        if [[ -s "${OUTDIR}/states.meta.tsv" && "$stale" -gt 0 ]]; then
+            echo "FATAL: ${stale} VCF shard parts predate the states array; rerun the shards" >&2
+            exit 1
+        fi
+        "${MERGE[@]}" --assemble --n-shards "$VCF_SHARDS" --part-prefix "$PARTS" \
+            --out "${OUTDIR}/merged.vcf.gz"
+    else
+        "${MERGE[@]}" --out "${OUTDIR}/merged.vcf.gz"
+    fi ;;
+esac
 
 # STAMP THE GRAPH PROVENANCE. bin/stamp_build_id.sh existed and was called by
 # p2_call.sh for the per-sample caller VCFs, but never here -- so the cohort

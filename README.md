@@ -57,6 +57,21 @@ insertion records are presence-only and should be treated as such.
 
 Run it with `bash bin/refbias_run.sh --cohort <name>`.
 
+### Large cohorts
+
+The cohort-level P5 steps never build a dense samples-by-keys table. The matrix
+step writes the states once, as a memory-mapped array
+(`p5/states.u8.npy`, one byte per cell) plus a per-site table (`p5/sites.tsv`).
+Validation, sanity checks, annotation and the VCF merge all read those.
+
+The merged VCF is written in shards by genome region and then assembled; the
+result is byte-identical to a single-process merge. Two settings control this:
+
+| variable | default | effect |
+|---|---|---|
+| `VCF_SHARDS` | one per 500 isolates | number of merge shards (array tasks) |
+| `P5_DENSE_MATRIX` | `0` | `1` also writes the legacy `p5/matrix.tsv`, for tools that still read it |
+
 ## Setup
 
     # 1. site paths -- gitignored, required, no defaults
