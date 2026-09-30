@@ -201,6 +201,11 @@ echo "--- pipeline outputs (${OUTPUT_TREES[*]})"
 ALIGN_EXCLUDES=()
 if [[ $FULL -eq 0 ]]; then
     ALIGN_EXCLUDES=(
+        # The archived alignments ARE copied: bin/archive_alignments.sh
+        # writes lossless CRAMs of the two alignments later passes read, at
+        # 37% of the BAM size, precisely so they survive a scratch purge.
+        # rsync takes the first rule that matches, so these come first.
+        --include '*.archive.cram' --include '*.archive.cram.crai'
         --exclude '*.bam'   --exclude '*.bam.bai'
         --exclude '*.cram'  --exclude '*.cram.crai'
         --exclude '*.sam'

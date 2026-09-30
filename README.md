@@ -72,6 +72,16 @@ result is byte-identical to a single-process merge. Two settings control this:
 | `VCF_SHARDS` | one per 500 isolates | number of merge shards (array tasks) |
 | `P5_DENSE_MATRIX` | `0` | `1` also writes the legacy `p5/matrix.tsv`, for tools that still read it |
 
+### Keeping data between runs
+
+While the graph is unchanged, three things need not be recomputed:
+
+- **Per-build caches.** These are the P0 builds (including the odgi projection store) and the IS6110 element catalogue. `bin/sync_back.sh` mirrors them to durable storage, and `bin/stage_in.sh` now restores them after a scratch purge.
+- **Alignments that later passes read.** `bash bin/refbias_run.sh --cohort <name> --only archive` writes lossless CRAMs of the matched-reference and element-free alignments, at about 37% of the BAM size. Each CRAM is verified against its BAM, and `sync_back.sh` copies them to durable storage.
+  - `ARCHIVE_DELETE_BAM=1` removes each verified BAM.
+  - `ARCHIVE_DROP_UNUSED=1` also removes the H37Rv and fixed-reference IS6110 alignments, which nothing after their own pass reads.
+- **Bringing alignments back.** After a purge, run `bin/stage_in.sh alignments`, then `--only restore`.
+
 ## Setup
 
     # 1. site paths -- gitignored, required, no defaults

@@ -377,6 +377,74 @@ class SvMatrixReader(unittest.TestCase):
             self.assertEqual(rows[0].get("S9", "NOCALL"), "NOCALL")
 
 
+class AlignmentArchive(unittest.TestCase):
+    """bin/archive_alignments.sh: CRAM archive, verified, and back to BAM."""
+
+    REF = ("ACGTTGCAAGGCTTACCGATCGATTACGGATCCATGCAAGTCGATCGTAGCTAGCTTAGG"
+           "CATCGATCGGATCGAATTCGGCTAGCTAGGATCCGATAGC")          # 100 bp
+
+    def setup_sample(self, d, header_len=100):
+        st = os.environ.get("MTB_SAMTOOLS", "")
+        if not (st and os.path.exists(st)):
+            self.skipTest("MTB_SAMTOOLS not set; source config/project_env.sh")
+        ref = self.REF
+        self.assertEqual(len(ref), 100)
+        for sub in ("build/refs", "clean", "p2w", "p1i", "p1w", "p1g"):
+            os.makedirs(os.path.join(d, sub))
+        for fa in (f"{d}/build/refs/R.fasta", f"{d}/clean/R.isclean.fasta"):
+            write(fa, f">c\n{ref}\n")
+        sam = (f"@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:c\tLN:{header_len}\n"
+               "@RG\tID:S\tSM:S\n"
+               + "".join(f"r{i}\t0\tc\t{1 + 10 * i}\t60\t20M\t*\t0\t0\t"
+                         f"{ref[10 * i:10 * i + 20]}\t{'F' * 20}\tRG:Z:S\tNM:i:0\tMD:Z:20\n"
+                         for i in range(5)))
+        write(f"{d}/x.sam", sam)
+        for bam in (f"{d}/p2w/S.bam", f"{d}/p1i/S.isclean.bam", f"{d}/p1w/S.h37rv.bam",
+                    f"{d}/p1g/S.isclean.bam"):
+            subprocess.run([st, "view", "-b", "-o", bam, f"{d}/x.sam"], check=True,
+                           capture_output=True)
+            subprocess.run([st, "index", bam], check=True)
+        write(f"{d}/refmap.tsv", "sample\ta\tb\tc\treference\nS\t.\t.\t.\tR\n")
+        env = dict(os.environ, MTB_BUILD_DIR=f"{d}/build", REFMAP=f"{d}/refmap.tsv",
+                   P1WORK=f"{d}/p1w", P2WORK=f"{d}/p2w", P1IDIR=f"{d}/p1i",
+                   P1GDIR=f"{d}/p1g", CLEANDIR=f"{d}/clean",
+                   ARCHIVE_DELETE_BAM="1", ARCHIVE_DROP_UNUSED="1")
+        return st, env
+
+    def run_step(self, step, env):
+        return subprocess.run(["bash", "bin/archive_alignments.sh", step, "S"],
+                              capture_output=True, text=True, env=env)
+
+    def test_archive_then_restore_round_trips(self):
+        with tempfile.TemporaryDirectory() as d:
+            st, env = self.setup_sample(d)
+            r = self.run_step("--archive", env)
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            self.assertIn("verified", r.stdout)
+            for gone in ("p2w/S.bam", "p1i/S.isclean.bam", "p1w/S.h37rv.bam",
+                         "p1g/S.isclean.bam"):
+                self.assertFalse(os.path.exists(f"{d}/{gone}"), gone)
+            self.assertTrue(os.path.exists(f"{d}/p2w/S.archive.cram"))
+            r = self.run_step("--restore", env)
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            view = lambda f: subprocess.run([st, "view", f], capture_output=True,
+                                            text=True, check=True).stdout
+            norm = lambda t: sorted("\t".join(l.split("\t")[:11] + sorted(l.split("\t")[11:]))
+                                    for l in t.splitlines())
+            self.assertEqual(norm(view(f"{d}/p2w/S.bam")), norm(view(f"{d}/x.sam")))
+
+    def test_mismatch_keeps_every_bam(self):
+        # a header that disagrees with the reference: CRAM cannot reproduce it
+        with tempfile.TemporaryDirectory() as d:
+            st, env = self.setup_sample(d, header_len=101)
+            r = self.run_step("--archive", env)
+            self.assertNotEqual(r.returncode, 0)
+            self.assertIn("does not reproduce", r.stderr)
+            for kept in ("p2w/S.bam", "p1i/S.isclean.bam", "p1w/S.h37rv.bam",
+                         "p1g/S.isclean.bam"):
+                self.assertTrue(os.path.exists(f"{d}/{kept}"), kept)
+
+
 class ProjectionStore(unittest.TestCase):
     """Found regenerating scale200: `add` failed for any store path with /../"""
 

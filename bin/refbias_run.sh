@@ -490,6 +490,14 @@ for p in "${RUN[@]}"; do
         else
             JOB[p5vcf]=$(submit p5vcf bin/p5_finish.sh "${P5EX},P5FSTEP=--merge" "" "$_up")
         fi ;;
+      archive|restore)
+        # Not part of the default chain: run with --only archive after a
+        # cohort finishes, and --only restore before rerunning P3, SV
+        # genotyping or IS6110 stage 2 on a purged scratch. The per-cohort
+        # directories come from DIRS; ARCHIVE_DELETE_BAM=1 and
+        # ARCHIVE_DROP_UNUSED=1 pass through from the environment.
+        JOB[$p]=$(submit "$p" bin/archive_alignments.sh \
+                "ARCHIVESTEP=--${p}" "1-${N}" "") ;;
       *) die "no rule for pass '${p}'" ;;
     esac
     # P5 submits three jobs rather than an array plus a summary, so the
