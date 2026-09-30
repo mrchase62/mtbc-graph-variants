@@ -325,6 +325,39 @@ def rows(p):
         return list(csv.DictReader(fh, delimiter="\t"))
 
 
+class Is6110Stage2Split(unittest.TestCase):
+    """Stage 2 run per reference and per sample: the array edges."""
+
+    def base(self, d):
+        write(os.path.join(d, "refmap.tsv"), "sample\treference\nA\tR1\nB\tR2\n")
+        write(os.path.join(d, "keys.tsv"),
+              "sample\treference\tr_pos\tframe\th37rv_pos\tnode\n")
+        return [sys.executable, "is6110/bin/is6110_p5_stage2.py",
+                "--refmap", os.path.join(d, "refmap.tsv"),
+                "--cohort-keys", os.path.join(d, "keys.tsv"),
+                "--stage1-dir", d, "--paths", os.path.join(d, "paths.txt"),
+                "--graph", os.path.join(d, "g.og"),
+                "--workdir", os.path.join(d, "w"), "--out", os.path.join(d, "o.tsv")]
+
+    def test_project_index_past_last_reference_exits_cleanly(self):
+        with tempfile.TemporaryDirectory() as d:
+            write(os.path.join(d, "paths.txt"), "R1#1#c\nR2#1#c\n")
+            r = subprocess.run(self.base(d) + ["--mode", "project", "--index", "3"],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("nothing to do", r.stdout)
+
+    def test_merge_refuses_a_missing_sample(self):
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "w", "samples"))
+            write(os.path.join(d, "w", "samples", "A.tsv"),
+                  "sample\tkey\tstate\tallele\tevidence\nA\tk\tREF\tN\tx\n")
+            r = subprocess.run(self.base(d) + ["--mode", "merge"],
+                               capture_output=True, text=True)
+            self.assertNotEqual(r.returncode, 0)
+            self.assertIn("no stage-2 table for B", r.stderr)
+
+
 class ProjectionStore(unittest.TestCase):
     """Found regenerating scale200: `add` failed for any store path with /../"""
 

@@ -440,8 +440,20 @@ for p in "${RUN[@]}"; do
         # isolate that did not report a site. Both scripts existed and were
         # validated long before this pass; what was missing was anything that
         # ran them, so the merged VCF's IS6110 block was 98.7% NOCALL.
+        # Stage 2 is two arrays and a join, not one serial job: projection runs
+        # one task per distinct reference (at most the panel's size, and a
+        # task past the cohort's last reference exits at once), then one task
+        # per sample reads its own depth, then the cohort table is joined.
         EX="P1IDIR=${OUTROOT}/p1i,COHORT_NAME=${COHORT_NAME}"
-        JOB[p1is]=$(submit p1is bin/p1i_p5states.sh "$EX" "" "${JOB[p1iv]:-}") ;;
+        NACC="$(wc -l < "${BUILD}/assets/accessions.txt" 2>/dev/null || echo "$N")"
+        NPROJ=$(( N < NACC ? N : NACC ))
+        JOB[p1is1]=$(submit p1is1 bin/p1i_p5states.sh "${EX},P1ISSTEP=--stage1" "" "${JOB[p1iv]:-}")
+        JOB[p1isp]=$(submit p1isproj bin/p1i_p5states.sh "${EX},P1ISSTEP=--project" \
+                "1-${NPROJ}" "${JOB[p1is1]}")
+        JOB[p1iss]=$(submit p1issample bin/p1i_p5states.sh "${EX},P1ISSTEP=--sample" \
+                "1-${N}" "${JOB[p1isp]}")
+        JOB[p1is]=$(submit p1ismerge bin/p1i_p5states.sh "${EX},P1ISSTEP=--merge" "" \
+                "${JOB[p1iss]}") ;;
       p5svgt)
         # Measure deletion absence, so the SV block is not presence-only.
         # Needs sv_matrix.tsv, which p5 --pre writes.
