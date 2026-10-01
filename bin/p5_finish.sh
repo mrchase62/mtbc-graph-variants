@@ -329,12 +329,17 @@ case "$P5FSTEP" in
                     --part-prefix "$PARTS" --out /dev/null
             done
         fi
-        # parts from an earlier generation must not be assembled with this one
-        stale=$(find "${OUTDIR}/vcf_parts" -maxdepth 1 -name 's.*.meta.json' \
-                ! -newer "${OUTDIR}/states.meta.tsv" 2>/dev/null | wc -l)
-        if [[ -s "${OUTDIR}/states.meta.tsv" && "$stale" -gt 0 ]]; then
-            echo "FATAL: ${stale} VCF shard parts predate the states array; rerun the shards" >&2
-            exit 1
+        # Parts from an earlier generation must not be assembled with this one.
+        # Only testable against the states array: a cohort still on the legacy
+        # matrix has no states.meta.tsv, and `find -newer <missing file>` fails,
+        # which under set -e and pipefail ended this job silently.
+        if [[ -s "${OUTDIR}/states.meta.tsv" ]]; then
+            stale=$(find "${OUTDIR}/vcf_parts" -maxdepth 1 -name 's.*.meta.json' \
+                    ! -newer "${OUTDIR}/states.meta.tsv" | wc -l)
+            if [[ "$stale" -gt 0 ]]; then
+                echo "FATAL: ${stale} VCF shard parts predate the states array; rerun the shards" >&2
+                exit 1
+            fi
         fi
         "${MERGE[@]}" --assemble --n-shards "$VCF_SHARDS" --part-prefix "$PARTS" \
             --out "${OUTDIR}/merged.vcf.gz"
