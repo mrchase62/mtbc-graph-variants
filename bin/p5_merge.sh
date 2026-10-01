@@ -193,6 +193,7 @@ PROJDIR="${WORK}/proj"; mkdir -p "$PROJDIR" "$PROJSTORE"
 KSHA="$(awk -F'\t' 'NR>1{print $1}' "$KEYS" | sha1sum | cut -c1-16)"
 PROJ="${PROJDIR}/${REFID}.${KSHA}.pos"
 NPOS="$(awk -F'\t' 'NR>1 && $2=="h37rv"' "$KEYS" | wc -l)"
+PROJ_USE="$PROJ"
 if [[ -s "$PROJ" ]] && [[ "$(grep -vc '^#' "$PROJ")" -eq "$NPOS" ]]; then
     echo "[P5] ${SAMPLE}: reusing the ${REFID} projection ($NPOS positions)"
 else
@@ -211,7 +212,11 @@ else
         # load-bearing. graphframe/docs/GRAPH_FRAME_RESOLUTION.md
         "$MTB_PY" graphframe/bin/frame_convert.py to-panel \
             < "${PANEL}.raw.$$" > "${PANEL}.$$"
-        mv -f "${PANEL}.$$" "$PANEL"; rm -f "${PANEL}.raw.$$"
+        # NEVER REPLACE A COPY ANOTHER TASK MAY BE READING. Several tasks build
+        # this shared file at once, and with `mv -f` one renamed over a file another
+        # had open; on NFS the reader got ESTALE (scale200 rerun, 2026-10-01). The
+        # first copy in is kept (`mv -n`) and later ones are discarded.
+        mv -n "${PANEL}.$$" "$PANEL" || true; rm -f "${PANEL}.$$" "${PANEL}.raw.$$"
     fi
     # Ask the store what it already has, project only the remainder, fold the
     # answer back in, then emit the whole set from the store.
@@ -263,13 +268,23 @@ else
         echo "[P5] ${SAMPLE}: ${REFID} projection is ${got} of ${NPOS}" \
              "($(( got * 100 / NPOS ))%); the rest have no equivalent in that path"
     fi
-    mv -f "${PROJ}.$$" "$PROJ"
+    # NEVER RENAME OVER A FILE ANOTHER TASK MAY BE READING: on NFS the reader
+    # gets ESTALE (the P5 anchor file, scale200 rerun, 2026-10-01). Samples of
+    # one reference share this file, so it is installed only where none
+    # exists; otherwise this task reads its own copy, and an incomplete shared
+    # one (below 100%, which the reuse test above rejects) is never trusted.
+    if mv -n "${PROJ}.$$" "$PROJ" && [[ ! -e "${PROJ}.$$" ]]; then
+        PROJ_USE="$PROJ"
+    else
+        PROJ_USE="${PROJ}.$$"
+        trap 'rm -f "${PROJ}.$$"' EXIT
+    fi
     echo "[P5] ${SAMPLE}: ${REFID} projection assembled from the store"
 fi
 
 "$MTB_PY" bin/p5_states.py --sample "$SAMPLE" --reference "$REFID" \
     --keys "$KEYS" --placed "$PLACED" --gvcf "$GVCF" --h37rv "$H37RV_FA" \
-    --projected "$PROJ" \
+    --projected "$PROJ_USE" \
     --out "${OUTDIR}/${SAMPLE}.states.tsv.tmp"
 # renamed only once complete: the skip above trusts any states file whose
 # checksum matches, so a task killed mid-write must not leave one behind

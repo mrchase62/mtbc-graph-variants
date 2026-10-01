@@ -351,7 +351,12 @@ _got="$(grep -vc '^#' "${POS}.$$" || true)"
     echo "FATAL: ${SAMPLE}: the store emitted ${_got} of ${NPROBE} probes for "\
          "${REFID}, below the ${MINFRAC}% floor" >&2
     rm -f "${POS}.$$"; exit 1; }
-mv -f "${POS}.$$" "$POS"
+# THIS TASK'S OWN COPY, never a shared one. Samples of one reference used to
+# rename their copies onto one shared name, and on NFS renaming over a file
+# another task has open gives that reader ESTALE (the P5 anchor file, scale200
+# rerun, 2026-10-01). The store is what is shared; emitting from it is cheap.
+POS="${POS}.$$"
+trap 'rm -f "$POS"' EXIT
 echo "[P5svgt] ${SAMPLE}: ${REFID} projection ready (${_got} rows)"
 
 if [[ -n "$IVTAB" ]]; then
