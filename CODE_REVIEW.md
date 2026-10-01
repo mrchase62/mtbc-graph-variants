@@ -797,6 +797,22 @@ decision for the project rather than a mechanical fix.
 - **5.7, SVLEN after interval merging.** This would rename every `svi:` interval ID and orphan the existing genotype tables.
 - **6.11, stable tie-breaking in `t8_select_reference.py`.** The current sort is already deterministic, and a stable sort would change the chosen reference for tied samples.
 
+### Decisions on the deliberately unchanged items (2026-10-01)
+
+| item | decision | where |
+|---|---|---|
+| 3.7 ancestral alleles | fixed: AA is the MTBC ancestor's state; 4,759 of 5,130 ties resolved, no resolved site changed | `bin/ancestral_alleles.py`, P0 `--step ancestral` |
+| 3.9 caller-matrix inherited calls | fixed: NOCALL without a second frame, as in interval mode | `bin/p5_sv_genotype.py` |
+| 4.4 seam slop | fixed: one 3 bp rule in promotion, flank placement and the writer | `is6110/bin/is6110_seam.py` |
+| 4.5 split IS6110 keys | fixed: keys within 6 bp across isolates share a canonical position | `is6110/bin/is6110_write_vcf.py` |
+| 5.7 SVLEN after merging | fixed: SVLEN is the merged span | `bin/sv_intervals.py` |
+| 6.11 reference tie-break | left unchanged: changing it would force realignment of every cohort | — |
+
+Found while settling them, and fixed: the SV interval arm (catalogue, two-frame
+tables, interval-mode genotyping) and accessory presence ran outside the chain,
+gwas1000 used scale200's catalogue, and the merge dropped every caller deletion
+when a catalogue was present. See HANDOFF.md section 2.
+
 ### Behaviour changes to expect on re-run
 
 - **P4.** More masked bases are routed to the composed arm. On two pilot samples, direct core calls fell by 46 to 49, and composed PE/PPE calls rose by a similar number.

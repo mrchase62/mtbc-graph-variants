@@ -130,47 +130,24 @@ def project(a, tref, fr, paths, og, ref_of, carrier_of):
     rows = []
     tpath = paths.get(tref)
     if tpath is not None and need:
-        qf = os.path.join(a.workdir, "proj", f".{tref}.{os.getpid()}.pos")
         order = []
-        with open(qf, "w") as fh:
-            for k in sorted(need):
-                cref, cpos = carrier_of.get(k, (None, None))
-                if cref is None or cref not in paths:
-                    continue
-                fh.write(f"{paths[cref]},{fr.to_panel(cref, cpos - 1)},+\n")
-                order.append((k, cref, cpos))
-        if order:
-            p = subprocess.run([a.odgi, "position", "-i", og, "-F", qf, "-r",
-                                tpath, "-t", str(a.threads)],
-                               capture_output=True, text=True)
-            # A failed odgi call returns no rows, and every key for this target
-            # would then read as unprojected. Stop instead.
-            if p.returncode != 0:
-                sys.exit(f"FATAL: odgi position failed for {tref} "
-                         f"(exit {p.returncode}):\n{p.stderr[-2000:]}")
-            got = {}
-            for line in p.stdout.split("\n"):
-                if not line or line.startswith("#"):
-                    continue
-                f = line.split("\t")
-                if len(f) < 3:
-                    continue
-                sp = f[0].rsplit(",", 2)
-                tp = f[1].rsplit(",", 2)
-                try:
-                    got[(sp[0], int(sp[1]))] = (int(tp[1]), int(f[2]))
-                except (ValueError, IndexError):
-                    continue
-            for k, cref, cpos in order:
-                v = got.get((paths[cref], fr.to_panel(cref, cpos - 1)))
-                if v is None:
-                    # odgi answered but returned no row for this query:
-                    # nothing was measured, which is not evidence of absence
-                    rows.append((k, "", -1))
-                else:
-                    tp, dist = v
-                    rows.append((k, fr.to_refs(tref, tp) + 1, dist))
-        os.remove(qf)
+        for k in sorted(need):
+            cref, cpos = carrier_of.get(k, (None, None))
+            if cref is None or cref not in paths:
+                continue
+            order.append((k, cref, cpos))
+        known = store_load(a, tref)
+        miss = sorted({(c, p) for _, c, p in order if (c, p) not in known})
+        if miss:
+            known.update(run_odgi(a, tref, tpath, fr, paths, og, miss))
+            store_add(a, tref, {q: known[q] for q in miss})
+        for k, cref, cpos in order:
+            pos, dist = known[(cref, cpos)]
+            rows.append((k, pos, dist))
+        sent = set(miss)
+        hit = sum(1 for _, c, p in order if (c, p) not in sent)
+        print(f"  {tref}: {hit} of {len(order)} keys from the projection store, "
+              f"{len(miss)} positions sent to odgi")
     out = proj_path(a, tref)
     with open(out + ".tmp", "w") as fh:
         fh.write("short_key\tpos\tdist\n")
@@ -178,6 +155,112 @@ def project(a, tref, fr, paths, og, ref_of, carrier_of):
             fh.write(f"{k}\t{pos}\t{dist}\n")
     os.replace(out + ".tmp", out)
     print(f"  {tref}: {len(rows)} keys projected onto its path")
+
+
+# ---- the projection store: reused between runs -----------------------------
+# A projection answers a question with no sample in it: where does carrier
+# reference C, position P land on target reference T, in this graph. Keyed on
+# (T, C, P) rather than on the key, it stays valid when the key set changes, so
+# a rerun sends odgi only the positions no earlier run has asked about. On
+# gwas1000 this step was about 16 of the 20 billing-hours of an IS6110 rerun.
+# The store lives in the build directory (--store), so a rebuilt graph gets a
+# new one. Values are refs-frame positions, converted with the build's own
+# frame table. Parts are append-only and renamed into place, as in proj_store.
+def store_load(a, tref):
+    out = {}
+    d = os.path.join(a.store, tref) if a.store else ""
+    if not d or not os.path.isdir(d):
+        return out
+    for f in sorted(os.listdir(d)):
+        if not f.endswith(".tsv"):
+            continue
+        for line in open(os.path.join(d, f)):
+            if line.startswith("#"):
+                continue
+            c, p, pos, dist = line.rstrip("\n").split("\t")
+            out.setdefault((c, int(p)), ((int(pos) if pos else ""), int(dist)))
+    return out
+
+
+def store_add(a, tref, res):
+    if not a.store or not res:
+        return
+    d = os.path.join(a.store, tref)
+    os.makedirs(d, exist_ok=True)
+    import time
+    name = os.path.join(d, f"{int(time.time() * 1e6)}.{os.getpid()}.tsv")
+    with open(name + ".tmp", "w") as fh:
+        fh.write("#carrier_ref\tcarrier_pos\tpos\tdist\n")
+        for (c, p), (pos, dist) in sorted(res.items()):
+            fh.write(f"{c}\t{p}\t{pos}\t{dist}\n")
+    os.replace(name + ".tmp", name)
+
+
+def run_odgi(a, tref, tpath, fr, paths, og, queries):
+    """{(carrier_ref, carrier_pos): (refs-frame pos or "", dist)} for each query."""
+    qf = os.path.join(a.workdir, "proj", f".{tref}.{os.getpid()}.pos")
+    with open(qf, "w") as fh:
+        for cref, cpos in queries:
+            fh.write(f"{paths[cref]},{fr.to_panel(cref, cpos - 1)},+\n")
+    p = subprocess.run([a.odgi, "position", "-i", og, "-F", qf, "-r",
+                        tpath, "-t", str(a.threads)],
+                       capture_output=True, text=True)
+    os.remove(qf)
+    # A failed odgi call returns no rows, and every key for this target
+    # would then read as unprojected. Stop instead.
+    if p.returncode != 0:
+        sys.exit(f"FATAL: odgi position failed for {tref} "
+                 f"(exit {p.returncode}):\n{p.stderr[-2000:]}")
+    got = {}
+    for line in p.stdout.split("\n"):
+        if not line or line.startswith("#"):
+            continue
+        f = line.split("\t")
+        if len(f) < 3:
+            continue
+        sp = f[0].rsplit(",", 2)
+        tp = f[1].rsplit(",", 2)
+        try:
+            got[(sp[0], int(sp[1]))] = (int(tp[1]), int(f[2]))
+        except (ValueError, IndexError):
+            continue
+    out = {}
+    for cref, cpos in queries:
+        v = got.get((paths[cref], fr.to_panel(cref, cpos - 1)))
+        # odgi answered but returned no row for this query: nothing was
+        # measured, which is not evidence of absence
+        out[(cref, cpos)] = ("", -1) if v is None else (fr.to_refs(tref, v[0]) + 1, v[1])
+    return out
+
+
+def seed(a, refs, carrier_of):
+    """Fill the store from an earlier run's <workdir>/proj/<ref>.tsv files.
+
+    Those files hold key -> result; the store needs (carrier, position) ->
+    result, so the carriers must come from the key table that produced them.
+    Run it BEFORE p1iv rewrites that table. A projection file older than the
+    key table was made from a different key set and is skipped.
+    """
+    kt = os.path.getmtime(a.cohort_keys)
+    n_ref = n_new = n_old = 0
+    for tref in refs:
+        p = proj_path(a, tref)
+        if not os.path.exists(p):
+            continue
+        if os.path.getmtime(p) < kt:
+            n_old += 1
+            continue
+        known = store_load(a, tref)
+        res = {}
+        for r in csv.DictReader(open(p, newline=""), delimiter="\t"):
+            c = carrier_of.get(r["short_key"])
+            if c is None or c in known:
+                continue
+            res[c] = ((int(r["pos"]) if r["pos"] else ""), int(r["dist"]))
+        store_add(a, tref, res)
+        n_ref += 1; n_new += len(res)
+    print(f"  seeded {n_new} positions for {n_ref} references into {a.store}"
+          + (f"; {n_old} projection files older than the key table skipped" if n_old else ""))
 
 
 def load_proj(a, tref):
@@ -352,7 +435,7 @@ def merge(a, samples):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", choices=("all", "project", "sample", "merge"),
+    ap.add_argument("--mode", choices=("all", "project", "sample", "merge", "seed"),
                     default="all",
                     help="all: every step in this process (the old behaviour). "
                          "project: one reference (--ref or --index). sample: one "
@@ -384,6 +467,10 @@ def main():
     ap.add_argument("--window", type=int, default=10)
     ap.add_argument("--workdir", default="refbias/p1i/p5stage2")
     ap.add_argument("--out", default="is6110/results/p5_is6110_states.stage2.tsv")
+    ap.add_argument("--store", default="",
+                    help="projection store reused between runs, normally "
+                         "<build>/proj_is6110; empty disables it. --mode seed "
+                         "fills it from an earlier run's projection files")
     a = ap.parse_args()
 
     os.makedirs(a.workdir, exist_ok=True)
@@ -402,6 +489,12 @@ def main():
             print(f"  index {a.index}: only {len(refs)} references; nothing to do")
             return 0
         tref = refs[a.index - 1]
+
+    if a.mode == "seed":
+        if not a.store:
+            sys.exit("FATAL: --mode seed needs --store")
+        seed(a, refs, carriers(a))
+        return 0
 
     if a.mode in ("all", "project"):
         og = a.graph

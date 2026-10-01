@@ -140,8 +140,89 @@ fill_store() {
     rm -f "$MISS"
 }
 
+# ---- the interval catalogue and the second frame, for interval mode --------
+# Both used to be built by hand -- the catalogue once, from scale200's caller
+# matrix, into refbias/assets/sv_intervals.tsv, and the two-frame tables by
+# sv2frame/bin/sv_twoframe.sh -- so nothing tied them to the cohort they were
+# used for. gwas1000 was genotyped against scale200's catalogue, and the merge
+# then dropped every gwas1000 caller deletion that catalogue did not hold.
+# They are steps of this pass now, written under the cohort's own p5 directory.
+#
+#   SVCAT=cohort   graph deletions plus this cohort's caller deletions called
+#                  in at least SVCAT_MIN_CARRIERS isolates (default 2, decided
+#                  2026-10-01); the rest stay in the VCF presence-only, flagged
+#                  UNCATALOGUED. A singleton cannot show repeated origins, and
+#                  caller false positives concentrate there; genotyping all of
+#                  gwas1000's would have cost about 240 CPU-hours of odgi
+#                  against about 85 for the 4,408 recurrent ones
+#   SVCAT=graph    graph deletions only; caller deletions stay presence-only
+SVCAT="${SVCAT:-cohort}"
+SVCAT_MIN_CARRIERS="${SVCAT_MIN_CARRIERS:-2}"
+TWOFRAMEDIR="${TWOFRAMEDIR:-${OUTDIR}/twoframe}"
+COHORT_NAME="${COHORT_NAME:-}"
+case "$COHORT_NAME" in
+  ""|pilot|pilot_rerun) _ISTAG="" ;;
+  scale100)             _ISTAG="scale_" ;;
+  *)                    _ISTAG="${COHORT_NAME}_" ;;
+esac
+IS6110KEYS="${IS6110KEYS:-is6110/results/${_ISTAG}p1i_cohort_keys.tsv}"
+
 STEP="${1:-${SVGTSTEP:-}}"
 case "$STEP" in
+  --catalogue)
+    [[ -n "$IVTAB" ]] || { echo "FATAL: --catalogue needs IVTAB, the path to write" >&2; exit 1; }
+    GRAPH_VCF="${GRAPH_VCF:-$(dirname "$OG")/all_variants.decomposed.vcf.gz}"
+    [[ -s "$GRAPH_VCF" ]] || { echo "FATAL: no graph VCF at ${GRAPH_VCF}" >&2; exit 1; }
+    CAT_ARGS=(--graph-vcf "$GRAPH_VCF")
+    case "$SVCAT" in
+      cohort) [[ -s "$SVMATRIX" ]] || { echo "FATAL: no ${SVMATRIX}; run p5 --pre" >&2; exit 1; }
+              CAT_ARGS+=(--sv-matrix "$SVMATRIX" --min-caller-carriers "$SVCAT_MIN_CARRIERS") ;;
+      graph)  ;;
+      *) echo "FATAL: SVCAT must be cohort or graph, not '${SVCAT}'" >&2; exit 1 ;;
+    esac
+    # IS6110 landmarks from this cohort's own key table, when it has one
+    if [[ -s "$IS6110KEYS" ]]; then CAT_ARGS+=(--is6110-keys "$IS6110KEYS")
+    else echo "  note: no IS6110 key table at ${IS6110KEYS}; H37Rv copies only"; fi
+    "$MTB_PY" bin/sv_intervals.py "${CAT_ARGS[@]}" --out "${IVTAB}.tmp"
+    mv -f "${IVTAB}.tmp" "$IVTAB"
+    exit 0 ;;
+  --twoframe)
+    # The H37Rv-frame half of the two-frame genotyper, one sample per task.
+    # About 8 s a sample: the catalogue is already in H37Rv coordinates, so it
+    # needs only the read collection's own CRAM. The matched-frame column is
+    # left empty -- it would be this pass's own output, and the genotyper reads
+    # only the H37Rv-frame state and clips from this table.
+    [[ -s "$IVTAB" ]] || { echo "FATAL: no catalogue at ${IVTAB}; run --catalogue" >&2; exit 1; }
+    if [[ $# -ge 2 ]]; then S="$2"
+    else S="$(awk -F'\t' -v n="$(( ${SLURM_ARRAY_TASK_ID:?--twoframe is an array step} + 1 ))" 'NR==n{print $1}' "$REFMAP")"; fi
+    [[ -n "$S" ]] || { echo "FATAL: no refmap row" >&2; exit 1; }
+    mkdir -p "$TWOFRAMEDIR"
+    TF="${TWOFRAMEDIR}/${S}.2frame.tsv"
+    if [[ -s "$TF" && "$TF" -nt "$IVTAB" ]]; then
+        echo "[P5svgt] ${S}: two-frame table current"; exit 0
+    fi
+    CRAMTAB="${CRAMTAB:-${CRAMS:?CRAMS is unset; run through bin/refbias_run.sh}}"
+    REL="$(awk -F'\t' -v s="$S" '$1==s{print $2; exit}' "$CRAMTAB")"
+    [[ -n "$REL" ]] || { echo "FATAL: ${S} not in ${CRAMTAB}" >&2; exit 1; }
+    CRAM="${MTB_CRAM_ROOT:?MTB_CRAM_ROOT is unset}/${REL}"
+    [[ -s "$CRAM" ]] || { echo "FATAL: ${S}: no CRAM at ${CRAM}" >&2; exit 1; }
+    # The IS-clean H37Rv alignment from pass p1g, for element-proximal
+    # intervals: on plain H37Rv a read carrying element sequence has sixteen
+    # places to align. Required, so a missing one cannot silently change the
+    # instrument; TWOFRAME_NO_ISCLEAN=1 for a cohort that never ran p1g.
+    TF_EXTRA=()
+    IC="${P1GDIR:-refbias/p1g}/${S}.isclean.bam"
+    if [[ -s "$IC" ]]; then TF_EXTRA+=(--isclean-bam "$IC")
+    elif [[ -z "${TWOFRAME_NO_ISCLEAN:-}" ]]; then
+        echo "FATAL: ${S}: no p1g alignment at ${IC} (restore it with" \
+             "bin/archive_alignments.sh --restore, or set TWOFRAME_NO_ISCLEAN=1)" >&2
+        exit 1
+    fi
+    "${MTB_PY_VT:-$MTB_PY}" sv2frame/bin/sv_twoframe.py --intervals "$IVTAB" \
+        --sample "$S" --cram "$CRAM" --h37rv-fasta "${MTB_CRAM_REF:?MTB_CRAM_REF is unset}" \
+        "${TF_EXTRA[@]}" --out "${TF}.tmp.$$"
+    mv -f "${TF}.tmp.$$" "$TF"
+    exit 0 ;;
   --probes)
     if [[ -n "$IVTAB" ]]; then
         [[ -s "$IVTAB" ]] || { echo "FATAL: no ${IVTAB}" >&2; exit 1; }
@@ -194,7 +275,7 @@ PY
     fill_store "$REFID" "$RPATH" "ref_${REFID}"
     exit 0 ;;
   --states) ;;
-  *) echo "usage: $0 --probes | --project | --states | --merge   (or SVGTSTEP=...)" >&2; exit 2 ;;
+  *) echo "usage: $0 --catalogue | --twoframe | --probes | --project | --states | --merge   (or SVGTSTEP=...)" >&2; exit 2 ;;
 esac
 
 [[ -s "$PROBES" ]] || { echo "FATAL: run --probes first" >&2; exit 1; }
@@ -282,10 +363,20 @@ if [[ -n "$IVTAB" ]]; then
     # sv2frame/TWOFRAME_RESULTS.md. TWOFRAME points at that table; without it
     # inherited candidates come back NOCALL, which is the honest state.
     # TRUST_INHERITED=1 restores the pre-2026-09-27 behaviour.
-    TWOFRAME="${TWOFRAME:-sv2frame/${COHORT_TAG:-$(basename "$(dirname "$OUTDIR")")}/per_sample/${SAMPLE}.2frame.tsv}"
+    TWOFRAME="${TWOFRAME:-${TWOFRAMEDIR}/${SAMPLE}.2frame.tsv}"
     TF_ARGS=()
-    [[ -s "$TWOFRAME" ]] && TF_ARGS+=(--twoframe "$TWOFRAME")
-    [[ -n "${TRUST_INHERITED:-}" ]] && TF_ARGS+=(--trust-inherited)
+    if [[ -n "${TRUST_INHERITED:-}" ]]; then
+        TF_ARGS+=(--trust-inherited)
+    elif [[ -s "$TWOFRAME" && "$TWOFRAME" -nt "$IVTAB" ]]; then
+        TF_ARGS+=(--twoframe "$TWOFRAME")
+    else
+        # Missing or older than the catalogue: a stale table keys on interval
+        # ids that may no longer exist, which reads as "no second frame" for
+        # every interval and silently turns every inherited ALT into NOCALL.
+        echo "FATAL: ${SAMPLE}: no two-frame table newer than ${IVTAB} at" \
+             "${TWOFRAME}; run --twoframe (or TRUST_INHERITED=1)" >&2
+        exit 1
+    fi
     "$MTB_PY" bin/p5_sv_genotype.py --intervals "$IVTAB" --sample "$SAMPLE" \
         --reference "$REFID" --gvcf "$GVCF" --bam "$BAM" \
         --mapq-scope "${MAPQSCOPE:-is6110}" --min-mapq "${MINMAPQ:-30}" \

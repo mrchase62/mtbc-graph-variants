@@ -231,10 +231,17 @@ IS6110_KEYS="${IS6110_KEYS:-}"
 # -- two key spaces with nothing in common, so the interval arm never reached
 # the VCF at all. Both are passed now: the catalogue supplies the deletions and
 # the caller matrix still supplies the insertions it cannot genotype.
-IVTAB="${IVTAB:-refbias/assets/sv_intervals.tsv}"
+# The catalogue is the cohort's own, written by p5_svgt.sh --catalogue. It used
+# to default to refbias/assets/sv_intervals.tsv, built once by hand from
+# scale200's caller matrix, which every cohort then shared.
+IVTAB="${IVTAB:-${OUTDIR}/sv_intervals.tsv}"
 IVSTATES="${IVSTATES:-${OUTDIR}/svgt_iv_states.tsv}"
 IV_ARGS=()
 if [[ -s "$IVTAB" && -s "$IVSTATES" ]]; then
+    # States genotyped against an older catalogue key on interval ids that may
+    # not exist any more; refuse rather than join them.
+    [[ "$IVSTATES" -nt "$IVTAB" ]] || { echo "FATAL: ${IVSTATES} is older than" \
+        "${IVTAB}; rerun pass p5svgt" >&2; exit 1; }
     IV_ARGS=(--sv-intervals "$IVTAB" --sv-interval-states "$IVSTATES")
     echo "  deletion block from ${IVTAB} genotyped in ${IVSTATES}"
 else
@@ -249,7 +256,13 @@ fi
 # nothing in common and must not be crossed.
 if [[ -z "${SV_STATES:-}" ]]; then
     for _c in "${OUTDIR}/svgt_states.tsv" "${OUTDIR}/sv_states.tsv"; do
-        [[ -s "$_c" ]] && { SV_STATES="$_c"; break; }
+        # Caller cluster keys shift whenever sv_matrix.tsv is rebuilt, so an
+        # overlay older than the matrix would join the wrong clusters.
+        if [[ -s "$_c" && "$_c" -nt "${OUTDIR}/sv_matrix.tsv" ]]; then
+            SV_STATES="$_c"; break
+        elif [[ -s "$_c" ]]; then
+            echo "  ignoring ${_c}: older than ${OUTDIR}/sv_matrix.tsv"
+        fi
     done
 fi
 [[ -s "${SV_STATES:-}" ]] || SV_STATES=""
@@ -296,8 +309,12 @@ else
     echo "FATAL: neither states.u8.npy nor matrix.tsv in ${OUTDIR}; run --pre" >&2
     exit 1
 fi
+# The ancestral allele table is a build asset (p0_prepare.sh --step ancestral).
+ANCESTRAL="${ANCESTRAL:-${BUILD}/assets/ancestral.tsv}"
+[[ -s "$ANCESTRAL" ]] || { echo "FATAL: no ancestral allele table at ${ANCESTRAL};" \
+    "run bin/p0_prepare.sh --step ancestral" >&2; exit 1; }
 MERGE=("$MTB_PY" bin/merge_cohort_vcf.py "${SMALL[@]}" \
-    --sv-matrix "${OUTDIR}/sv_matrix.tsv" \
+    --sv-matrix "${OUTDIR}/sv_matrix.tsv" --ancestral "$ANCESTRAL" \
     --h37rv-fasta "$H37RV_FASTA" --build-id "$BUILD_ID" \
     ${IS6110_KEYS:+--is6110-keys "$IS6110_KEYS"} \
     ${IS6110_STATES:+--is6110-states "$IS6110_STATES"} \

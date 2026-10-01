@@ -26,9 +26,11 @@ they carry at least --min-reads reads, they are replaced by ONE stack:
                 means every isolate rescued against the same reference shares
                 one key, rather than one key per random placement
   reads_q       all reads in the array. The ambiguity is between identical
-                repeats of ONE locus -- the DR consensus occurs nowhere else in
-                the genome, which is checked per reference below -- so the
-                locus-level placement is not ambiguous
+                repeats of ONE locus, so the locus-level placement is not
+                ambiguous. Each DR cluster of a reference is a locus; where a
+                reference has more than one (GCF_965122945 has two, 22.7 kb
+                apart), a cluster is rescued only if no other cluster also holds
+                sub-threshold evidence, so one copy never becomes two calls
   el_start/end  summed, so both_el_termini, and with it the two-sided /
                 one-sided evidence class, comes from the reads as usual
   span          the array's length, so the geometry reads two_sided_wide and
@@ -71,28 +73,34 @@ def dr_hits(seq, max_mm):
     return sorted(out)
 
 
-def dr_locus(seq, max_mm=4, max_gap=2000):
-    """(first, last) base of the DR array, or None.
+def dr_loci(seq, max_mm=4, max_gap=2000):
+    """[(first, last), ...] bases of each DR cluster, in order; [] if none.
 
     max_gap joins repeats across the reference's own excised element: an array
     with an IS6110 copy in it is split by about 1.4 kb in the original sequence
-    and not at all in the element-free one. More than one cluster is refused,
-    because the rescue's premise is a single locus.
+    and not at all in the element-free one. A cluster needs at least 3 repeats.
+
+    Most references have one cluster. GCF_965122945 has two, 22.7 kb apart, and
+    each is treated as its own locus (see main for the guard that applies).
     """
     h = dr_hits(seq, max_mm)
     if not h:
-        return None, "no DR array"
+        return []
     clusters = [[h[0]]]
     for p in h[1:]:
         if p - clusters[-1][-1] > max_gap:
             clusters.append([p])
         else:
             clusters[-1].append(p)
-    big = [c for c in clusters if len(c) >= 3]
-    if len(big) != 1:
-        return None, f"{len(big)} DR clusters"
-    c = big[0]
-    return (c[0], c[-1] + len(DR) - 1), ""
+    return [(c[0], c[-1] + len(DR) - 1) for c in clusters if len(c) >= 3]
+
+
+def dr_locus(seq, max_mm=4, max_gap=2000):
+    """The single DR cluster as (first, last), or (None, reason)."""
+    L = dr_loci(seq, max_mm, max_gap)
+    if len(L) != 1:
+        return None, (f"{len(L)} DR clusters" if L else "no DR array")
+    return L[0], ""
 
 
 def main():
@@ -131,22 +139,34 @@ def main():
         R = ref_of[s]
         if R not in loci:
             fa = os.path.join(a.clean_dir, f"{R}.isclean.fasta")
-            loci[R], why[R] = (dr_locus(read_seq(fa)) if os.path.exists(fa)
-                               else (None, "no element-free reference"))
-        L = loci[R]
+            if os.path.exists(fa):
+                loci[R] = dr_loci(read_seq(fa))
+                why[R] = "" if loci[R] else "no DR array"
+            else:
+                loci[R], why[R] = [], "no element-free reference"
         out = rows
-        if L is None:
+        if not loci[R]:
             counts[f"reference: {why[R]}"] += 1
-        else:
-            lo, hi = L[0] - a.slop, L[1] + a.slop
-            inside = [r for r in rows if lo <= int(r["clean_pos"]) <= hi]
+        # Each DR cluster is its own locus. Where a reference has more than one,
+        # a MAPQ-0 junction read could belong to either, so a cluster is rescued
+        # only if no OTHER cluster also holds sub-threshold evidence: otherwise
+        # one copy's ambiguous reads could become two calls.
+        spans = [(L, [r for r in rows if L[0] - a.slop <= int(r["clean_pos"])
+                      <= L[1] + a.slop]) for L in loci[R]]
+        weak = [not any(int(r["reads_q"]) >= a.min_reads for r in ins)
+                and sum(int(r["reads"]) for r in ins) >= a.min_reads
+                for L, ins in spans]
+        tag = "" if len(spans) == 1 else " (one of several DR clusters)"
+        for k, (L, inside) in enumerate(spans):
             tot = sum(int(r["reads"]) for r in inside)
             if not inside:
-                counts["no element evidence in the DR array"] += 1
+                counts["no element evidence in the DR array" + tag] += 1
             elif any(int(r["reads_q"]) >= a.min_reads for r in inside):
-                counts["already called in the DR array; unchanged"] += 1
+                counts["already called in the DR array; unchanged" + tag] += 1
             elif tot < a.min_reads:
-                counts[f"fewer than {a.min_reads} reads in the DR array; unchanged"] += 1
+                counts[f"fewer than {a.min_reads} reads in the DR array; unchanged" + tag] += 1
+            elif sum(weak) > 1:
+                counts["weak evidence in more than one DR cluster; unchanged"] += 1
             else:
                 near = min(inside, key=lambda r: abs(int(r["clean_pos"]) - L[0]))
                 off = int(near["orig_pos"]) - int(near["clean_pos"])
@@ -170,10 +190,10 @@ def main():
                     fwd=sum(int(r["fwd"]) for r in inside),
                     rev=sum(int(r["rev"]) for r in inside),
                     repeat_locus="DR")
-                out = [r for r in rows if r not in inside] + [agg]
+                out = [r for r in out if r not in inside] + [agg]
                 out.sort(key=lambda r: int(r["clean_pos"]))
                 kind = "two-sided" if agg["both_el_termini"] else "one-sided"
-                counts[f"RESCUED, {kind}"] += 1
+                counts[f"RESCUED, {kind}" + tag] += 1
                 rescued.append((s, R, tot, len(inside), kind))
 
         tmp = cur + ".tmp"

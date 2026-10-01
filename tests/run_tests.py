@@ -11,6 +11,7 @@ the standard library and the pipeline's own scripts, and take a few seconds:
 Run them before any cohort run that follows a code change.
 """
 import csv
+import shutil
 import importlib.util
 import os
 import subprocess
@@ -307,6 +308,33 @@ class ShardedMerge(unittest.TestCase):
             recs = [l for l in self.body(one) if not l.startswith("#")]
             self.assertEqual(len(recs), 10)            # every key has an ALT carrier
 
+    def test_uncatalogued_caller_deletion_is_kept(self):
+        """With a catalogue, only the caller deletions it covers are dropped;
+        one it does not cover stays, presence-only and flagged UNCATALOGUED."""
+        import gzip
+        with tempfile.TemporaryDirectory() as d:
+            samples, _ = self.build(d)
+            hdr = "key\tsvtype\th37rv_pos\tsvlen\tcomponent\tqual_band\t" + "\t".join(samples)
+            alt = "\t".join(["ALT"] + ["NOCALL"] * (len(samples) - 1))
+            write(f"{d}/sv.tsv", hdr + "\n"
+                  f"sv:DEL:5000:400\tDEL\t5000\t400\tcalled\tlow\t{alt}\n"
+                  f"sv:DEL:800000:30\tDEL\t800000\t30\tcalled\tlow\t{alt}\n")
+            write(f"{d}/iv.tsv", "interval\tsource\tsvtype\tstart\tend\tsvlen\t"
+                  "support_tier\tis6110_prox\tn_ref_carriers\tref_carriers\n"
+                  "svi:DEL:5001:400\tcaller\tDEL\t5001\t5400\t400\tC_caller_only\t0\t0\t\n")
+            write(f"{d}/ivst.tsv", "sample\tinterval\tsvtype\tstate\n" + "".join(
+                f"{sm}\tsvi:DEL:5001:400\tDEL\t{'ALT' if sm == 'S1' else 'REF'}\n"
+                for sm in samples))
+            out = f"{d}/o.vcf.gz"
+            self.merge(d, "--sv-matrix", f"{d}/sv.tsv", "--sv-intervals", f"{d}/iv.tsv",
+                       "--sv-interval-states", f"{d}/ivst.tsv", "--out", out)
+            with gzip.open(out, "rt") as fh:
+                ids = {l.split("\t")[2]: l for l in fh if not l.startswith("#")}
+            self.assertIn("svi:DEL:5001:400", ids)
+            self.assertNotIn("sv:DEL:5000:400", ids)          # superseded
+            self.assertIn("sv:DEL:800000:30", ids)            # not covered: kept
+            self.assertIn("UNCATALOGUED", ids["sv:DEL:800000:30"])
+
     def test_assemble_refuses_missing_shard(self):
         with tempfile.TemporaryDirectory() as d:
             self.build(d)
@@ -357,6 +385,60 @@ class Is6110Stage2Split(unittest.TestCase):
             self.assertNotEqual(r.returncode, 0)
             self.assertIn("no stage-2 table for B", r.stderr)
 
+    def test_projection_store_reuse_and_seed(self):
+        """Projections are reused by (carrier, position): a rerun sends odgi
+        only new positions, results are identical, and seeding from an
+        earlier run's projection files reproduces the store."""
+        with tempfile.TemporaryDirectory() as d:
+            write(f"{d}/frames.tsv", "accession\tpanel_len\trefs_len\tstrand\toffset\tagree\n"
+                  + "".join(f"{x}\t1000\t1000\t+\t0\tok\n" for x in ("R1", "R2")))
+            write(f"{d}/paths.txt", "R1#1#c\nR2#1#c\n")
+            log = f"{d}/odgi.log"
+            fake = write(f"{d}/odgi", "#!/usr/bin/env python3\n"
+                "import sys\n"
+                "a = sys.argv; q = a[a.index('-F') + 1]; t = a[a.index('-r') + 1]\n"
+                f"log = open({log!r}, 'a')\n"
+                "for l in open(q):\n"
+                "    p, o, s = l.strip().rsplit(',', 2); log.write(l)\n"
+                "    print(f'{p},{o},{s}\\t{t},{int(o) + 7},+\\t0')\n")
+            os.chmod(fake, 0o755)
+            write(f"{d}/refmap.tsv", "sample\treference\nA\tR1\nB\tR2\n")
+            def keys(pos):
+                write(f"{d}/keys.tsv", "sample\treference\tr_pos\tframe\th37rv_pos\tnode\n"
+                      + "".join(f"A\tR1\t{p}\th37rv\t{p}\t\n" for p in pos))
+                os.makedirs(f"{d}/s1", exist_ok=True)
+                write(f"{d}/s1/A.tsv", "sample\tkey\tstate\n"
+                      + "".join(f"A\th37rv:{p}:A>T\tALT\n" for p in pos))
+                write(f"{d}/s1/B.tsv", "sample\tkey\tstate\n"
+                      + "".join(f"B\th37rv:{p}:A>T\tNOCALL\n" for p in pos))
+            env = dict(os.environ, MTB_GRAPH_FRAMES=f"{d}/frames.tsv")
+            cmd = [sys.executable, "is6110/bin/is6110_p5_stage2.py",
+                   "--refmap", f"{d}/refmap.tsv", "--cohort-keys", f"{d}/keys.tsv",
+                   "--stage1-dir", f"{d}/s1", "--paths", f"{d}/paths.txt",
+                   "--graph", f"{d}/g.og", "--odgi", fake, "--workdir", f"{d}/w",
+                   "--store", f"{d}/store", "--out", f"{d}/o.tsv"]
+            def project():
+                r = subprocess.run(cmd + ["--mode", "project", "--ref", "R2"],
+                                   capture_output=True, text=True, env=env)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                return open(f"{d}/w/proj/R2.tsv").read()
+            sent = lambda: len(open(log).read().splitlines()) if os.path.exists(log) else 0
+            keys([100, 200])
+            first = project()
+            self.assertEqual(sent(), 2)
+            self.assertIn("h37rv:100:\t107\t0", first)
+            keys([100, 200, 300])                      # one new key
+            second = project()
+            self.assertEqual(sent(), 3)                # only the new position
+            self.assertTrue(set(first.splitlines()) < set(second.splitlines()))
+            shutil.rmtree(f"{d}/store")                # an earlier run, no store
+            r = subprocess.run(cmd + ["--mode", "seed"], capture_output=True,
+                               text=True, env=env)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("seeded 3 positions", r.stdout)
+            self.assertEqual(project(), second)
+            self.assertEqual(sent(), 3)                # served from the seed
+
 
 class SvMatrixReader(unittest.TestCase):
     """SV genotyping keeps one sample's column, not the whole matrix."""
@@ -391,7 +473,8 @@ class AlignmentArchive(unittest.TestCase):
         self.assertEqual(len(ref), 100)
         for sub in ("build/refs", "clean", "p2w", "p1i", "p1w", "p1g"):
             os.makedirs(os.path.join(d, sub))
-        for fa in (f"{d}/build/refs/R.fasta", f"{d}/clean/R.isclean.fasta"):
+        for fa in (f"{d}/build/refs/R.fasta", f"{d}/clean/R.isclean.fasta",
+                   f"{d}/clean/H37Rv.isclean.fasta"):
             write(fa, f">c\n{ref}\n")
         sam = (f"@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:c\tLN:{header_len}\n"
                "@RG\tID:S\tSM:S\n"
@@ -408,6 +491,7 @@ class AlignmentArchive(unittest.TestCase):
         env = dict(os.environ, MTB_BUILD_DIR=f"{d}/build", REFMAP=f"{d}/refmap.tsv",
                    P1WORK=f"{d}/p1w", P2WORK=f"{d}/p2w", P1IDIR=f"{d}/p1i",
                    P1GDIR=f"{d}/p1g", CLEANDIR=f"{d}/clean",
+                   H37CLEAN=f"{d}/clean/H37Rv.isclean.fasta",
                    ARCHIVE_DELETE_BAM="1", ARCHIVE_DROP_UNUSED="1")
         return st, env
 
@@ -425,6 +509,8 @@ class AlignmentArchive(unittest.TestCase):
                          "p1g/S.isclean.bam"):
                 self.assertFalse(os.path.exists(f"{d}/{gone}"), gone)
             self.assertTrue(os.path.exists(f"{d}/p2w/S.archive.cram"))
+            # the p1g alignment is read by the SV two-frame step: archived, not dropped
+            self.assertTrue(os.path.exists(f"{d}/p1g/S.isclean.archive.cram"))
             r = self.run_step("--restore", env)
             self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
             view = lambda f: subprocess.run([st, "view", f], capture_output=True,
@@ -501,6 +587,96 @@ class DrArrayRescue(unittest.TestCase):
             self.assertEqual(len(out["B"]), 2)
             self.assertFalse(any(x["repeat_locus"] for x in out["B"] + out["C"]))
             self.assertTrue(os.path.exists(f"{d}/p1i/A.elstacks.raw.tsv"))
+
+    def test_two_clusters(self):
+        """Two DR clusters: rescue one only when the other holds no weak
+        evidence, so one copy's ambiguous reads never become two calls."""
+        import random
+        rng = random.Random(5)
+        uniq = lambda n: "".join(rng.choice("ACGT") for _ in range(n))
+        arr = lambda: "".join(self.DR + uniq(36) for _ in range(8))
+        u1, a1, u2, a2 = uniq(5000), arr(), uniq(20000), arr()
+        seq = u1 + a1 + u2 + a2 + uniq(5000)
+        c1 = len(u1) + 1
+        c2 = c1 + len(a1) + len(u2)
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(f"{d}/clean"); os.makedirs(f"{d}/p1i")
+            write(f"{d}/clean/R.isclean.fasta", ">c\n" + seq + "\n")
+            write(f"{d}/refmap.tsv", "sample\treference\nA\tR\nB\tR\n")
+            tables = {
+                "A": [self.stack("A", c1 + 72 * i, 4, 0, 1, 1) for i in range(3)],
+                "B": [self.stack("B", c1 + 72 * i, 4, 0, 1, 1) for i in range(3)]
+                     + [self.stack("B", c2 + 72 * i, 4, 0, 1, 1) for i in range(3)],
+            }
+            for smp, rows in tables.items():
+                with open(f"{d}/p1i/{smp}.elstacks.tsv", "w") as fh:
+                    fh.write("\t".join(self.HDR) + "\n")
+                    for r in rows:
+                        fh.write("\t".join(map(str, r)) + "\n")
+            r = subprocess.run([sys.executable, "is6110/bin/is6110_repeat_rescue.py",
+                                "--dir", f"{d}/p1i", "--refmap", f"{d}/refmap.tsv",
+                                "--clean-dir", f"{d}/clean"], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            a = rows_of(f"{d}/p1i/A.elstacks.tsv")
+            b = rows_of(f"{d}/p1i/B.elstacks.tsv")
+            self.assertEqual([int(x["clean_pos"]) for x in a if x["repeat_locus"]], [c1])
+            self.assertFalse(any(x["repeat_locus"] for x in b))
+            self.assertEqual(len(b), 6)
+
+
+class Is6110SeamAndKeys(unittest.TestCase):
+    """One ref_shared rule everywhere (review 4.4); one key per insertion (4.5)."""
+
+    def test_seam_slop_and_side(self):
+        sm = load("is6110_seam", "is6110/bin/is6110_seam.py")
+        with tempfile.TemporaryDirectory() as d:
+            cm = write(f"{d}/R.crossmap.tsv", "orig_start\torig_end\tdeleted_len\t"
+                       "clean_junction\tcum_deleted\n1001\t2355\t1355\t1000\t1355\n")
+            s = sm.Seams(cm)
+            self.assertEqual(s.nearest(1000), ("L", 1001, 2355, 0))
+            self.assertEqual(s.nearest(2358), ("R", 1001, 2355, 2))
+            self.assertIsNone(s.nearest(996))           # 4 bp off: not shared
+            self.assertTrue(s.shared(1003))             # inside the duplication
+            self.assertFalse(sm.Seams(f"{d}/missing.tsv").known())
+        # promotion and the writer agree, by construction
+        pr = load("is6110_promote_sites", "is6110/bin/is6110_promote_sites.py")
+        self.assertEqual(pr.classify_site(2357, s, sm.SEAM_SLOP), pr.SHARED)
+        self.assertEqual(pr.classify_site(2360, s, sm.SEAM_SLOP), pr.LACKING)
+
+    def test_cluster_keys(self):
+        w = load("is6110_write_vcf", "is6110/bin/is6110_write_vcf.py")
+        obs = [("h", 100, "A", 1), ("h", 101, "B", 1), ("h", 101, "C", 1),
+               ("h", 106, "D", 1),          # within 6 of the cluster start
+               ("h", 107, "E", 1),          # 7 from the start: a new cluster
+               ("h", 103, "A", 2),          # A already in the cluster: separate
+               ("n", 101, "F", 1)]          # another axis is never merged in
+        c = w.cluster_keys(obs, 6)
+        self.assertEqual(c[("A", 1)], 101)      # most carriers wins
+        self.assertEqual(c[("D", 1)], 101)
+        self.assertEqual(c[("A", 2)], 103)
+        self.assertEqual(c[("E", 1)], 103)      # joins the cluster 103 opened
+        self.assertEqual(c[("F", 1)], 101)
+        self.assertEqual(w.cluster_keys(obs, 0)[("D", 1)], 106)
+
+
+class AncestralAtIngroup(unittest.TestCase):
+    """Review 3.7: AA is the MTBC ancestor's state, the outgroup breaking a
+    tie there; a site the root already resolved keeps its allele."""
+
+    def test_ingroup_state(self):
+        with tempfile.TemporaryDirectory() as d:
+            write(f"{d}/t.nwk", "(O,(A,(B,C)));\n")
+            # site 1: root ties {C,T}, ingroup is C. site 2: root resolves A.
+            # site 3: ingroup ties {A,G} and the outgroup (T) cannot break it.
+            write(f"{d}/a.fa", ">O\nTAT\n>A\nCAA\n>B\nCGG\n>C\nCGG\n")
+            write(f"{d}/s.tsv", "chrom\tpos\tref\talt\nc\t1\tC\tT\nc\t2\tA\tG\nc\t3\tA\tG\n")
+            r = subprocess.run([sys.executable, "bin/ancestral_alleles.py", "--tree",
+                                f"{d}/t.nwk", "--alignment", f"{d}/a.fa", "--sites",
+                                f"{d}/s.tsv", "--out", f"{d}/o.tsv", "--outgroup", "O"],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            got = [(x["AA"], x["flag"]) for x in rows_of(f"{d}/o.tsv")]
+            self.assertEqual(got, [("C", ""), ("A", ""), (".", "TIED:AG")])
 
 
 def rows_of(p):

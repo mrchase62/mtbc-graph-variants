@@ -44,6 +44,9 @@ attaching it to the nearest anchor. Those keep the graph node key that
 """
 import argparse, collections, csv, hashlib, os, re, subprocess, sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from is6110_seam import Seams
+
 
 def read_fasta_one(path):
     name, buf = None, []
@@ -58,7 +61,7 @@ def read_fasta_one(path):
 
 
 def load_excisions(path):
-    """Excised spans from the build's crossmap, keyed by BOTH adjacent bases.
+    """The reference's removed spans, as is6110_seam.Seams.
 
     The site's reference coordinate is never the span's first base. clean_to_orig
     maps a clean position to its original frame, and a junction sits at the seam,
@@ -68,13 +71,7 @@ def load_excisions(path):
     matches sixteen copies and fails the mapping-quality floor. That is what
     drove 124 of 179 sites into "one_flank_unique" on the first run.
     """
-    left, right = {}, {}
-    if os.path.exists(path):
-        for r in csv.DictReader(open(path), delimiter="\t"):
-            s0, e0 = int(r["orig_start"]), int(r["orig_end"])
-            left[s0 - 1] = e0      # site left of the seam: element runs s0..e0
-            right[e0 + 1] = s0     # site right of the seam: element runs s0..e0
-    return left, right
+    return Seams(path)
 
 
 def cigar_ref_span(cig):
@@ -155,12 +152,18 @@ def main():
             # Step the window past the reference's own copy, on whichever side of
             # the seam this site sits. lstart/rend bracket the element; where the
             # reference carries no copy here both collapse to p.
-            exl, exr = exc[ref]
+            # The seam is found with the rule the VCF writer uses (is6110_seam),
+            # so a site the writer calls ref_shared always has its windows
+            # stepped past the reference's copy. Exact matching used to leave a
+            # site 1-3 bp off the seam with one window inside the element.
             lstart, rend = p, p
-            if p in exl:
-                rend = exl[p]                 # element to the RIGHT of the site
-            elif p in exr:
-                lstart = exr[p]               # element to the LEFT of the site
+            hit = exc[ref].nearest(p)
+            if hit is not None:
+                side, s0, e0, _ = hit
+                if side == "L":
+                    rend = p + (e0 - s0 + 1)  # element to the RIGHT of the site
+                else:
+                    lstart = p - (e0 - s0 + 1)  # element to the LEFT of the site
             l2, l1 = lstart - a.gap - 1, lstart - a.gap - a.window
             r1, r2 = rend + a.gap + 1, rend + a.gap + a.window
             s["_l1"], s["_r1"] = l1, r1

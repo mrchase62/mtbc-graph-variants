@@ -498,10 +498,21 @@ def main():
                 # interval, which is the inherited ALT the matrix's `component`
                 # column calls `inherited`. Without covered flanks the
                 # projection may simply have failed, and that stays ABSENT.
-                if flank_ok and not a.no_promote:
+                if flank_ok and not a.no_promote and a.trust_inherited:
                     state, why = "ALT", ("inherited: the interval is absent "
                                          "from this sample's reference and "
                                          "its flanks are covered")
+                elif flank_ok and not a.no_promote:
+                    # THE SAME RULE AS INTERVAL MODE (review 3.9). Promoting
+                    # on the graph lookup plus a covered flank is what the
+                    # two-frame check contradicted 26.5% of the time on
+                    # scale200; interval mode stopped doing it, and this mode
+                    # has no second frame to confirm with, so the inherited
+                    # candidate is NOCALL. --trust-inherited restores the old
+                    # behaviour for reproducing earlier output.
+                    state, why = "NOCALL", ("inherited_unconfirmed: absent from "
+                                            "this sample's reference, flanks "
+                                            "covered, no second frame")
                 else:
                     state, why = "ABSENT", (f"{len(ok)}/{len(probes)} interior "
                                             f"probes project, flanks "

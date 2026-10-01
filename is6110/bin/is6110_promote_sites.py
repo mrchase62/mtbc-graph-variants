@@ -48,16 +48,18 @@ Arm-agnostic: point --dir at any p1g or p1i output.
 """
 import argparse, collections, csv, glob, os, statistics as st, sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from is6110_seam import Seams, SEAM_SLOP   # the one ref_shared rule (review 4.4)
+
 TWO, ONE = "two_sided", "one_sided"
 SHARED, LACKING, UNKNOWN = "ref_shared", "ref_lacking", "unknown"
 
 
 def junctions(path):
-    """Clean coordinates where a build removed one of its intervals."""
+    """The seams where a build removed one of its intervals, or None."""
     if not path or not os.path.exists(path):
         return None
-    return sorted(int(r["clean_junction"])
-                  for r in csv.DictReader(open(path), delimiter="\t"))
+    return Seams(path)
 
 
 def resolve_crossmaps(dir_, samples, crossmap, crossmap_dir, refmap):
@@ -87,10 +89,12 @@ def resolve_crossmaps(dir_, samples, crossmap, crossmap_dir, refmap):
     return out
 
 
-def classify_site(pos, junc, slop):
-    if junc is None:
+def classify_site(orig_pos, seams, slop):
+    """By the ORIGINAL coordinate, with the rule is6110_write_vcf.py and
+    is6110_place_by_flank.py use, so the three never disagree."""
+    if seams is None:
         return UNKNOWN
-    return SHARED if any(abs(pos - j) <= slop for j in junc) else LACKING
+    return SHARED if seams.shared(orig_pos, slop) else LACKING
 
 
 def load(path, min_reads_q):
@@ -151,7 +155,7 @@ def sites_for(dir_, sample, min_reads_q, pw, sw, junc, slop):
     stacks = load(os.path.join(dir_, f"{sample}.elstacks.tsv"), min_reads_q)
     sites = collapse(stacks, pw, sw)
     for s in sites:
-        s["site_class"] = classify_site(s["pos"], junc, slop)
+        s["site_class"] = classify_site(s["orig"], junc, slop)
     return stacks, sites
 
 
@@ -194,9 +198,11 @@ def main():
                     help="per-reference crossmaps, for the matched arm")
     ap.add_argument("--refmap", default="refbias/scale/p1/refmap.tsv",
                     help="sample to reference assignment, for the matched arm")
-    ap.add_argument("--class-slop", type=int, default=25,
+    ap.add_argument("--class-slop", type=int, default=SEAM_SLOP,
                     help="how close a call must be to a removed-interval "
-                         "coordinate to count as ref_shared")
+                         "seam to count as ref_shared; the default is the one "
+                         "the VCF writer and flank placement use, see "
+                         "is6110_seam.py. Change it only for experiments")
     ap.add_argument("--sweep", action="store_true",
                     help="print site totals across a range of pair windows")
     ap.add_argument("--out", default="")

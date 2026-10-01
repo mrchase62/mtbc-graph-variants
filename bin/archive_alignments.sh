@@ -27,12 +27,13 @@
 # WHAT IS KEPT, per sample                  reference it is encoded against
 #   P2WORK/<s>.bam          -> .archive.cram   ${BUILD}/refs/<R>.fasta
 #   P1IDIR/<s>.isclean.bam  -> .archive.cram   ${CLEANDIR}/<R>.isclean.fasta
+#   P1GDIR/<s>.isclean.bam  -> .archive.cram   ${H37CLEAN} (H37Rv.isclean)
+#                           the SV two-frame step (p5_svgt.sh --twoframe)
+#                           reads it for element-proximal intervals
 #
 # WHAT NOTHING READS, and is deleted only with ARCHIVE_DROP_UNUSED=1
 #   P1WORK/<s>.h37rv.bam    P1's own alignment; P1 keeps its VCF, nothing
 #                           after P1 opens the BAM
-#   P1GDIR/<s>.isclean.bam  the fixed-reference IS6110 arm; read only by p1g
-#                           itself, and the merged VCF does not use that arm
 #
 # VERIFIED BEFORE ANYTHING IS REMOVED. Each CRAM is decoded and compared with
 # its BAM: the record count, every record with its auxiliary tags sorted (CRAM
@@ -62,6 +63,7 @@ P2WORK="${P2WORK:-refbias/work/p2}"
 P1IDIR="${P1IDIR:-refbias/p1i}"
 P1GDIR="${P1GDIR:-refbias/p1g}"
 CLEANDIR="${CLEANDIR:-is6110/assets/isclean_matched}"
+H37CLEAN="${H37CLEAN:-is6110/assets/H37Rv.isclean.fasta}"
 ST="${MTB_SAMTOOLS:?MTB_SAMTOOLS is unset}"
 NT="${SLURM_CPUS_PER_TASK:-2}"
 
@@ -78,6 +80,7 @@ kept() {
     [[ -n "$r" ]] || { echo "FATAL: ${s} not in ${REFMAP}" >&2; return 1; }
     printf '%s\t%s\n' "${P2WORK}/${s}.bam" "${BUILD}/refs/${r}.fasta"
     printf '%s\t%s\n' "${P1IDIR}/${s}.isclean.bam" "${CLEANDIR}/${r}.isclean.fasta"
+    printf '%s\t%s\n' "${P1GDIR}/${s}.isclean.bam" "$H37CLEAN"
 }
 
 cram_of() { printf '%s' "${1%.bam}.archive.cram"; }
@@ -155,12 +158,13 @@ samples() {
 
 if [[ "$STEP" == "--status" ]]; then
     printf '%-14s %8s %8s %8s\n' kind bam archive neither
-    for kind in matched isclean; do
+    for kind in matched isclean p1g; do
         nb=0; na=0; nn=0
         while read -r s; do
             while IFS=$'\t' read -r bam fa; do
                 case "$kind" in matched) [[ "$bam" == *isclean* ]] && continue ;;
-                                isclean) [[ "$bam" == *isclean* ]] || continue ;; esac
+                                isclean) [[ "$bam" == "${P1IDIR}/"*isclean* ]] || continue ;;
+                                p1g)     [[ "$bam" == "${P1GDIR}/"* ]] || continue ;; esac
                 if [[ -s "$bam" ]]; then nb=$((nb + 1))
                 elif [[ -s "$(cram_of "$bam")" ]]; then na=$((na + 1))
                 else nn=$((nn + 1)); fi
@@ -180,7 +184,7 @@ while read -r s; do
         else restore_one "$bam" "$fa" || rc=1; fi
     done < <(kept "$s")
     if [[ "$STEP" == "--archive" && "${ARCHIVE_DROP_UNUSED:-0}" == 1 && "$rc" -eq 0 ]]; then
-        for f in "${P1WORK}/${s}.h37rv.bam" "${P1GDIR}/${s}.isclean.bam"; do
+        for f in "${P1WORK}/${s}.h37rv.bam"; do
             if [[ -e "$f" ]]; then
                 rm -f "$f" "${f}.bai"
                 echo "  ${f}: removed (ARCHIVE_DROP_UNUSED=1; nothing after its own pass reads it)"

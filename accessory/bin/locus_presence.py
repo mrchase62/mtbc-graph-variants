@@ -191,9 +191,12 @@ def main():
                          reference_carries=("" if rc is None else int(rc)),
                          route_agreement=agree,
                          panel_carrier_frac=r.get("carrier_frac", "")))
-    with open(a.out, "w", newline="") as fh:
+    # Written to a temporary name and renamed: the array skips any sample whose
+    # table exists, so a task killed mid-write must not leave one behind.
+    with open(a.out + ".tmp", "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t")
         w.writeheader(); w.writerows(rows)
+    os.replace(a.out + ".tmp", a.out)
     import shutil
     shutil.rmtree(tmp, ignore_errors=True)
     t = sum(tally.values())

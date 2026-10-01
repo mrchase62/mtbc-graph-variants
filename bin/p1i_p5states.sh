@@ -98,7 +98,8 @@ BUILD="${MTB_BUILD_DIR:?MTB_BUILD_DIR is unset; run through bin/refbias_run.sh}"
 OG="${OG:-$(awk -F'\t' '$1=="graph"{print $2}' "${BUILD}/build_info.tsv")}"
 [[ -s "$OG" ]] || { echo "FATAL: no graph at '${OG}'" >&2; exit 1; }
 [[ -s "${BUILD}/assets/paths.txt" ]] || { echo "FATAL: no ${BUILD}/assets/paths.txt" >&2; exit 1; }
-STAGE2+=(--graph "$OG" --paths "${BUILD}/assets/paths.txt")
+STAGE2+=(--graph "$OG" --paths "${BUILD}/assets/paths.txt"
+         --store "${BUILD}/proj_is6110")
 
 case "$P1ISSTEP" in
   --project)

@@ -91,7 +91,7 @@ if [[ "$LIST" == 1 ]]; then
     echo "graph    : $OG"
     echo "build id : $BUILD_ID"
     echo "build dir: $BUILD"
-    for s in stamp paths accessions gff refs frames assets manifest; do
+    for s in stamp paths accessions gff refs frames assets ancestral manifest; do
         if _done "$s"; then printf "  %-12s done   %s\n" "$s" "$(cat "${BUILD}/logs/$s.done")"
         else printf "  %-12s MISSING\n" "$s"; fi
     done
@@ -324,6 +324,26 @@ step_assets() {
     _mark assets
 }
 
+# --- step: ancestral ---------------------------------------------------------
+# The ancestral allele at every panel SNP site, for the merged VCF's AA tag. A
+# property of the panel and its tree, not of any cohort, so it is a build asset
+# and every cohort's VCF joins the same table. It used to be a file in
+# data/trees that nothing regenerated; p5_finish.sh now reads it from here and
+# refuses a build without it. Seconds to compute.
+step_ancestral() {
+    _done ancestral && { _say "ancestral: already done"; return 0; }
+    local t="${ANC_TREE:-data/trees/cx333.rooted.nwk}"
+    local al="${ANC_ALN:-data/trees/cx333.snps.fasta}"
+    local st="${ANC_SITES:-data/trees/cx333.sites.tsv}"
+    mtb_require_file "$t"; mtb_require_file "$al"; mtb_require_file "$st"
+    local out="${BUILD}/assets/ancestral.tsv"
+    "$MTB_PY" bin/ancestral_alleles.py --tree "$t" --alignment "$al" \
+        --sites "$st" --out "${out}.tmp"
+    mv -f "${out}.tmp" "$out"
+    _say "ancestral: $(( $(wc -l < "$out") - 1 )) sites -> ${out}"
+    _mark ancestral
+}
+
 # --- step: manifest ----------------------------------------------------------
 step_manifest() {
     local out="${BUILD}/manifest.tsv"
@@ -372,5 +392,6 @@ else
     _say "  bash bin/p0_prepare.sh --step gff"
     _say "  sbatch --array=1-\$(wc -l < ${BUILD}/assets/accessions.txt) bin/p0_prepare.sh --step refs"
     _say "  bash bin/p0_prepare.sh --step frames"
+    _say "  bash bin/p0_prepare.sh --step ancestral"
     _say "  bash bin/p0_prepare.sh --step manifest"
 fi

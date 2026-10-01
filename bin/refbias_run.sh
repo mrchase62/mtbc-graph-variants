@@ -392,7 +392,13 @@ for p in "${RUN[@]}"; do
         EX="OUTDIR=${OUTROOT}/p3,WORK=${WORKPFX}p3"
         JOB[p3a]=$(submit p3 bin/p3_accessory.sh "$EX" "1-${N}" "${JOB[p2]:-}")
         JOB[p3]=$(submit p3sum bin/p3_accessory.sh \
-                "${EX},P3STEP=--summary" "" "${JOB[p3a]}") ;;
+                "${EX},P3STEP=--summary" "" "${JOB[p3a]}")
+        # Level-1 accessory presence, which p5vcf merges. It reads only the
+        # sample's reads, so it needs nothing from P1 or P2. It used to be run
+        # by hand, and three of the five cohorts never had it.
+        JOB[p3acc]=$(submit p3acc accessory/bin/locus_presence_array.sh \
+                "OUTDIR=accessory/${COHORT_NAME},COHORT_TAG=${COHORT_NAME},CRAMTAB=${CRAMS}" \
+                "1-${N}" "" "-c 1 --mem=4G") ;;
       p4)
         EX="OUTDIR=${OUTROOT}/p4,WORK=${WORKPFX}p4"
         JOB[p4a]=$(submit p4 bin/p4_place.sh "$EX" "1-${N}" "${JOB[p2]:-}")
@@ -466,10 +472,20 @@ for p in "${RUN[@]}"; do
                 "${JOB[p1iss]}" "-c 1 --mem=2G") ;;
       p5svgt)
         # Measure deletion absence, so the SV block is not presence-only.
-        # Needs sv_matrix.tsv, which p5 --pre writes.
-        EX="OUTDIR=${OUTROOT}/p5,WORK=${WORKPFX}p5svgt,SVDIR=${OUTROOT}/p5/svgt"
+        # INTERVAL MODE, the arm the merged VCF reads: the cohort's own
+        # catalogue (graph deletions plus its caller deletions, SVCAT), the
+        # H37Rv-frame second frame per sample, then depth genotyping at every
+        # interval. All three used to be run by hand, outside the chain.
+        # The catalogue needs sv_matrix.tsv (p5 --pre) and the IS6110 keys (p1iv).
+        EX="OUTDIR=${OUTROOT}/p5,WORK=${WORKPFX}p5svgt,SVDIR=${OUTROOT}/p5/svgt_iv"
+        EX="${EX},IVTAB=${OUTROOT}/p5/sv_intervals.tsv,TWOFRAMEDIR=${OUTROOT}/p5/twoframe"
+        EX="${EX},COHORT_NAME=${COHORT_NAME},SVCAT=${SVCAT:-cohort},SVCAT_MIN_CARRIERS=${SVCAT_MIN_CARRIERS:-2}"
+        JOB[svcat]=$(submit p5svcat bin/p5_svgt.sh "${EX},SVGTSTEP=--catalogue" "" \
+                "$(deps "${JOB[p5]:-}" "${JOB[p1iv]:-}")" "-c 1 --mem=4G")
+        JOB[sv2f]=$(submit p5sv2frame bin/p5_svgt.sh "${EX},SVGTSTEP=--twoframe" \
+                "1-${N}" "${JOB[svcat]}" "-c 1 --mem=4G -t 0-01:00")
         JOB[svgtp]=$(submit p5svgtprobes bin/p5_svgt.sh \
-                "${EX},SVGTSTEP=--probes" "" "${JOB[p5]:-}")
+                "${EX},SVGTSTEP=--probes" "" "${JOB[svcat]}" "-c 1 --mem=4G")
         # Projection once per reference, then the per-sample genotyping. The
         # per-sample tasks used to fill the projection store themselves, and
         # every sample of a new reference projected it at the same moment.
@@ -478,7 +494,7 @@ for p in "${RUN[@]}"; do
         JOB[svgtr]=$(submit p5svgtproj bin/p5_svgt.sh \
                 "${EX},SVGTSTEP=--project" "1-${NPROJ}" "${JOB[svgtp]}")
         JOB[svgta]=$(submit p5svgt bin/p5_svgt.sh \
-                "${EX},SVGTSTEP=--states" "1-${N}" "${JOB[svgtr]}")
+                "${EX},SVGTSTEP=--states" "1-${N}" "$(deps "${JOB[svgtr]}" "${JOB[sv2f]}")")
         JOB[p5svgt]=$(submit p5svgtmerge bin/p5_svgt.sh \
                 "${EX},SVGTSTEP=--merge" "" "${JOB[svgta]}") ;;
       p5vcf)
@@ -486,7 +502,7 @@ for p in "${RUN[@]}"; do
         # a genotype to it. Depending on only some of these is how a merged VCF
         # came to be written with no insertion sites in it at all.
         P5EX="OUTDIR=${OUTROOT}/p5,WORK=${WORKPFX}p5,COHORT_NAME=${COHORT_NAME}"
-        _up="$(deps "${JOB[p5]:-}" "${JOB[p5svgt]:-}" "${JOB[p1is]:-}")"
+        _up="$(deps "${JOB[p5]:-}" "${JOB[p5svgt]:-}" "${JOB[p1is]:-}" "${JOB[p3acc]:-}")"
         # Sharded by genome region above a few hundred isolates: one shard per
         # 500 isolates by default (VCF_SHARDS overrides), so a 10,000-isolate
         # cohort runs 20 shards each holding a twentieth of the records.

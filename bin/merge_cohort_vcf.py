@@ -185,16 +185,17 @@ def _header_body(w):
       'emitted on its own node_<id> contig rather than dropped">\n')
     w('##INFO=<ID=AA,Number=1,Type=String,Description="Ancestral allele, '
       'reconstructed by Fitch parsimony over the 333-genome CX333 tree '
-      'rooted on the canettii outgroup GCF_035581225. A property of the '
-      'panel rather than of this cohort. `.` where the root state is tied; '
-      'see AA_FLAG">\n')
+      'rooted on the canettii outgroup GCF_035581225: the state of the MTBC '
+      'ancestor, the root\'s ingroup child, with the outgroup resolving a tie '
+      'there. A property of the panel rather than of this cohort. `.` where '
+      'the MTBC ancestor is still tied; see AA_FLAG">\n')
     w('##INFO=<ID=AA_FLAG,Number=1,Type=String,Description="TIED:<bases> '
-      'where parsimony does not resolve the root state, NODATA where the '
-      'site had none. 5,130 of 72,986 panel sites are tied and are NOT '
-      'resolved by a coin toss">\n')
+      'where parsimony does not resolve the MTBC ancestor\'s state, NODATA '
+      'where the site had none. 371 of 72,986 panel sites are tied and are '
+      'NOT resolved by a coin toss">\n')
     w('##INFO=<ID=AA_INVERTED,Number=0,Type=Flag,Description="The REFERENCE '
       'carries the DERIVED allele at this site, so GT=0 is derived and GT=1 '
-      'is ancestral. True of 6,525 of 72,986 panel SNP sites, 8.9%, which is '
+      'is ancestral. True of 6,567 of 72,986 panel SNP sites, 9.0%, which is '
       'why AA is annotated rather than REF being re-polarised -- VCF requires '
       'REF to match the reference base">\n')
     w('##INFO=<ID=IS6110PROX,Number=0,Type=Flag,Description="The interval '
@@ -202,6 +203,9 @@ def _header_body(w):
       'mismapped copies of the element unless it is filtered">\n')
     w('##INFO=<ID=NODE,Number=1,Type=String,Description="Graph node, for '
       'node-frame records">\n')
+    w('##INFO=<ID=UNCATALOGUED,Number=0,Type=Flag,Description="A caller '
+      'deletion no interval of the catalogue covers, so it is written '
+      'presence-only from the caller matrix instead of being dropped">\n')
     for t, d in (("KIND", "small-variant kind from P4"),
                  ("REGION", "core, pe_ppe, masked, off_path_near or off_path_accessory"),
                  ("SVTYPE", "structural variant type"),
@@ -338,6 +342,16 @@ def assemble(a):
     return 0
 
 
+def _load_sv_intervals():
+    """bin/sv_intervals.py, for its same-event rule; one definition, not two."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "sv_intervals", os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                     "sv_intervals.py"))
+    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    return m
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--matrix", default="",
@@ -400,7 +414,7 @@ def main():
                          "to contrast presence with absence. Stage 2 asks each "
                          "non-carrier's own element-free alignment whether it "
                          "looked and found nothing, and earns REF or ABSENT.")
-    ap.add_argument("--ancestral", default="data/trees/cx333.ancestral.tsv",
+    ap.add_argument("--ancestral", default="",
                     help="per-site ancestral allele from bin/ancestral_alleles.py; "
                          "absent means no AA is emitted")
     ap.add_argument("--h37rv-contig", default="NC_000962.3")
@@ -437,7 +451,9 @@ def main():
     # the 333 genomes and their tree, so it is joined here as a lookup rather
     # than recomputed per cohort -- and adding it needs no cohort re-run.
     anc = {}
-    if a.ancestral and os.path.exists(a.ancestral):
+    if a.ancestral and not os.path.exists(a.ancestral):
+        sys.exit(f"FATAL: no ancestral allele table at {a.ancestral}")
+    if a.ancestral:
         for r in csv.DictReader(open(a.ancestral), delimiter="\t"):
             anc[(int(r["pos"]), r["ref"], r["alt"])] = (r["AA"], r["flag"])
 
@@ -751,6 +767,31 @@ def main():
     elif a.sv_intervals or a.sv_interval_states:
         sys.exit("FATAL: --sv-intervals and --sv-interval-states go together")
 
+    # WHICH CALLER DELETIONS THE CATALOGUE SUPERSEDES: only those an interval
+    # actually covers, under the catalogue's own same-event rule. Every caller
+    # deletion used to be dropped once a catalogue was given, so a deletion the
+    # catalogue never took in -- outside its 50 bp-100 kb range, or from a
+    # cohort whose caller set built no catalogue -- vanished from the VCF
+    # without a count. The whole catalogue is read for this, not just this
+    # shard's rows, so a deletion near a shard edge sees its interval.
+    cat_starts, cat_rows = [], []
+    if ivs:
+        _ivm = _load_sv_intervals()
+        cat_rows = sorted((int(r["start"]), abs(int(r.get("svlen") or 0)))
+                          for r in csv.DictReader(open(a.sv_intervals, newline=""),
+                                                  delimiter="\t"))
+        cat_starts = [x[0] for x in cat_rows]
+
+    def catalogued(r):
+        try:
+            p0, L = int(r["h37rv_pos"]), abs(int(r.get("svlen") or 0))
+        except (ValueError, KeyError):
+            return False
+        lo = bisect.bisect_left(cat_starts, p0 - _ivm.TOL_CAP)
+        hi = bisect.bisect_right(cat_starts, p0 + _ivm.TOL_CAP)
+        return any(_ivm.same_event(p0, L, s0, l0) for s0, l0 in cat_rows[lo:hi])
+    n_uncat = 0
+
     n_iv = 0
     for r in ivs:
         st = iv_states.get(r["interval"], {})
@@ -784,14 +825,21 @@ def main():
         if not p or p in (".", "NA"):
             continue
         svtype = r.get("svtype", "SV")
-        # With the catalogue in play the caller's deletions are superseded by
-        # it; only the insertions it cannot reach are still needed.
+        # With the catalogue in play the caller's deletions it covers are
+        # superseded by it; insertions, and deletions it does not cover, are
+        # still written from the caller matrix.
+        uncat = False
         if ivs and svtype == "DEL":
-            continue
+            if catalogued(r):
+                continue
+            uncat = True
+            n_uncat += 1
         info = [f"CLASS=sv", f"SVTYPE={svtype}",
                 f"SVLEN={r.get('svlen','0')}",
                 f"COMPONENT={r.get('component','')}",
                 f"QUALBAND={r.get('qual_band','')}"]
+        if uncat:
+            info.append("UNCATALOGUED")
         measured = sv_state.get(r["key"], {})
         cell = []
         for s in order:
@@ -804,6 +852,9 @@ def main():
         add((a.h37rv_contig, int(p), r["key"], h37_base(int(p)),
              [f"<{svtype}>"], info, "\t".join(cell)))
         n_sv += 1
+    if ivs:
+        print(f"  {n_uncat:,} caller deletions no catalogue interval covers, "
+              f"kept presence-only (UNCATALOGUED)")
 
     # ---- LEVEL 1: does the sample carry the insert at all? ----------------
     # Michael's two-level framing. An accessory locus carries two different

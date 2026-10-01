@@ -66,6 +66,21 @@ n=$(ls "${P1IDIR}"/*.elstacks.tsv 2>/dev/null | wc -l)
 [[ "$n" -gt 0 ]] || { echo "FATAL: no elstacks in ${P1IDIR}; run pass p1i first" >&2; exit 1; }
 echo "    ${n} per-sample stack files"
 
+echo "=== 0/5 keep the last run's IS6110 projections"
+# Stage 2 (pass p1is) projects every key from a carrier onto each reference,
+# and that was ~80% of an IS6110 rerun's cost. Its results depend on the
+# carrier position, the target and the graph, not on the key set, so they go
+# into a build-scoped store that p1is reuses. They can only be filed under
+# their carriers while the key table that produced them still exists, which is
+# now: step 5 below rewrites it. Nothing to do on a cohort's first run.
+STORE="${MTB_BUILD_DIR:+${MTB_BUILD_DIR}/proj_is6110}"
+if [[ -n "$STORE" && -s "$KEYS" && -d "${P1IDIR}/p5stage2/proj" ]]; then
+    "$MTB_PY" is6110/bin/is6110_p5_stage2.py --mode seed --cohort-keys "$KEYS" \
+        --refmap "$REFMAP" --workdir "${P1IDIR}/p5stage2" --store "$STORE"
+else
+    echo "    nothing to keep (no earlier key table, projections or build)"
+fi
+
 echo "=== 0/5 DR-array rescue"
 # Copies inside the CRISPR DR array have junction reads that align equally well
 # to many identical repeats, so no stack reaches the mapping-quality threshold

@@ -73,6 +73,12 @@ def main():
     ap.add_argument("--is6110-window", type=int, default=500,
                     help="how close a breakpoint must be to a landmark to be "
                          "flagged IS6110-proximal")
+    ap.add_argument("--min-caller-carriers", type=int, default=1,
+                    help="take a caller deletion into the catalogue only if at "
+                         "least this many isolates called it (the matrix's "
+                         "n_alt). Below it, the deletion stays in the VCF "
+                         "presence-only, from the caller matrix, flagged "
+                         "UNCATALOGUED; it is not lost")
     ap.add_argument("--min-len", type=int, default=50)
     ap.add_argument("--max-len", type=int, default=100000)
     ap.add_argument("--out", required=True)
@@ -126,7 +132,10 @@ def main():
             hit["_car"] |= set(r["ref_carriers"].split(",")) - {""}
             hit["start"] = min(hit["start"], r["start"])
             hit["end"] = max(hit["end"], r["end"])
-            hit["svlen"] = max(hit["svlen"], r["svlen"])
+            # SVLEN IS THE MERGED SPAN (review 5.7). It was the largest member's
+            # length, so `svi:DEL:<start>:<svlen>` could name a length that
+            # disagrees with start..end, and the genotyper probes start..end.
+            hit["svlen"] = hit["end"] - hit["start"] + 1
     for r in merged:
         r["ref_carriers"] = ",".join(sorted(r["_car"]))
         r["n_ref_carriers"] = len(r.pop("_car"))
@@ -138,7 +147,7 @@ def main():
               f"{sum(1 for x in nc if x == 0):,} carried by none, "
               f"{sum(1 for x in nc if x == 1):,} by exactly one")
 
-    n_add = n_dup = 0
+    n_add = n_dup = n_few = 0
     if a.sv_matrix:
         idx = sorted((r["start"], r["svlen"], i) for i, r in enumerate(rows))
         starts = [x[0] for x in idx]
@@ -151,6 +160,9 @@ def main():
                 continue
             if L < a.min_len or L > a.max_len:
                 continue
+            if int(r.get("n_alt") or 0) < a.min_caller_carriers:
+                n_few += 1
+                continue
             lo = bisect.bisect_left(starts, pos - TOL_CAP)
             hi = bisect.bisect_right(starts, pos + TOL_CAP)
             if any(same_event(pos, L, s, l) for s, l, _ in idx[lo:hi]):
@@ -161,7 +173,9 @@ def main():
                              ref_carriers=""))
             n_add += 1
         print(f"  caller: {n_add:,} intervals added, {n_dup:,} already covered "
-              f"by a graph interval")
+              f"by a graph interval"
+              + (f", {n_few:,} with fewer than {a.min_caller_carriers} carriers "
+                 f"left presence-only" if n_few else ""))
 
     # ---- IS6110 proximity.
     # WHY IT IS ON EVERY ROW. At ppe38 the project measured 204 SV records in
