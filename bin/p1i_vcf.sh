@@ -66,6 +66,15 @@ n=$(ls "${P1IDIR}"/*.elstacks.tsv 2>/dev/null | wc -l)
 [[ "$n" -gt 0 ]] || { echo "FATAL: no elstacks in ${P1IDIR}; run pass p1i first" >&2; exit 1; }
 echo "    ${n} per-sample stack files"
 
+echo "=== 0/5 DR-array rescue"
+# Copies inside the CRISPR DR array have junction reads that align equally well
+# to many identical repeats, so no stack reaches the mapping-quality threshold
+# and the copy is never called. This merges such stacks into one locus-level
+# site; samples whose DR copy was already called are left exactly as they were.
+# See is6110/bin/is6110_repeat_rescue.py.
+"$MTB_PY" is6110/bin/is6110_repeat_rescue.py --dir "$P1IDIR" --refmap "$REFMAP" \
+    --clean-dir "${CLEANDIR:-is6110/assets/isclean_matched}"
+
 echo "=== 1/5 labelling"
 "$MTB_PY" is6110/bin/is6110_promote_sites.py \
     --dir "$P1IDIR" --refmap "$REFMAP" --out "$SITES" --calls-out "$CALLS"

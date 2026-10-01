@@ -445,6 +445,69 @@ class AlignmentArchive(unittest.TestCase):
                 self.assertTrue(os.path.exists(f"{d}/{kept}"), kept)
 
 
+class DrArrayRescue(unittest.TestCase):
+    """IS6110 copies in the DR array: junction reads scatter over identical
+    repeats with MAPQ 0, so no stack passes. The rescue merges them into one
+    locus-level site and leaves every already-called sample unchanged."""
+
+    DR = "GTCGTCAGACCCAAAACCCCGAGAGGGGACGGAAAC"
+    HDR = ["sample", "clean_pos", "orig_pos", "reads", "reads_q", "positions", "span",
+           "sa_mapq_max", "sa_mapq_mean", "el_start", "el_end", "el_internal",
+           "chr_start", "chr_end", "both_el_termini", "both_chr_sides", "fwd", "rev"]
+
+    def stack(self, s, pos, reads, rq, es, ee, mq=0):
+        return [s, pos, pos, reads, rq, 1, 0, mq, float(mq), es, ee, 0, 1, 0,
+                int(es > 0 and ee > 0), 0, reads, 0]
+
+    def test_rescue(self):
+        import random
+        rng = random.Random(3)
+        uniq = lambda n: "".join(rng.choice("ACGT") for _ in range(n))
+        left = uniq(5000)
+        array = "".join(self.DR + uniq(36) for _ in range(20))
+        seq = left + array + uniq(5000)
+        lo = len(left) + 1                      # 1-based start of the array
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(f"{d}/clean"); os.makedirs(f"{d}/p1i")
+            write(f"{d}/clean/R.isclean.fasta", ">c\n" + seq + "\n")
+            write(f"{d}/refmap.tsv", "sample\treference\nA\tR\nB\tR\nC\tR\n")
+            tables = {
+                # A: scattered over repeats, none passes -> rescued, two-sided
+                "A": [self.stack("A", lo + 72 * i, 4, 0, 1 if i % 2 else 0, 0 if i % 2 else 1)
+                      for i in range(6)] + [self.stack("A", 900, 30, 30, 15, 15, 60)],
+                # B: a DR stack already passes -> unchanged
+                "B": [self.stack("B", lo + 100, 25, 25, 12, 13, 60),
+                      self.stack("B", lo + 300, 3, 0, 1, 0)],
+                # C: nothing in the array -> unchanged
+                "C": [self.stack("C", 900, 30, 30, 15, 15, 60)],
+            }
+            for smp, rows in tables.items():
+                with open(f"{d}/p1i/{smp}.elstacks.tsv", "w") as fh:
+                    fh.write("\t".join(self.HDR) + "\r\n")
+                    for r in rows:
+                        fh.write("\t".join(map(str, r)) + "\r\n")
+            cmd = [sys.executable, "is6110/bin/is6110_repeat_rescue.py", "--dir", f"{d}/p1i",
+                   "--refmap", f"{d}/refmap.tsv", "--clean-dir", f"{d}/clean"]
+            for _ in range(2):                  # the second run must be a no-op
+                r = subprocess.run(cmd, capture_output=True, text=True)
+                self.assertEqual(r.returncode, 0, r.stderr)
+            out = {smp: rows_of(f"{d}/p1i/{smp}.elstacks.tsv") for smp in tables}
+            dr = [x for x in out["A"] if x["repeat_locus"] == "DR"]
+            self.assertEqual(len(dr), 1)
+            self.assertEqual(int(dr[0]["clean_pos"]), lo)
+            self.assertEqual(int(dr[0]["reads_q"]), 24)
+            self.assertEqual(dr[0]["both_el_termini"], "1")
+            self.assertEqual(len(out["A"]), 2)  # the unique-region stack is kept
+            self.assertEqual(len(out["B"]), 2)
+            self.assertFalse(any(x["repeat_locus"] for x in out["B"] + out["C"]))
+            self.assertTrue(os.path.exists(f"{d}/p1i/A.elstacks.raw.tsv"))
+
+
+def rows_of(p):
+    with open(p, newline="") as fh:
+        return list(csv.DictReader(fh, delimiter="\t"))
+
+
 class ProjectionStore(unittest.TestCase):
     """Found regenerating scale200: `add` failed for any store path with /../"""
 
