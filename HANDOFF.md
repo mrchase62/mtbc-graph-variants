@@ -32,7 +32,55 @@ the working tree's data. Do not edit code in the working tree.
 2026-07-28, and netscratch is purged without warning. The rerun needs it for
 accessory presence and the SV two-frame step, so do not let it wait.
 
-## 1. Current state: no production cohort matches the code
+## 0. Progress
+
+**scale200 is current** (2026-10-01, finished 15:48). Every P3 to P5 file
+postdates the fixes, two-frame and interval states exist for all 200
+samples, and the VCF passed the gate. One P5 states task hit an NFS
+stale-handle race (fixed in `0bc2a10`). After the requeue Slurm still
+cancelled its dependents, so p5, p5svgt and p5vcf were resubmitted.
+
+| record class | before | after | why |
+|---|---|---|---|
+| small variants | 78,727 | 79,429 | P4 and P5 review fixes |
+| SV | 5,836 | 6,693 | 1,563 recurrent catalogue intervals plus 5,130 caller rows, 2,947 of them UNCATALOGUED deletions that used to be dropped |
+| IS6110 | 944 | 778 | 461 rows moved to a shared key (4.5), seam reclassification (4.4), 5 DR rescues |
+| accessory presence | 802 | 802 | unchanged |
+| with AA | 34,464 | 34,908 | ancestral fix (3.7) |
+
+Measured cost, using the billing weights from sacct: about 128 billing-hours
+and 81 CPU-hours.
+
+| step | billing-hours |
+|---|---|
+| SV projection, for the new catalogue's probes | 59 |
+| p3 | 20 |
+| p5states, both submissions | 15 |
+| p4b | 14 |
+| p4 | 6 |
+| everything else | under 4 each |
+
+IS6110 projection came from the store: the longest task took 26 s.
+
+**Requests right-sized for gwas1000 (2026-10-01).** Peaks were measured with
+seff and `/usr/bin/time`. The per-sample passes peak at about 0.65 GB, which
+is odgi loading the graph, against 8 GB requested. P5 states peaks at 0.49 GB
+on a gwas1000 sample, against 32 GB requested. Memory costs a quarter of a
+CPU per GB on shared.
+
+| step | new request | old request |
+|---|---|---|
+| p3, p4b, SV projection | 4 cores, 2 GB | 4 cores, 8 GB |
+| p4 | 2 cores, 2 GB | 4 cores, 8 GB |
+| p5states | 2 cores, 4 GB | 4 cores, 32 GB |
+| p5keys, p5pre | 1 to 2 cores, 8 GB | 4 cores, 32 GB |
+| SV genotyping per sample | 1 core, 2 GB | 4 cores, 8 GB |
+
+At these requests, scale200 would have cost about 80 billing-hours instead
+of 128. Estimate for gwas1000: roughly 250 to 350 billing-hours, about 100 of
+them SV projection for its 150 references.
+
+## 1. State before the rerun (2026-09-30)
 
 The review fixes (`deefef7`, `0a3f712`, 2026-09-29) changed P3, P4, P4b, P5
 states, SV genotyping, IS6110 stage 2 and the merged VCF. On 2026-09-30 only

@@ -390,7 +390,12 @@ for p in "${RUN[@]}"; do
                 "${EX},P2STEP=--summary" "" "${JOB[p2a]}") ;;
       p3)
         EX="OUTDIR=${OUTROOT}/p3,WORK=${WORKPFX}p3"
-        JOB[p3a]=$(submit p3 bin/p3_accessory.sh "$EX" "1-${N}" "${JOB[p2]:-}")
+        # RIGHT-SIZED 2026-10-01 from the scale200 rerun (seff, /usr/bin/time):
+        # the per-sample passes peak at ~0.65 GB, which is odgi loading the
+        # graph, against 8 GB requested; on shared a GB costs a quarter of a
+        # CPU, so the request was a third of each task's billing. 2 GB is three
+        # times the peak and does not grow with the cohort.
+        JOB[p3a]=$(submit p3 bin/p3_accessory.sh "$EX" "1-${N}" "${JOB[p2]:-}" "-c 4 --mem=2G")
         JOB[p3]=$(submit p3sum bin/p3_accessory.sh \
                 "${EX},P3STEP=--summary" "" "${JOB[p3a]}")
         # Level-1 accessory presence, which p5vcf merges. It reads only the
@@ -401,12 +406,13 @@ for p in "${RUN[@]}"; do
                 "1-${N}" "" "-c 1 --mem=4G") ;;
       p4)
         EX="OUTDIR=${OUTROOT}/p4,WORK=${WORKPFX}p4"
-        JOB[p4a]=$(submit p4 bin/p4_place.sh "$EX" "1-${N}" "${JOB[p2]:-}")
+        # 53% CPU efficiency on 4 cores, so 2
+        JOB[p4a]=$(submit p4 bin/p4_place.sh "$EX" "1-${N}" "${JOB[p2]:-}" "-c 2 --mem=2G")
         JOB[p4]=$(submit p4sum bin/p4_place.sh \
                 "${EX},P4STEP=--summary" "" "${JOB[p4a]}") ;;
       p4b)
         EX="OUTDIR=${OUTROOT}/p4b,WORK=${WORKPFX}p4b"
-        JOB[p4ba]=$(submit p4b bin/p4b_place_sv.sh "$EX" "1-${N}" "${JOB[p2]:-}")
+        JOB[p4ba]=$(submit p4b bin/p4b_place_sv.sh "$EX" "1-${N}" "${JOB[p2]:-}" "-c 4 --mem=2G")
         JOB[p4b]=$(submit p4bsum bin/p4b_place_sv.sh \
                 "${EX},P4BSTEP=--summary" "" "${JOB[p4ba]}") ;;
       p5)
@@ -414,14 +420,19 @@ for p in "${RUN[@]}"; do
         # P4's output, then states per sample against those keys, then the
         # matrix. p5_finish.sh refuses to run if the generations disagree.
         P5EX="OUTDIR=${OUTROOT}/p5,WORK=${WORKPFX}p5,COHORT_NAME=${COHORT_NAME}"
-        JOB[p5keys]=$(submit p5keys bin/p5_merge.sh "${P5EX},P5STEP=--keys" "" "${JOB[p4]:-}")
-        JOB[p5states]=$(submit p5states bin/p5_merge.sh "${P5EX},P5STEP=--states" "1-${N}" "${JOB[p5keys]:-}")
+        # p5_merge.sh asks for 4 cores and 32 GB. A gwas1000 sample's
+        # p5_states.py peaks at 0.49 GB over 173,685 keys, plus odgi's 0.65 GB
+        # when the store is missing positions; 4 GB leaves room for a key set
+        # several times larger. The cohort-level steps get 8 GB: the heaviest
+        # thing --pre runs, validation, peaked at 1.8 GB on gwas1000.
+        JOB[p5keys]=$(submit p5keys bin/p5_merge.sh "${P5EX},P5STEP=--keys" "" "${JOB[p4]:-}" "-c 1 --mem=8G")
+        JOB[p5states]=$(submit p5states bin/p5_merge.sh "${P5EX},P5STEP=--states" "1-${N}" "${JOB[p5keys]:-}" "-c 2 --mem=4G")
         # --pre only: matrix, validation, sanity, SV matrix, P6. The merged VCF
         # is pass p5vcf, after the two genotyping passes below.
         # --pre also builds sv_matrix.tsv from P4b, and p4 and p4b run in
         # parallel off p2, so it must wait for BOTH or it reads a partial P4b.
         JOB[p5]=$(submit p5pre bin/p5_finish.sh "${P5EX},P5FSTEP=--pre" "" \
-                  "$(deps "${JOB[p5states]:-}" "${JOB[p4b]:-}")")
+                  "$(deps "${JOB[p5states]:-}" "${JOB[p4b]:-}")" "-c 2 --mem=8G")
         ;;
       p1g)
         # fixed-reference arm: every isolate against the same cut-down H37Rv.
@@ -447,7 +458,7 @@ for p in "${RUN[@]}"; do
         # because each reads the previous one's whole-cohort table and there is
         # nothing per-sample left to parallelise.
         EX="OUTDIR=${OUTROOT}/p1i,WORK=${WORKPFX}p1iv,P1IVCF=${OUTROOT}/p1i/vcf"
-        JOB[p1iv]=$(submit p1iv bin/p1i_vcf.sh "$EX" "" "${JOB[p1i]:-}" "-c 2 --mem=4G") ;;
+        JOB[p1iv]=$(submit p1iv bin/p1i_vcf.sh "$EX" "" "${JOB[p1i]:-}" "-c 2 --mem=2G") ;;
       p1is)
         # Put the IS6110 arm into P5's key space and earn a REF for every
         # isolate that did not report a site. Both scripts existed and were
@@ -491,10 +502,12 @@ for p in "${RUN[@]}"; do
         # every sample of a new reference projected it at the same moment.
         NACC="$(wc -l < "${BUILD}/assets/accessions.txt" 2>/dev/null || echo "$N")"
         NPROJ=$(( N < NACC ? N : NACC ))
+        # projection is odgi on 4 threads at 94% efficiency, 0.65 GB; the
+        # per-sample genotyping is single-threaded and takes about 30 s
         JOB[svgtr]=$(submit p5svgtproj bin/p5_svgt.sh \
-                "${EX},SVGTSTEP=--project" "1-${NPROJ}" "${JOB[svgtp]}")
+                "${EX},SVGTSTEP=--project" "1-${NPROJ}" "${JOB[svgtp]}" "-c 4 --mem=2G")
         JOB[svgta]=$(submit p5svgt bin/p5_svgt.sh \
-                "${EX},SVGTSTEP=--states" "1-${N}" "$(deps "${JOB[svgtr]}" "${JOB[sv2f]}")")
+                "${EX},SVGTSTEP=--states" "1-${N}" "$(deps "${JOB[svgtr]}" "${JOB[sv2f]}")" "-c 1 --mem=2G")
         JOB[p5svgt]=$(submit p5svgtmerge bin/p5_svgt.sh \
                 "${EX},SVGTSTEP=--merge" "" "${JOB[svgta]}") ;;
       p5vcf)
@@ -517,7 +530,7 @@ for p in "${RUN[@]}"; do
         else
             # one process peaked at 0.8 GB at 200 isolates
             JOB[p5vcf]=$(submit p5vcf bin/p5_finish.sh "${P5EX},P5FSTEP=--merge" "" \
-                    "$_up" "-c 1 --mem=8G")
+                    "$_up" "-c 1 --mem=4G")
         fi ;;
       archive|restore)
         # Not part of the default chain: run with --only archive after a

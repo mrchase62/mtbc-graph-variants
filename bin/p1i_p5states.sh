@@ -5,8 +5,8 @@
 #SBATCH -t 0-08:00
 #SBATCH -p shared
 #SBATCH --mem=16000
-#SBATCH --output=slurm/P1ip5_%j.out
-#SBATCH --error=slurm/P1ip5_%j.err
+#SBATCH --output=slurm/P1ip5_%A_%a.out
+#SBATCH --error=slurm/P1ip5_%A_%a.err
 #
 # Pass p1is: put the IS6110 arm into P5's key space, then EARN a REF for every
 # isolate that did not report a site.
