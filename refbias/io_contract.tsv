@@ -1,0 +1,84 @@
+# What each pass of bin/refbias_run.sh consumes and produces.
+#
+# WHY A DECLARATION AND NOT A DERIVATION. Every pass already validates its own
+# inputs -- each has a FATAL that names the file it could not find -- but that
+# check happens inside the job, after the array has been submitted and after
+# afterok has committed the rest of the chain to waiting on it. A missing input
+# therefore costs a submission and cancels every downstream pass. This table
+# moves the same knowledge in front of the submission, where it is cheap.
+#
+# It is also the answer to a second question: what does a pass READ? The
+# per-cohort inventory records what each pass writes, which is half of an I/O
+# contract, and a reader who wants to know whether a pass can run has had to
+# read the script.
+#
+# scope   cohort  -- one file for the whole cohort
+#         sample  -- one per isolate; `n` in the checker means the isolate count
+#         build   -- a panel-wide asset, shared by every cohort
+# when    pre     -- must exist before the pass is submitted
+#         post    -- the pass produces it
+# required yes    -- the pass cannot run without it
+#          no     -- optional; absence changes behaviour but is not an error
+#
+# Paths use ${OUTROOT}, ${WORKPFX}, ${BUILD}, ${COHORT}, ${CRAMS}, ${REFMAP}
+# exactly as bin/refbias_run.sh exports them, and ${S} for the sample.
+pass	when	scope	required	path	note
+p1	pre	cohort	yes	${COHORT}	the screened isolate table
+p1	pre	cohort	yes	${CRAMS}	sample to CRAM relative path
+p1	pre	build	yes	${BUILD}/refs/	333 panel references, bwa-indexed
+p1	pre	build	yes	${BUILD}/build_info.tsv	names the graph this build belongs to
+p1	post	sample	yes	${OUTROOT}/p1/${S}.candidates.tsv	top reference candidates by SNP distance
+p1	post	cohort	yes	${OUTROOT}/p1/refmap.tsv	P1's summary IS the refmap; every later pass reads it
+p1	post	sample	yes	${WORKPFX}p1/${S}.h37rv.vcf.gz	H37Rv-frame calls, consumed by P4 -- a property of the sample, not of the matched reference
+p2	pre	cohort	yes	${REFMAP}	from p1
+p2	pre	build	yes	${BUILD}/logs/refs.done	P0 finished preparing the references
+p2	post	sample	yes	${OUTROOT}/p2/${S}.vcf.gz	small variants, matched-reference frame
+p2	post	sample	yes	${OUTROOT}/p2/${S}.g.vcf.gz	gVCF; the joint-call evidence for missing versus reference
+p2	post	sample	yes	${OUTROOT}/p2/${S}.delly.vcf	structural, caller one
+p2	post	sample	no	${OUTROOT}/p2/${S}.dysgu.vcf	structural, caller two
+p2	post	sample	yes	${WORKPFX}p2/${S}.bam	alignment, read by p3
+p3	pre	sample	yes	${WORKPFX}p2/${S}.bam	from p2
+p3	pre	build	yes	${BUILD}/assets/accessory_panel.fasta	128 novel and mosaic contigs
+p3	post	sample	yes	${OUTROOT}/p3/${S}.accessory.tsv	arm A, presence by breadth
+p3	post	sample	yes	${OUTROOT}/p3/${S}.copynumber.tsv	arm B, copy number by depth
+p3	post	sample	yes	${OUTROOT}/p3/${S}.elementdepth.tsv	per-interval depth; computed and currently unused
+p3	post	sample	yes	accessory/${NAME}/${S}.presence.tsv	level-1 accessory presence (p3acc)
+p4	pre	sample	yes	${OUTROOT}/p2/${S}.vcf.gz	from p2
+p4	pre	sample	yes	${WORKPFX}p1/${S}.h37rv.vcf.gz	from p1 -- the dependency that broke the pinned-reference arm
+p4	pre	build	yes	${BUILD}/assets/repeat_mask.bed	routes calls between the direct and composed arms
+p4	post	sample	yes	${OUTROOT}/p4/${S}.placed.tsv	graph-placed small variants
+p4b	pre	sample	yes	${OUTROOT}/p2/${S}.delly.vcf	from p2
+p4b	post	sample	yes	${OUTROOT}/p4b/${S}.sv_placed.tsv	graph-placed structural variants
+p5	pre	sample	yes	${OUTROOT}/p4/${S}.placed.tsv	from p4
+p5	pre	sample	yes	${OUTROOT}/p4b/${S}.sv_placed.tsv	from p4b
+p5	post	cohort	yes	${OUTROOT}/p5/keys.tsv	the cohort key set, built once over all of p4
+p5	post	sample	yes	${OUTROOT}/p5/${S}.states.tsv	per-sample states against those keys
+p5	post	cohort	yes	${OUTROOT}/p5/states.u8.npy	the samples x keys states array (the dense matrix.tsv is written only with P5_DENSE_MATRIX=1)
+p5	post	cohort	yes	${OUTROOT}/p5/sv_matrix.tsv	structural variants, same frame
+p5	post	cohort	yes	${OUTROOT}/p6/annotated.tsv	P6 annotation, written by p5_finish
+p1g	pre	cohort	yes	${COHORT}	
+p1g	pre	build	yes	is6110/assets/H37Rv.isclean.fasta	the fixed cut-down reference
+p1g	post	sample	yes	${OUTROOT}/p1g/${S}.junctions.tsv	chromosome-side junctions
+p1g	post	sample	yes	${OUTROOT}/p1g/${S}.elementdepth.tsv	element to chromosome depth ratio
+p1i	pre	cohort	yes	${REFMAP}	each isolate's matched reference
+p1i	pre	build	yes	is6110/assets/isclean_matched/	333 cut-down references, crossmaps and indexes
+p1i	pre	build	yes	is6110/assets/matched_gff/	333 element interval files
+p1i	post	sample	yes	${OUTROOT}/p1i/${S}.elstacks.tsv	element-side stacks
+p1i	post	sample	yes	${OUTROOT}/p1i/${S}.junctions.tsv	chromosome-side junctions
+p1iv	pre	sample	yes	${OUTROOT}/p1i/${S}.elstacks.tsv	from p1i
+p1iv	post	cohort	yes	${OUTROOT}/p1i/vcf/${S}.is6110.vcf	matched frame, authoritative
+p1iv	post	cohort	yes	${OUTROOT}/p1i/vcf/${S}.is6110.h37rv.vcf	H37Rv frame, derived
+p1is	pre	cohort	yes	${OUTROOT}/p1i/${S}.junctions.tsv	the matched arm's per-isolate junctions, from p1i
+p1is	pre	cohort	yes	is6110/results/${NAME}_p1i_cohort_keys.tsv	the arm's cohort key table, from p1iv
+p1is	post	cohort	yes	is6110/results/${NAME}_p5_is6110_states.stage2.tsv	the earned REF/ABSENT states
+p5svgt	pre	cohort	yes	${OUTROOT}/p5/sv_matrix.tsv	the clustered SV table, written by p5 --pre
+p5svgt	pre	sample	yes	${OUTROOT}/p2/${S}.g.vcf.gz	depth for the absence measurement
+p5svgt	pre	sample	yes	${WORKPFX}p2/${S}.bam	the matched alignment, for mapping-quality-filtered depth
+p5svgt	pre	sample	yes	${OUTROOT}/p1g/${S}.isclean.bam	the IS-clean H37Rv alignment the two-frame step reads
+p5svgt	post	cohort	yes	${OUTROOT}/p5/sv_intervals.tsv	the cohort's deletion catalogue (--catalogue)
+p5svgt	post	sample	yes	${OUTROOT}/p5/twoframe/${S}.2frame.tsv	the H37Rv-frame second frame (--twoframe)
+p5svgt	post	cohort	yes	${OUTROOT}/p5/svgt_iv_states.tsv	interval-mode deletion states
+p5vcf	pre	cohort	yes	${OUTROOT}/p5/states.u8.npy	the small-variant states array
+p5vcf	pre	build	yes	${BUILD}/assets/ancestral.tsv	ancestral alleles (p0_prepare.sh --step ancestral)
+p5vcf	pre	cohort	yes	${OUTROOT}/p5/sv_matrix.tsv	the SV table
+p5vcf	post	cohort	yes	${OUTROOT}/p5/merged.vcf.gz	the cohort-level deliverable

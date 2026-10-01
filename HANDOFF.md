@@ -80,6 +80,27 @@ At these requests, scale200 would have cost about 80 billing-hours instead
 of 128. Estimate for gwas1000: roughly 250 to 350 billing-hours, about 100 of
 them SV projection for its 150 references.
 
+**DR placement: reverted.** A flank-consensus placement for rescued DR
+copies was added after the detettore6110 comparison, then removed at the
+user's instruction: detettore6110 was for comparison only, and none of its
+method goes into the pipeline. The rescue is back to keying rescued copies at
+the array's first base. The comparison's finding stands as a known
+limitation. In 19 of gwas1000's 24 rescued isolates, the copy is H37Rv's own
+DR copy (3,120,523 to 3,121,897), flanked by spacers the matched reference
+lacks, so `h37rv:3119185` with H37Rv "empty" is the wrong key and state for
+them. The affected passes (p1iv onward for both cohorts) were rerun on the
+reverted code.
+
+**I/O contract.** `refbias/io_contract.tsv` lived only in the working tree.
+It still required the dense `matrix.tsv`, which P5 no longer writes, so it
+blocked every submission that did not include p5. An updated copy is now in
+the repository, and `runroot/refbias/io_contract.tsv` points at it.
+
+**detettore6110 comparison.** On 14 gwas1000 isolates, copy number agrees
+within 2. Of 79 H37Rv sites detettore6110 placed, 63 match ours within 10 bp,
+and 8 more are in our calls under graph-node keys. See
+`analysis/detettore_eval/`.
+
 ## 1. State before the rerun (2026-09-30)
 
 The review fixes (`deefef7`, `0a3f712`, 2026-09-29) changed P3, P4, P4b, P5
