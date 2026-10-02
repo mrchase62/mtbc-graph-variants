@@ -1,9 +1,12 @@
 # Handoff: one rerun to bring production data up to date
 
-Updated 2026-10-01. Repository `mtbc-graph-variants`, branch `review-fixes`,
-PR #1 (https://github.com/mrchase62/mtbc-graph-variants/pull/1). The last
-commit is `5e13986`. **Everything in section 2 is uncommitted** in the
-working directory.
+Updated 2026-10-02. Repository `mtbc-graph-variants`, branch `main`
+(protected: no force-push, no deletion). PR #1 was merged as `b58fc4f` and
+the `review-fixes` branch deleted. The last commit is `58a6c73`. Section 2 is
+committed. `analysis/` and the paper PDF are untracked.
+
+**Both production cohorts are current**, and so are their association results
+(section 0b).
 
 ## The rules
 
@@ -100,6 +103,133 @@ the repository, and `runroot/refbias/io_contract.tsv` points at it.
 within 2. Of 79 H37Rv sites detettore6110 placed, 63 match ours within 10 bp,
 and 8 more are in our calls under graph-node keys. See
 `analysis/detettore_eval/`.
+
+**gwas1000 is current** (2026-10-02): 200,444 merged VCF records, and the
+VCF passed the gate.
+
+## 0b. Association chains (2026-10-02)
+
+Both cohorts' association chains were rerun on the current data.
+
+### Trees: cohort plus CX333
+
+Each cohort's SNPs were aligned together with the 333 CX333 panel genomes'
+SNPs:
+
+- **alignment:** `analysis/combined_tree/build_alignment.py`;
+- **tree:** IQ-TREE GTR+F+ASC+G4, via `bin/build_snp_tree.sh`, rooted on
+  ET1291 (`GCF_035581225`);
+- **cut for the chain:** `analysis/combined_tree/prune_for_cohort.py` keeps
+  the cohort isolates, H37Rv and the outgroup. The event reconstruction needs
+  genotypes the panel genomes lack.
+
+| cohort | combined tree | chain tree |
+|---|---|---|
+| gwas1000 | 1,330 tips | 999 tips |
+| scale200 | 533 tips | 202 tips |
+
+Trees are in `data/trees/<cohort>_cx333.*` and `data/trees/<cohort>.rooted.nwk`.
+Tree checks: every lineage is monophyletic (`analysis/combined_tree/tree_checks.md`).
+
+### Three chain omissions, found and fixed
+
+Each one silently dropped part of the results. None raised an error.
+
+| commit | omission | effect |
+|---|---|---|
+| `a76636c` | `cohort_assoc_tail.sh` never passed `--accessory-presence` to `assoc_scan.py` | no carrier-only (level-2) null for any accessory variant, and the callability floor was measured against the whole tree. gwas1000 lost 5 testable variants. |
+| `a76636c` | `audit_chain.py` estimated a locus's applicable branches as twice its carriers minus one | after the scan fix, the audit still flagged one variant (`node:68834:0:A>G`, 83 carriers: 165 estimated branches, 244 in the tree) that the scan had correctly dropped. The audit now reads the tree with the scan's own code. |
+| `58a6c73` | the gene burden was never given `--lineages`, and the small-variant and SV burdens (`--cls small`, `--cls sv`) were run by hand and never added to the chain | `p_lineage` was blank in every burden. The rerun archived `small_gene.tsv` and `sv_gene.tsv` and produced neither, so the resistance genes looked missing. |
+
+The chain script and the audit are now in the repo:
+`assoc/bin/cohort_assoc_tail.sh` and `bin/audit_chain.py`. The repo chain
+script still calls the working tree's `assoc/bin/*.py` (relative to the
+current directory), so it is run from the working tree. The launchers are in
+`analysis/combined_tree/`:
+
+- `assoc_tail.sbatch`: the whole chain;
+- `burden_only.sbatch`: one burden, `CLS=is6110|small|sv`;
+- `audit_only.sbatch`: the audit alone.
+
+### Results
+
+The phenotype is RRDR carriage (`assoc/<cohort>/rrdr_carriers.txt`): 459
+carriers of 999 tips for gwas1000, and 57 of 202 for scale200. "Survive" means
+q < 0.05 under all three nulls: branch, region and lineage.
+
+| | gwas1000 | scale200 |
+|---|---|---|
+| variants with 2 or more independent gains | 11,322 | 3,607 |
+| callable (80% or more of applicable branches determined) | 7,914 | 2,602 |
+| variant-level survivors (`scan.tsv`) | 28 | 3 |
+| small-variant gene burden, testable units / survivors (`small_gene.tsv`) | 6,457 / 18 | 5,189 / 6 |
+| SV gene burden, testable units / survivors (`sv_gene.tsv`) | 340 / 0 | 179 / 0 |
+| IS6110 gene burden, testable units / survivors (`is6110_gene.tsv`) | 263 / 0 | 77 / 0 |
+| chain audit (`chain_audit.txt`) | pass | pass |
+
+**Positive controls: the resistance genes are found.**
+
+- **gwas1000, variant level.** The 28 survivors are:
+  - rpoB: S450L, H445 and D435;
+  - rpoC, at 764817 and 764840;
+  - katG S315T;
+  - inhA, and the inhA promoter at c-15t and t-8c;
+  - embB: M306V/I, G406 and Q497;
+  - gyrA: A90V and D94G;
+  - rpsL: K43R and K88R;
+  - rrs, including a1401g.
+- **gwas1000, small-variant burden.** The 18 survivors are the same units as
+  on 2026-09-28. Genes: rpoB, rpoC, rpoA, katG, inhA, embB, gyrA, rpsL, rrs,
+  gid, pncA, ethA, thyA. Promoters: fabG1, ahpC, embA, pncA, eis. This test
+  finds the loss-of-function genes (pncA, ethA, gid) that the variant-level
+  scan cannot.
+- **scale200, small-variant burden.** The 6 survivors are rpoB, rpoC, embB,
+  gyrA, pncA and ethA. katG and the embA promoter narrowly miss on the
+  lineage null (q 0.053 and 0.057, against 0.040 and 0.015 on 2026-09-28)
+  but pass the branch null. This is a power limit at 57 carriers.
+- **IS6110 burden.** It is not expected to find resistance genes. Only 3 of
+  gwas1000's 2,020 placed insertions fall in a resistance gene, each with one
+  origin. Its closest unit is ig:Rv2813-Rv2814c, the DR region, at q_branch
+  0.064. Its origins are keyed at the DR array start, which is the known
+  limitation.
+
+rpoB is partly circular, because RRDR carriage defines the phenotype. The
+other genes are co-resistance in MDR isolates.
+
+**One warning, not a failure, in both audits:** small/masked drops 1% of its
+records between the VCF and the event matrix (against 0% overall). It was
+present before the rerun.
+
+### Other checks on the current data (`analysis/`)
+
+| check | result | where |
+|---|---|---|
+| RRDR calls against the reads | sensitivity 1.000, specificity 0.994 | `pipeline_checks/` |
+| lineage barcode | 97.5% exact, no cross-lineage calls | `pipeline_checks/` |
+| matched reference is the closest panel genome by SNPs | 979 of 997 (98.2%); the rest rank 2 to 5, at most 20 SNPs farther | `reference_match/` |
+| accessory-genome variant audit, gwas1000 | per isolate, including IS6110 | `accessory_audit/` |
+| IS6110 simulated-read benchmark against detettore6110 | comparison only; nothing adopted | `is6110_simbench/REPORT.md` |
+
+### Cost
+
+| step | billing-hours |
+|---|---|
+| gwas1000 + CX333 tree | 49 |
+| scale200 + CX333 tree | 10 |
+| chains, scan rerun, audit, burdens | 8 |
+
+### Superseded outputs
+
+All in the working tree, synced to durable storage:
+
+- `assoc/archive/stale_pre_rerun_20261002/<cohort>/`: before the rerun;
+- `assoc/archive/scan_no_accpres_20261002/gwas1000/`: the scan without the
+  presence tables;
+- `assoc/archive/burden_no_lineage_20261002/<cohort>/`: the IS6110 burden
+  without the lineage null.
+
+The current results are the files directly under `assoc/<cohort>/`. The last
+sync was 2026-10-02, after the burdens.
 
 ## 1. State before the rerun (2026-09-30)
 
@@ -297,10 +427,11 @@ gwas1000 before submitting it.
 
 ## 6. After the cohorts are current
 
-1. Regenerate the paper comparison: `analysis/is6110_paper_check.py`, which
-   reads `is6110/results/gwas1000_p1i_cohort_keys.tsv`.
-2. Sync to durable storage with `bin/sync_back.sh`. The last sync was
-   2026-09-29, and durable space is limited, so check sizes first.
+1. Done 2026-10-02: the paper comparison was regenerated on the current
+   gwas1000 keys (`analysis/is6110_paper_check.md`).
+2. Done 2026-10-02: synced to durable storage with `bin/sync_back.sh`.
+   Durable storage holds 63 GB, and space is limited, so check sizes before
+   the next sync.
 3. Archive alignments with `bin/archive_alignments.sh --archive` if scratch
    space is needed.
 4. Delete the archived stale generations once the new ones are checked:
@@ -311,8 +442,15 @@ gwas1000 before submitting it.
 
 ## 7. Other open items
 
-- **Uncommitted:** section 2, `HANDOFF.md`, `analysis/` and the paper PDF.
-  `analysis/dr_test/` is throwaway.
+- **Untracked:** `analysis/` and the paper PDF. `analysis/dr_test/` is
+  throwaway.
+- **The association chain's Python modules** (`assoc/bin/*.py`) exist only in
+  the working tree. The repo's chain script and audit call them there.
+- **Outgroup review:** the output of `check_high_mac_no_panel.py` has not
+  been reviewed. The old manual patch, which set 6 outgroup columns to N, was
+  not re-applied.
+- **The 1% small/masked warning** in both chain audits predates the rerun and
+  has not been explained.
 - **Not started:** the per-reference coordinate map from the 10k scaling
   plan, and a review of about 15 GB of "possible junk".
 - **The 50 (sample, key) pairs** that occur twice in gwas1000's key table
