@@ -207,6 +207,7 @@ present before the rerun.
 | RRDR calls against the reads | sensitivity 1.000, specificity 0.994 | `pipeline_checks/` |
 | lineage barcode | 97.5% exact, no cross-lineage calls | `pipeline_checks/` |
 | matched reference is the closest panel genome by SNPs | gwas1000: 979 of 997 (98.2%), the rest rank 2 to 5, at most 20 SNPs farther. scale200: 192 of 200 (96.0%), 6 rank 2 to 5, 2 rank 6 (exact ties in P1), at most 19 SNPs farther. No isolate matched across lineages. | `reference_match/` |
+| SNPs called against the matched reference (P2) against H37Rv (P1), same reads | gwas1000: median 302 against 1,636, every isolate fewer, median per-isolate reduction 6.4x. scale200: 212 against 1,095, every isolate fewer, 5.8x. Largest for lineage 2 (12.6x, 13.6x), smallest for lineage 4 (3.8x, 4.5x) and gwas1000's lineage 9 (3.3x). Figure `snp_distance.png`. | `reference_match/` |
 | accessory-genome variant audit, gwas1000 | per isolate, including IS6110 | `accessory_audit/` |
 | IS6110 simulated-read benchmark against detettore6110 | comparison only; nothing adopted | `is6110_simbench/REPORT.md` |
 
