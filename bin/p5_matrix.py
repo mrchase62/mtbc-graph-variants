@@ -35,7 +35,19 @@ def main():
                          "at 10,000, of which about 98% is REF or NOCALL and "
                          "recoverable from the sparse per-sample files. The "
                          "counts and the summary are still produced.")
+    ap.add_argument("--sites-out", default="",
+                    help="per-site table: the dense matrix's leading columns "
+                         "plus key_index, the site's row in the states array. "
+                         "Every cohort consumer reads this and the array "
+                         "instead of matrix.tsv. Default: sites.tsv in "
+                         "--array-dir (or --dir)")
+    ap.add_argument("--array-dir", default="",
+                    help="where to write states.u8.npy; default --dir")
     a = ap.parse_args()
+    # beside the states array, not beside --out: --out is /dev/null whenever
+    # the dense matrix is not wanted
+    if not a.sites_out:
+        a.sites_out = os.path.join(a.array_dir or a.dir, "sites.tsv")
 
     meta = {r["sample"]: r for r in rd(a.refmap)}
     keys = rd(a.keys)
@@ -50,11 +62,16 @@ def main():
     # used by this script at all.
     # One reader for every consumer; the sparse format lives in p5_states_io.
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from p5_states_io import CODE, NAME, load_states, samples_in
+    from p5_states_io import CODE, NAME, load_states, samples_in, save_array
     samples = samples_in(a.dir, meta)
     if not samples:
         print("no state files found", file=sys.stderr); return 1
     M = load_states(a.dir, keys, samples)
+    # The one parse of the sparse files for the whole cohort: every consumer
+    # after this memory-maps the array instead of re-reading 10,000 files.
+    save_array(a.array_dir or a.dir, M, samples, keys)
+    print(f"  states array {M.shape[0]:,} keys x {M.shape[1]:,} samples "
+          f"({M.nbytes / 1e6:,.0f} MB) -> {a.array_dir or a.dir}/states.u8.npy")
 
     # Reference-artefact flag, as a general screen rather than a list of the 437
     # sites section 21.1 happened to find. A site where most of the 333-genome
@@ -99,20 +116,23 @@ def main():
     n_abs_all = (M == CODE["ABSENT"]).sum(axis=1)
     n_noc_all = (M == CODE["NOCALL"]).sum(axis=1)
 
-    import contextlib
+    FIXED = ["key", "frame", "region", "kind", "h37rv_pos", "node",
+             "acc_locus", "canonical_ref", "n_alt", "n_ref",
+             "n_absent", "n_nocall", "panel_af", "h37rv_minor"]
+    stmp = a.sites_out + ".tmp"
     with (open(os.devnull, "w") if a.no_dense
-          else open(a.out, "w", newline="")) as fh:
+          else open(a.out, "w", newline="")) as fh, \
+            open(stmp, "w", newline="") as sfh:
         w = csv.writer(fh, delimiter="\t", lineterminator="\n")
-        w.writerow(["key", "frame", "region", "kind", "h37rv_pos", "node",
-                    "acc_locus", "canonical_ref", "n_alt", "n_ref",
-                    "n_absent", "n_nocall", "panel_af", "h37rv_minor"] + samples)
+        sw = csv.writer(sfh, delimiter="\t", lineterminator="\n")
+        w.writerow(FIXED + samples)
+        sw.writerow(FIXED + ["key_index"])
         n_flag = 0
         n_kept = 0
         for i, k in enumerate(keys):
             if not keep_mask[i]:
                 continue
             n_kept += 1
-            col = [NAME[v] for v in M[i]]
             n_alt = int(n_alt_all[i])
             af = ""
             minor = ""
@@ -122,10 +142,14 @@ def main():
                     af = round(v, 4)
                     minor = 1 if v >= 0.5 else 0
                     n_flag += minor
-            w.writerow([k["key"], k["frame"], k["region"], k["kind"],
-                        k["h37rv_pos"], k["node"], k["acc_locus"],
-                        k["canonical_ref"], n_alt, int(n_ref_all[i]),
-                        int(n_abs_all[i]), int(n_noc_all[i]), af, minor] + col)
+            fixed = [k["key"], k["frame"], k["region"], k["kind"],
+                     k["h37rv_pos"], k["node"], k["acc_locus"],
+                     k["canonical_ref"], n_alt, int(n_ref_all[i]),
+                     int(n_abs_all[i]), int(n_noc_all[i]), af, minor]
+            sw.writerow(fixed + [i])
+            if not a.no_dense:
+                w.writerow(fixed + [NAME[v] for v in M[i]])
+    os.replace(stmp, a.sites_out)
 
     print(f"  {n_kept} sites x {len(samples)} samples")
     print(f"    flagged h37rv_minor (panel AF >= 0.5, H37Rv unrepresentative): "
@@ -153,7 +177,8 @@ def main():
           f"samples")
     print(f"    a site carried by every sample is a reference artefact candidate,")
     print(f"    not a shared variant, since H37Rv is the canonical frame")
-    print(f"\n  written: {a.out}")
+    print(f"\n  written: {a.sites_out}"
+          + ("" if a.no_dense else f" and {a.out}"))
     return 0
 
 

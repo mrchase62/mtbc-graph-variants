@@ -6,7 +6,9 @@
 # the cohort CRAM table for the alignment and p1/refmap.tsv for the reference
 # whose accessory content the reference route consults.
 set -euo pipefail
-source config/project_env.sh 2>/dev/null || true
+# Found relative to this script, and a failure is fatal: `|| true` on a
+# relative path let the script run with every tool variable empty.
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/config/project_env.sh"
 
 S="${1:?usage: locus_presence_one.sh <sample> [cohort]}"
 COHORT_TAG="${2:-${COHORT_TAG:-gwas1000}}"

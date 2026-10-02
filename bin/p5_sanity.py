@@ -59,7 +59,14 @@ def _snp_dist(row):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--matrix", default="refbias/p5/matrix.tsv")
+    ap.add_argument("--matrix", default="",
+                    help="the dense matrix; legacy input, for cohorts built "
+                         "before the states array existed")
+    ap.add_argument("--states-array", default="",
+                    help="directory holding states.u8.npy (p5_matrix.py). "
+                         "Needs --keys and --sites; replaces --matrix")
+    ap.add_argument("--keys", default="")
+    ap.add_argument("--sites", default="")
     ap.add_argument("--refmap", default="refbias/p1/refmap.tsv")
     ap.add_argument("--p2-summary", default="refbias/p2/p2_summary.tsv")
     ap.add_argument("--cohort", default="refbias/cohort.pilot.tsv")
@@ -77,20 +84,65 @@ def main():
             if (r.get("h37rv_small") or "").strip().isdigit():
                 p2[r["sample"]] = int(r["h37rv_small"])
 
-    with open(a.matrix, newline="") as fh:
-        rdr = csv.reader(fh, delimiter="\t")
-        hdr = next(rdr)
-        fixed = hdr.index("n_nocall") + 1
-        # skip the artefact-flag columns: they sit between the counts and the
-        # samples, and treating them as samples adds two pseudo-isolates
-        while fixed < len(hdr) and hdr[fixed] in ("panel_af", "h37rv_minor"):
-            fixed += 1
-        samples = hdr[fixed:]
+    # Per-sample tallies are taken here, while reading, so the sample cells are
+    # never held: the checks below need each site's own columns and, per
+    # sample, a count of each state and of ALT calls by kind.
+    st, kind = {}, {}
+    if a.states_array:
+        # From the states array: row blocks of the selected sites, counted
+        # with numpy. The dense path kept every row with every sample's cell as
+        # a string -- about 15 GB at 997 isolates, hundreds at 10,000.
+        import numpy as np
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from p5_states_io import NAME, open_array
+        keys = rd(a.keys)
+        A, samples = open_array(a.states_array, keys)
+        with open(a.sites, newline="") as fh:
+            rdr = csv.reader(fh, delimiter="\t")
+            hdr = next(rdr)
+            sites = list(rdr)
         ix = {k: hdr.index(k) for k in ("region", "kind", "h37rv_pos", "n_alt",
                                         "frame")}
-        sites = []
-        for row in rdr:
-            sites.append(row)
+        ki = hdr.index("key_index")
+        idx = np.asarray([int(r[ki]) for r in sites], dtype=np.int64)
+        kinds = np.asarray([r[ix["kind"]] for r in sites])
+        tot = np.zeros((4, len(samples)), dtype=np.int64)
+        kind_alt = {kk: np.zeros(len(samples), dtype=np.int64)
+                    for kk in sorted(set(kinds.tolist()))}
+        BLK = max(1, int(5e8 // max(len(samples), 1)))
+        for b0 in range(0, len(idx), BLK):
+            sub = np.asarray(A[idx[b0:b0 + BLK]])
+            for c in range(4):
+                tot[c] += (sub == c).sum(axis=0)
+            kb = kinds[b0:b0 + BLK]
+            for kk in kind_alt:
+                m = kb == kk
+                if m.any():
+                    kind_alt[kk] += (sub[m] == 0).sum(axis=0)
+        for j, sm in enumerate(samples):
+            st[sm] = collections.Counter({NAME[c]: int(tot[c, j]) for c in range(4)})
+            kind[sm] = collections.Counter({kk: int(v[j]) for kk, v in kind_alt.items()})
+    else:
+        with open(a.matrix, newline="") as fh:
+            rdr = csv.reader(fh, delimiter="\t")
+            hdr = next(rdr)
+            fixed = hdr.index("n_nocall") + 1
+            # skip the artefact-flag columns: they sit between the counts and
+            # the samples, and treating them as samples adds two pseudo-isolates
+            while fixed < len(hdr) and hdr[fixed] in ("panel_af", "h37rv_minor"):
+                fixed += 1
+            samples = hdr[fixed:]
+            ix = {k: hdr.index(k) for k in ("region", "kind", "h37rv_pos",
+                                            "n_alt", "frame")}
+            st = {sm: collections.Counter() for sm in samples}
+            kind = {sm: collections.Counter() for sm in samples}
+            sites = []
+            for row in rdr:
+                for sm, v in zip(samples, row[fixed:]):
+                    st[sm][v] += 1
+                    if v == "ALT":
+                        kind[sm][row[ix["kind"]]] += 1
+                sites.append(row[:fixed])
 
     n = len(samples)
     findings = []
@@ -148,13 +200,7 @@ def main():
                          detail=f"{100*sum(singr.values())/len(sites):.1f}% of sites"))
 
     # --- 3-7: per-sample --------------------------------------------------------
-    st = {s: collections.Counter() for s in samples}
-    kind = {s: collections.Counter() for s in samples}
-    for r in sites:
-        for s, v in zip(samples, r[fixed:]):
-            st[s][v] += 1
-            if v == "ALT":
-                kind[s][r[ix["kind"]]] += 1
+    # st and kind were tallied while reading, above.
 
     say(3, "matrix ALT count against pass one's H37Rv burden (same frame)")
     print(f"      {'sample':<17s}{'matrix ALT':>11s}{'H37Rv':>10s}{'ratio':>8s}")
@@ -179,8 +225,11 @@ def main():
     for stt in ("ALT", "REF", "ABSENT", "NOCALL"):
         vals = [st[s][stt] for s in samples]
         med = statistics.median(vals)
+        # A fourfold departure either way. |x - med| > 3*med could only fire
+        # ABOVE the median (x > 4*med), so a sample with near-zero REF -- a
+        # broken gVCF, a failed alignment -- was never flagged.
         out = [(s, st[s][stt]) for s in samples
-               if med and abs(st[s][stt] - med) > 3 * med]
+               if med and (st[s][stt] > 4 * med or st[s][stt] < med / 4)]
         print(f"      {stt:<8s} median {med:>8.0f}  range {min(vals)}-{max(vals)}"
               + (f"  OUTLIERS: {out}" if out else ""))
         findings.append(dict(check=f"state_{stt}", value=int(med),

@@ -67,7 +67,7 @@ P2DIR="${P2DIR:-refbias/p2}"
 OUTDIR="${OUTDIR:-refbias/p5}"
 WORK="${WORK:-refbias/work/p5}"
 OG="${OG:-$(ls graphs/CX333.s10k.k23.K15/*.smooth.final.og 2>/dev/null | head -1)}"
-ODGI="${MTB_ODGI:-/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/odgi/bin/odgi}"
+ODGI="${MTB_ODGI:?MTB_ODGI is unset; see config/project_env.sh}"
 H37RV_PATH="${H37RV_PATH:-GCF_000195955#1#NC_000962.3}"
 H37RV_FA="${BUILD}/refs/GCF_000195955.fasta"
 PATHS="${BUILD}/assets/paths.txt"
@@ -104,8 +104,15 @@ case "$STEP" in
     exit 0
     ;;
   --matrix)
+    # The dense keys x samples text matrix is NOT written by default: at
+    # 10,000 isolates it is about 23 GB, and every cohort consumer now reads
+    # the states array and sites.tsv instead. P5_DENSE_MATRIX=1 still writes
+    # it, for anything outside this repository that reads matrix.tsv.
+    _dense=(--no-dense)
+    [[ "${P5_DENSE_MATRIX:-0}" == 1 ]] && _dense=()
     exec "$MTB_PY" bin/p5_matrix.py --refmap "$REFMAP" --keys "$KEYS" \
-        --dir "$OUTDIR" --out "${OUTDIR}/matrix.tsv"
+        --dir "$OUTDIR" --out "${OUTDIR}/matrix.tsv" \
+        --sites-out "${OUTDIR}/sites.tsv" "${_dense[@]}"
     ;;
   --states) ;;
   *) echo "usage: $0 --keys | --states | --matrix   (or P5STEP=...)" >&2; exit 2 ;;
@@ -127,7 +134,21 @@ PLACED="${P4DIR}/${SAMPLE}.placed.tsv"
 for f in "$GVCF" "$PLACED"; do
     [[ -s "$f" ]] || { echo "FATAL: ${SAMPLE}: missing ${f}" >&2; exit 1; }
 done
-[[ -s "${OUTDIR}/${SAMPLE}.states.tsv" ]] && { echo "[P5] ${SAMPLE}: already done"; exit 0; }
+# "Already done" means done AGAINST THIS KEY SET. The skip used to test only
+# that a states file existed, so after the keys changed every task reported
+# done and p5_finish.sh then refused the stale files -- to be deleted by hand.
+# The sparse header carries the checksum of the key list it was written
+# against; compare it with keys.tsv and redo the sample on a mismatch.
+_st="${OUTDIR}/${SAMPLE}.states.tsv"
+if [[ -s "$_st" ]]; then
+    _have="$(awk -F'\t' '$1=="#keys_sha1"{print $2; exit} !/^#/{exit}' "$_st")"
+    _want="$("$MTB_PY" -c 'import csv,sys; sys.path.insert(0,"bin"); import p5_states_io as io; print(io.keys_sha1(list(csv.DictReader(open(sys.argv[1]),delimiter="\t"))))' "$KEYS")"
+    if [[ -n "$_have" && "$_have" == "$_want" ]]; then
+        echo "[P5] ${SAMPLE}: already done against this key set"; exit 0
+    fi
+    echo "[P5] ${SAMPLE}: states file is from a different key set" \
+         "(${_have:-no checksum} vs ${_want}); recomputing"
+fi
 
 
 # WHICH FRAME IS THIS SAMPLE'S INPUT IN? Measured, not assumed. P1 and P2 align
@@ -172,6 +193,7 @@ PROJDIR="${WORK}/proj"; mkdir -p "$PROJDIR" "$PROJSTORE"
 KSHA="$(awk -F'\t' 'NR>1{print $1}' "$KEYS" | sha1sum | cut -c1-16)"
 PROJ="${PROJDIR}/${REFID}.${KSHA}.pos"
 NPOS="$(awk -F'\t' 'NR>1 && $2=="h37rv"' "$KEYS" | wc -l)"
+PROJ_USE="$PROJ"
 if [[ -s "$PROJ" ]] && [[ "$(grep -vc '^#' "$PROJ")" -eq "$NPOS" ]]; then
     echo "[P5] ${SAMPLE}: reusing the ${REFID} projection ($NPOS positions)"
 else
@@ -190,7 +212,11 @@ else
         # load-bearing. graphframe/docs/GRAPH_FRAME_RESOLUTION.md
         "$MTB_PY" graphframe/bin/frame_convert.py to-panel \
             < "${PANEL}.raw.$$" > "${PANEL}.$$"
-        mv -f "${PANEL}.$$" "$PANEL"; rm -f "${PANEL}.raw.$$"
+        # NEVER REPLACE A COPY ANOTHER TASK MAY BE READING. Several tasks build
+        # this shared file at once, and with `mv -f` one renamed over a file another
+        # had open; on NFS the reader got ESTALE (scale200 rerun, 2026-10-01). The
+        # first copy in is kept (`mv -n`) and later ones are discarded.
+        mv -n "${PANEL}.$$" "$PANEL" || true; rm -f "${PANEL}.$$" "${PANEL}.raw.$$"
     fi
     # Ask the store what it already has, project only the remainder, fold the
     # answer back in, then emit the whole set from the store.
@@ -242,13 +268,26 @@ else
         echo "[P5] ${SAMPLE}: ${REFID} projection is ${got} of ${NPOS}" \
              "($(( got * 100 / NPOS ))%); the rest have no equivalent in that path"
     fi
-    mv -f "${PROJ}.$$" "$PROJ"
+    # NEVER RENAME OVER A FILE ANOTHER TASK MAY BE READING: on NFS the reader
+    # gets ESTALE (the P5 anchor file, scale200 rerun, 2026-10-01). Samples of
+    # one reference share this file, so it is installed only where none
+    # exists; otherwise this task reads its own copy, and an incomplete shared
+    # one (below 100%, which the reuse test above rejects) is never trusted.
+    if mv -n "${PROJ}.$$" "$PROJ" && [[ ! -e "${PROJ}.$$" ]]; then
+        PROJ_USE="$PROJ"
+    else
+        PROJ_USE="${PROJ}.$$"
+        trap 'rm -f "${PROJ}.$$"' EXIT
+    fi
     echo "[P5] ${SAMPLE}: ${REFID} projection assembled from the store"
 fi
 
 "$MTB_PY" bin/p5_states.py --sample "$SAMPLE" --reference "$REFID" \
     --keys "$KEYS" --placed "$PLACED" --gvcf "$GVCF" --h37rv "$H37RV_FA" \
-    --projected "$PROJ" \
-    --out "${OUTDIR}/${SAMPLE}.states.tsv"
+    --projected "$PROJ_USE" \
+    --out "${OUTDIR}/${SAMPLE}.states.tsv.tmp"
+# renamed only once complete: the skip above trusts any states file whose
+# checksum matches, so a task killed mid-write must not leave one behind
+mv -f "${OUTDIR}/${SAMPLE}.states.tsv.tmp" "${OUTDIR}/${SAMPLE}.states.tsv"
 # nothing per-sample to remove: the projection is a shared cache
 echo "[P5] ${SAMPLE}: done"

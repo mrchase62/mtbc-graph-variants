@@ -68,10 +68,24 @@ because its sequence is too divergent to map -- is low Q30 depth, low Q0 depth,
 no clustered clips, soft edges. A repeat is Q30 depth zero with Q0 depth normal.
 A real deletion is both depths zero, clips at both ends, hard edges.
 """
-import argparse, collections, csv, os, re, subprocess, sys
+import argparse, collections, csv, os, re, subprocess, sys, tempfile
 
 CIGAR = re.compile(r"(\d+)([MIDNSHP=X])")
 REF_CONSUMING = set("MDN=X")
+
+
+def _finish(p, cmd, errf):
+    """Wait for p and stop on a nonzero exit, showing samtools' own message.
+
+    Both readers below discarded stderr and ignored the exit status. A CRAM
+    decode error partway through the contig (a reference MD5 mismatch, say)
+    left zero depth over the rest of it -- false depth_absent ALT calls -- and
+    a failed `view` left no clips, so no call could ever be marked strong.
+    """
+    rc = p.wait()
+    if rc != 0:
+        errf.seek(0)
+        sys.exit(f"FATAL: {' '.join(cmd)} exited {rc}:\n{errf.read()[-2000:]}")
 
 
 def depth_array(samtools, aln, ref, contig, length, min_mapq):
@@ -81,7 +95,8 @@ def depth_array(samtools, aln, ref, contig, length, min_mapq):
         cmd += ["-Q", str(min_mapq)]
     cmd.append(aln)
     d = [0] * (length + 2)
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    errf = tempfile.TemporaryFile("w+")
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=errf,
                          text=True, bufsize=1 << 20)
     n = 0
     for line in p.stdout:
@@ -90,7 +105,7 @@ def depth_array(samtools, aln, ref, contig, length, min_mapq):
             continue
         d[int(f[1])] = int(f[2])
         n += 1
-    p.wait()
+    _finish(p, cmd, errf)
     if n == 0:
         sys.exit(f"FATAL: samtools depth returned nothing for {aln}. "
                  f"Check the contig name and the reference.")
@@ -111,7 +126,8 @@ def clip_positions(samtools, aln, ref, min_mapq, min_clip):
         cmd += ["-q", str(min_mapq)]
     cmd.append(aln)
     lead, trail = collections.Counter(), collections.Counter()
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    errf = tempfile.TemporaryFile("w+")
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=errf,
                          text=True, bufsize=1 << 20)
     for line in p.stdout:
         f = line.split("\t", 6)
@@ -129,7 +145,7 @@ def clip_positions(samtools, aln, ref, min_mapq, min_clip):
         if parts[-1][1] == "S" and int(parts[-1][0]) >= min_clip:
             span = sum(int(n) for n, o in parts if o in REF_CONSUMING)
             trail[pos + span - 1] += 1
-    p.wait()
+    _finish(p, cmd, errf)
     return lead, trail
 
 

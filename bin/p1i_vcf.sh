@@ -49,17 +49,46 @@ RES="${RES:-is6110/results}"
 OG="${OG:-$(awk -F'\t' '$1=="graph"{print $2}' "${MTB_BUILD_DIR:-refbias/build/7713a8d71d8e}/build_info.tsv")}"
 mkdir -p "$VCFDIR" "$RES"
 
+# The PILOT's tables are unprefixed (p1i_cohort_keys.tsv and so on), and that
+# is what p1i_p5states.sh and merge_cohort_vcf.py read for it. Writing
+# pilot_p1i_cohort_keys.tsv here meant a pilot rerun left the old table in
+# place and stage 2 silently used it. Every other cohort is <tag>_.
+PFX="${TAG}_"; [[ "$TAG" == "pilot" ]] && PFX=""
 SITES="${RES}/sites_${TAG}_p1i.tsv"
 CALLS="${RES}/calls_${TAG}_p1i.tsv"
-RECON="${RES}/${TAG}_p1i_reconcile.tsv"
-FLANK="${RES}/${TAG}_p1i_sites_flank_all.tsv"
-H37RV="${RES}/${TAG}_p1i_sites_h37rv_all.tsv"
-KEYS="${RES}/${TAG}_p1i_cohort_keys.tsv"
+RECON="${RES}/${PFX}p1i_reconcile.tsv"
+FLANK="${RES}/${PFX}p1i_sites_flank_all.tsv"
+H37RV="${RES}/${PFX}p1i_sites_h37rv_all.tsv"
+KEYS="${RES}/${PFX}p1i_cohort_keys.tsv"
 
 echo "=== p1iv: cohort ${TAG}, stacks in ${P1IDIR}"
 n=$(ls "${P1IDIR}"/*.elstacks.tsv 2>/dev/null | wc -l)
 [[ "$n" -gt 0 ]] || { echo "FATAL: no elstacks in ${P1IDIR}; run pass p1i first" >&2; exit 1; }
 echo "    ${n} per-sample stack files"
+
+echo "=== 0/5 keep the last run's IS6110 projections"
+# Stage 2 (pass p1is) projects every key from a carrier onto each reference,
+# and that was ~80% of an IS6110 rerun's cost. Its results depend on the
+# carrier position, the target and the graph, not on the key set, so they go
+# into a build-scoped store that p1is reuses. They can only be filed under
+# their carriers while the key table that produced them still exists, which is
+# now: step 5 below rewrites it. Nothing to do on a cohort's first run.
+STORE="${MTB_BUILD_DIR:+${MTB_BUILD_DIR}/proj_is6110}"
+if [[ -n "$STORE" && -s "$KEYS" && -d "${P1IDIR}/p5stage2/proj" ]]; then
+    "$MTB_PY" is6110/bin/is6110_p5_stage2.py --mode seed --cohort-keys "$KEYS" \
+        --refmap "$REFMAP" --workdir "${P1IDIR}/p5stage2" --store "$STORE"
+else
+    echo "    nothing to keep (no earlier key table, projections or build)"
+fi
+
+echo "=== 0/5 DR-array rescue"
+# Copies inside the CRISPR DR array have junction reads that align equally well
+# to many identical repeats, so no stack reaches the mapping-quality threshold
+# and the copy is never called. This merges such stacks into one locus-level
+# site; samples whose DR copy was already called are left exactly as they were.
+# See is6110/bin/is6110_repeat_rescue.py.
+"$MTB_PY" is6110/bin/is6110_repeat_rescue.py --dir "$P1IDIR" --refmap "$REFMAP" \
+    --clean-dir "${CLEANDIR:-is6110/assets/isclean_matched}"
 
 echo "=== 1/5 labelling"
 "$MTB_PY" is6110/bin/is6110_promote_sites.py \
@@ -75,7 +104,12 @@ echo "=== 2/5 reconcile"
     --summary-out "${RECON%.tsv}_summary.tsv"
 
 echo "=== 3/5 project into the H37Rv frame"
-"$MTB_PY" is6110/bin/is6110_project_sites.py \
+# --all-stacks: project EVERY reconciled stack, not only the A/B tiers. The
+# output is named _all and the writer needs a flank row for every site; without
+# the flag one-sided and unconfirmed two-sided-wide sites got no row, were keyed
+# "node:" and were dropped by the P5 merge (1,800 gwas1000 rows). The pilot and
+# scale100 were run by hand WITH the flag, so this matches what they did.
+"$MTB_PY" is6110/bin/is6110_project_sites.py --all-stacks \
     --reconcile "$RECON" --refmap "$REFMAP" --graph "$OG" \
     --workdir "${WORK:-refbias/work/p1iv}" --out "$H37RV"
 

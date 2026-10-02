@@ -63,7 +63,7 @@ P2DIR="${P2DIR:-refbias/p2}"
 OUTDIR="${OUTDIR:-refbias/p4}"
 WORK="${WORK:-refbias/work/p4}"
 OG="${OG:-$(ls graphs/CX333.s10k.k23.K15/*.smooth.final.og 2>/dev/null | head -1)}"
-ODGI="${MTB_ODGI:-/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/odgi/bin/odgi}"
+ODGI="${MTB_ODGI:?MTB_ODGI is unset; see config/project_env.sh}"
 H37RV_PATH="${H37RV_PATH:-GCF_000195955#1#NC_000962.3}"
 PATHS="${BUILD}/assets/paths.txt"
 MASK="${BUILD}/assets/repeat_mask.bed"
@@ -113,12 +113,28 @@ echo "[P4] ${SAMPLE}: reference ${REFID}, build ${BUILD_ID}"
 # than the fix. The two are indistinguishable from a VCF header -- same contig,
 # same length -- so frame_detect.py decides it from the REF alleles and this
 # stops rather than guesses. graphframe/docs/GRAPH_FRAME_RESOLUTION.md section 6.
-VFRAME="$("$MTB_PY" graphframe/bin/frame_detect.py --vcf "$MATCHED" \
-    --accession "$REFID" --refs "${BUILD}/refs" | cut -f2)"
+#
+# frame_detect.py exits 2 when it cannot decide, and under `set -e` a bare
+# $(...) assignment died right there -- before the FATAL below and before the
+# empty-VCF branch further down, which is legitimate. So a matched VCF with no
+# single-base REF records lost the whole sample. Capture the status instead:
+# n=0 means there was nothing to test, which is not a frame mismatch.
+_fd_rc=0
+_fd="$("$MTB_PY" graphframe/bin/frame_detect.py --vcf "$MATCHED" \
+    --accession "$REFID" --refs "${BUILD}/refs")" || _fd_rc=$?
+VFRAME="$(cut -f2 <<< "$_fd")"
+_fd_n="$(grep -o 'n=[0-9]*' <<< "$_fd" | cut -d= -f2)"
 case "$VFRAME" in
     refs|either) ;;
-    *) echo "FATAL: ${SAMPLE}: $MATCHED is in the '${VFRAME}' frame, not refs; the
-   conversion in this script would be wrong for it" >&2; exit 1 ;;
+    *) if [[ "${_fd_n:-}" == "0" ]]; then
+           echo "[P4] ${SAMPLE}: no single-base records in ${MATCHED} to test the frame on;"
+           echo "     nothing there needs converting"
+       else
+           echo "FATAL: ${SAMPLE}: $MATCHED is in the '${VFRAME}' frame, not refs" \
+                "(frame_detect exit ${_fd_rc}: ${_fd}); the conversion in this" \
+                "script would be wrong for it" >&2
+           exit 1
+       fi ;;
 esac
 # R-coordinate positions of the matched arm's calls, once. These come out of a
 # VCF called against refbias/build/<id>/refs/<R>.fasta, so they are in the REFS
@@ -162,8 +178,14 @@ for f in "${WORK}/${SAMPLE}.h37rv.pos" "${WORK}/${SAMPLE}.node.pos"; do
 done
 fi
 
+# The inherited half's source, passed explicitly. p4_place.py's default is a
+# path relative to the working directory, which resolved only when run from the
+# original working tree and otherwise dropped the half without a word.
+GRAPH_VCF="${GRAPH_VCF:-$(dirname "$OG")/all_variants.nolab.vcf.gz}"
+[[ -s "$GRAPH_VCF" ]] || { echo "FATAL: no graph VCF at ${GRAPH_VCF}" >&2; exit 1; }
 "$MTB_PY" bin/p4_place.py \
     --sample "$SAMPLE" --reference "$REFID" --build-id "$BUILD_ID" \
+    --graph-vcf "$GRAPH_VCF" \
     --h37rv "${BUILD}/refs/GCF_000195955.fasta" \
     --ref-fasta "${BUILD}/refs/${REFID}.fasta" \
     --direct "$DIRECT" --matched "$MATCHED" \

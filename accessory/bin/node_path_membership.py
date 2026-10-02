@@ -123,9 +123,14 @@ def main():
             first.setdefault((nid, acc), (start, strand))
         multi = sum(1 for v in occ.values() if v > 1)
         with open(a.out_positions, "w") as fh:
-            fh.write("node\taccession\tstart\tstrand\tn_occurrences\n")
+            # `length` is the node's own length, recorded so a reader can
+            # check that an offset falls inside the node. (P4's node offsets
+            # already run along the path, so the base is start + offset on
+            # either strand; see p5_states.py.)
+            fh.write("node\taccession\tstart\tstrand\tn_occurrences\tlength\n")
             for (nid, acc), (start, strand) in first.items():
-                fh.write(f"{nid}\t{acc}\t{start}\t{strand}\t{occ[(nid, acc)]}\n")
+                fh.write(f"{nid}\t{acc}\t{start}\t{strand}\t{occ[(nid, acc)]}"
+                         f"\t{nlen.get(nid, '')}\n")
         print(f"  {len(first):,} (node, accession) pairs; {multi:,} "
               f"({multi/max(len(first),1):.1%}) are repeated within their own "
               f"path and cannot be genotyped from one position")

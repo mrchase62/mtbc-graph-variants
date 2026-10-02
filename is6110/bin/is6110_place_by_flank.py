@@ -42,7 +42,10 @@ H37Rv coordinate to find, and this script reports it as unplaceable rather than
 attaching it to the nearest anchor. Those keep the graph node key that
 `is6110_project_sites.py` gave them; see P1I_PROJECTION.md section 5.
 """
-import argparse, collections, csv, os, re, subprocess, sys
+import argparse, collections, csv, hashlib, os, re, subprocess, sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from is6110_seam import Seams
 
 
 def read_fasta_one(path):
@@ -58,7 +61,7 @@ def read_fasta_one(path):
 
 
 def load_excisions(path):
-    """Excised spans from the build's crossmap, keyed by BOTH adjacent bases.
+    """The reference's removed spans, as is6110_seam.Seams.
 
     The site's reference coordinate is never the span's first base. clean_to_orig
     maps a clean position to its original frame, and a junction sits at the seam,
@@ -68,13 +71,7 @@ def load_excisions(path):
     matches sixteen copies and fails the mapping-quality floor. That is what
     drove 124 of 179 sites into "one_flank_unique" on the first run.
     """
-    left, right = {}, {}
-    if os.path.exists(path):
-        for r in csv.DictReader(open(path), delimiter="\t"):
-            s0, e0 = int(r["orig_start"]), int(r["orig_end"])
-            left[s0 - 1] = e0      # site left of the seam: element runs s0..e0
-            right[e0 + 1] = s0     # site right of the seam: element runs s0..e0
-    return left, right
+    return Seams(path)
 
 
 def cigar_ref_span(cig):
@@ -127,6 +124,22 @@ def main():
     seqs, exc = {}, {}
     fa = os.path.join(a.workdir, "flanks.fa")
     n_written = 0
+    # Each window is aligned once, named by a hash of its sequence, never by
+    # its row. minimap2 seeds its tie-breaking with the read name, and a window
+    # whose best hit is near-tied (a chimeric primary plus supplementary) gets
+    # MAPQ 60 under one name and 1 under another. Named by row, adding one site
+    # renumbered every later one and flipped the verdicts of unrelated sites in
+    # other samples (5 of 11,524 on gwas1000). Named by sequence, a window's
+    # verdict depends only on the window, and samples sharing a reference and
+    # a site share one alignment.
+    win = {}                                   # (row, side) -> window name
+    seen = set()
+    def put(fh, i, side, seq):
+        h = hashlib.sha1(seq.encode()).hexdigest()[:20]
+        win[(i, side)] = h
+        if h not in seen:
+            seen.add(h)
+            fh.write(f">{h}\n{seq}\n")
     with open(fa, "w") as fh:
         for i, s in enumerate(sites):
             ref = s["reference"]
@@ -139,28 +152,36 @@ def main():
             # Step the window past the reference's own copy, on whichever side of
             # the seam this site sits. lstart/rend bracket the element; where the
             # reference carries no copy here both collapse to p.
-            exl, exr = exc[ref]
+            # The seam is found with the rule the VCF writer uses (is6110_seam),
+            # so a site the writer calls ref_shared always has its windows
+            # stepped past the reference's copy. Exact matching used to leave a
+            # site 1-3 bp off the seam with one window inside the element.
             lstart, rend = p, p
-            if p in exl:
-                rend = exl[p]                 # element to the RIGHT of the site
-            elif p in exr:
-                lstart = exr[p]               # element to the LEFT of the site
+            hit = exc[ref].nearest(p)
+            if hit is not None:
+                side, s0, e0, _ = hit
+                if side == "L":
+                    rend = p + (e0 - s0 + 1)  # element to the RIGHT of the site
+                else:
+                    lstart = p - (e0 - s0 + 1)  # element to the LEFT of the site
             l2, l1 = lstart - a.gap - 1, lstart - a.gap - a.window
             r1, r2 = rend + a.gap + 1, rend + a.gap + a.window
             s["_l1"], s["_r1"] = l1, r1
             if l1 < 1 or r2 > len(g):
                 s["_skip"] = "at contig edge"
                 continue
-            fh.write(f">{i}|L\n{g[l1-1:l2]}\n>{i}|R\n{g[r1-1:r2]}\n")
+            put(fh, i, "L", g[l1-1:l2])
+            put(fh, i, "R", g[r1-1:r2])
             n_written += 1
-    print(f"  {len(sites)} sites, {n_written} with both windows extractable")
+    print(f"  {len(sites)} sites, {n_written} with both windows extractable, "
+          f"{len(seen)} distinct windows aligned")
 
     p = subprocess.run([a.minimap2, "-a", "-x", "sr", "--secondary=no",
                         a.h37rv, fa], capture_output=True, text=True)
     if p.returncode != 0:
         sys.exit(f"minimap2 failed:\n{p.stderr[-2000:]}")
 
-    placed = {}
+    hit = {}
     for line in p.stdout.split("\n"):
         if not line or line.startswith("@"):
             continue
@@ -170,10 +191,10 @@ def main():
             continue
         if int(f[4]) < a.min_mapq:
             continue
-        idx, side = f[0].split("|")
         span, _ = cigar_ref_span(f[5])
         start = int(f[3])
-        placed[(int(idx), side)] = (f[2], start, start + span - 1, bool(flag & 16))
+        hit[f[0]] = (f[2], start, start + span - 1, bool(flag & 16))
+    placed = {k: hit[h] for k, h in win.items() if h in hit}
 
     ism = collections.defaultdict(list)
     ism_ran = set()

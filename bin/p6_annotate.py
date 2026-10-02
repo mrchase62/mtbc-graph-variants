@@ -27,7 +27,7 @@ def op(p):
     return gzip.open(p, "rt") if p.endswith(".gz") else open(p)
 
 
-def load_genes(path, want=("gene", "CDS")):
+def load_genes(path, want=("gene", "pseudogene", "CDS")):
     """[(start, end, locus_tag, gene, product)] sorted by start, per contig."""
     by_contig = collections.defaultdict(list)
     prod = {}
@@ -59,11 +59,22 @@ def load_genes(path, want=("gene", "CDS")):
 
 
 def make_lookup(rows):
+    """The gene containing p, preferring the latest-starting one.
+
+    The backward scan used to stop at the first gene that ENDS before p, so a
+    longer, earlier gene still containing p was never reached whenever a short
+    gene sat inside it -- 9,418 genic H37Rv bases came back intergenic. The
+    running maximum of end coordinates bounds the scan correctly: once no
+    earlier gene can reach p, stop.
+    """
     starts = [r[0] for r in rows]
+    reach, m = [], 0
+    for r in rows:
+        m = max(m, r[1]); reach.append(m)
 
     def hit(p):
         i = bisect.bisect_right(starts, p) - 1
-        while i >= 0 and rows[i][1] >= p:
+        while i >= 0 and reach[i] >= p:
             if rows[i][0] <= p <= rows[i][1]:
                 return rows[i]
             i -= 1
@@ -73,7 +84,11 @@ def make_lookup(rows):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--matrix", default="refbias/p5/matrix.tsv")
+    ap.add_argument("--matrix", default="refbias/p5/matrix.tsv",
+                    help="legacy input; --sites is read instead when given")
+    ap.add_argument("--sites", default="",
+                    help="sites.tsv from p5_matrix.py: the same per-site "
+                         "columns as the dense matrix, without the samples")
     ap.add_argument("--refmap", default="refbias/p1/refmap.tsv")
     ap.add_argument("--p4-dir", default="refbias/p4")
     ap.add_argument("--build", required=True)
@@ -145,7 +160,9 @@ def main():
 
     rows = []
     counts = collections.Counter()
-    with open(a.matrix, newline="") as fh:
+    # Only the per-site columns are read, so sites.tsv serves exactly as the
+    # dense matrix did, at a fraction of the size.
+    with open(a.sites or a.matrix, newline="") as fh:
         rd = csv.reader(fh, delimiter="\t")
         hdr = next(rd)
         fixed = hdr.index("n_nocall") + 1

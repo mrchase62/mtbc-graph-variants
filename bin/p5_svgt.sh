@@ -76,15 +76,153 @@ else
     OUTSUF="svgt"
 fi
 OG="${OG:-$(ls graphs/CX333.s10k.k23.K15/*.smooth.final.og 2>/dev/null | head -1)}"
-ODGI="${MTB_ODGI:-/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/odgi/bin/odgi}"
+ODGI="${MTB_ODGI:?MTB_ODGI is unset; see config/project_env.sh}"
 H37RV_PATH="${H37RV_PATH:-GCF_000195955#1#NC_000962.3}"
 PATHS="${BUILD}/assets/paths.txt"
 PROBES="${WORK}/${PROBES_NAME}"
 NT="${SLURM_CPUS_PER_TASK:-4}"
 mkdir -p "$OUTDIR" "$WORK" "$SVDIR" slurm
 
+# THE STORE IS KEYED ON (REFERENCE, POSITION) AND LIVES UNDER THE BUILD, so it
+# is cohort-independent by construction. The per-cohort cache this replaced was
+# keyed on the reference plus a checksum of the probe LIST, under
+# ${WORK}/proj -- which meant scale200 and gwas1000 could not share a single
+# projection even where they select the same reference and use the same
+# catalogue. Measured: 81 of gwas1000's 150 references were already projected
+# for scale200 with the identical interval-mode probe set, and the old cache
+# would have rebuilt all 150 at about 134 CPU-minutes each. 181 CPU-hours of
+# duplicated odgi.
+#
+# bin/proj_store.py says how it stays consistent: append-only part files, and
+# readers take the first value for each position, so two tasks projecting the
+# same reference at once cannot corrupt it.
+PROJSTORE="${PROJSTORE:-${BUILD}/proj}"
+PROJDIR="${WORK}/proj"; mkdir -p "$PROJDIR" "$PROJSTORE"
+
+
+# Fill the projection store for one reference: ask it what it is missing
+# from the probe list, project only that with odgi, fold it back.
+#   fill_store <refid> <rpath> <log label>
+fill_store() {
+    local REFID="$1" RPATH="$2" _lab="$3"
+    # Ask the store what it is missing, project only that, fold it back, then emit
+    # the whole probe set from the store.
+    MISS="${PROJDIR}/${REFID}.miss.$$"
+    "$MTB_PY" bin/proj_store.py missing --store "$PROJSTORE" --ref "$REFID" \
+        --need "$PROBES" --out "$MISS"
+    if [[ -s "$MISS" ]]; then
+        echo "[P5svgt] ${_lab}: projecting $(grep -c . "$MISS") new positions for ${REFID}"
+        "$MTB_PY" graphframe/bin/frame_convert.py to-panel \
+            < "$MISS" > "${MISS}.panel"
+        "$ODGI" position -i "$OG" -F "${MISS}.panel" -r "$RPATH" -t "$NT" \
+            2> "${WORK}/${_lab}.odgi.log" \
+          | "$MTB_PY" graphframe/bin/frame_convert.py from-panel \
+            > "${MISS}.pos"
+        # AN EMPTY RESULT IS NOT A FAILURE HERE, and treating it as one cost 12
+        # tasks. odgi legitimately drops positions that do not project into a given
+        # path -- 0.19% of them -- and the store asks for exactly the positions it
+        # does not yet have, so once every remaining one is undroppable the request
+        # comes back with nothing. GCF_965121955 sat at 39,620 of 39,685 stored and
+        # died on the last 65 every time. The real gate is the emit floor below,
+        # which asks whether the store can now answer the whole probe set well
+        # enough; that is the question that matters, and 39,620 of 39,685 is 99.8%.
+        if [[ -s "${MISS}.pos" ]]; then
+            "$MTB_PY" bin/proj_store.py add --store "$PROJSTORE" --ref "$REFID" \
+                --result "${MISS}.pos"
+        else
+            echo "[P5svgt] ${_lab}: none of those positions project into ${REFID};"\
+                 " the emit floor decides whether that matters"
+        fi
+        rm -f "${MISS}.panel" "${MISS}.pos"
+    else
+        echo "[P5svgt] ${_lab}: ${REFID} fully covered by the store"
+    fi
+    rm -f "$MISS"
+}
+
+# ---- the interval catalogue and the second frame, for interval mode --------
+# Both used to be built by hand -- the catalogue once, from scale200's caller
+# matrix, into refbias/assets/sv_intervals.tsv, and the two-frame tables by
+# sv2frame/bin/sv_twoframe.sh -- so nothing tied them to the cohort they were
+# used for. gwas1000 was genotyped against scale200's catalogue, and the merge
+# then dropped every gwas1000 caller deletion that catalogue did not hold.
+# They are steps of this pass now, written under the cohort's own p5 directory.
+#
+#   SVCAT=cohort   graph deletions plus this cohort's caller deletions called
+#                  in at least SVCAT_MIN_CARRIERS isolates (default 2, decided
+#                  2026-10-01); the rest stay in the VCF presence-only, flagged
+#                  UNCATALOGUED. A singleton cannot show repeated origins, and
+#                  caller false positives concentrate there; genotyping all of
+#                  gwas1000's would have cost about 240 CPU-hours of odgi
+#                  against about 85 for the 4,408 recurrent ones
+#   SVCAT=graph    graph deletions only; caller deletions stay presence-only
+SVCAT="${SVCAT:-cohort}"
+SVCAT_MIN_CARRIERS="${SVCAT_MIN_CARRIERS:-2}"
+TWOFRAMEDIR="${TWOFRAMEDIR:-${OUTDIR}/twoframe}"
+COHORT_NAME="${COHORT_NAME:-}"
+case "$COHORT_NAME" in
+  ""|pilot|pilot_rerun) _ISTAG="" ;;
+  scale100)             _ISTAG="scale_" ;;
+  *)                    _ISTAG="${COHORT_NAME}_" ;;
+esac
+IS6110KEYS="${IS6110KEYS:-is6110/results/${_ISTAG}p1i_cohort_keys.tsv}"
+
 STEP="${1:-${SVGTSTEP:-}}"
 case "$STEP" in
+  --catalogue)
+    [[ -n "$IVTAB" ]] || { echo "FATAL: --catalogue needs IVTAB, the path to write" >&2; exit 1; }
+    GRAPH_VCF="${GRAPH_VCF:-$(dirname "$OG")/all_variants.decomposed.vcf.gz}"
+    [[ -s "$GRAPH_VCF" ]] || { echo "FATAL: no graph VCF at ${GRAPH_VCF}" >&2; exit 1; }
+    CAT_ARGS=(--graph-vcf "$GRAPH_VCF")
+    case "$SVCAT" in
+      cohort) [[ -s "$SVMATRIX" ]] || { echo "FATAL: no ${SVMATRIX}; run p5 --pre" >&2; exit 1; }
+              CAT_ARGS+=(--sv-matrix "$SVMATRIX" --min-caller-carriers "$SVCAT_MIN_CARRIERS") ;;
+      graph)  ;;
+      *) echo "FATAL: SVCAT must be cohort or graph, not '${SVCAT}'" >&2; exit 1 ;;
+    esac
+    # IS6110 landmarks from this cohort's own key table, when it has one
+    if [[ -s "$IS6110KEYS" ]]; then CAT_ARGS+=(--is6110-keys "$IS6110KEYS")
+    else echo "  note: no IS6110 key table at ${IS6110KEYS}; H37Rv copies only"; fi
+    "$MTB_PY" bin/sv_intervals.py "${CAT_ARGS[@]}" --out "${IVTAB}.tmp"
+    mv -f "${IVTAB}.tmp" "$IVTAB"
+    exit 0 ;;
+  --twoframe)
+    # The H37Rv-frame half of the two-frame genotyper, one sample per task.
+    # About 8 s a sample: the catalogue is already in H37Rv coordinates, so it
+    # needs only the read collection's own CRAM. The matched-frame column is
+    # left empty -- it would be this pass's own output, and the genotyper reads
+    # only the H37Rv-frame state and clips from this table.
+    [[ -s "$IVTAB" ]] || { echo "FATAL: no catalogue at ${IVTAB}; run --catalogue" >&2; exit 1; }
+    if [[ $# -ge 2 ]]; then S="$2"
+    else S="$(awk -F'\t' -v n="$(( ${SLURM_ARRAY_TASK_ID:?--twoframe is an array step} + 1 ))" 'NR==n{print $1}' "$REFMAP")"; fi
+    [[ -n "$S" ]] || { echo "FATAL: no refmap row" >&2; exit 1; }
+    mkdir -p "$TWOFRAMEDIR"
+    TF="${TWOFRAMEDIR}/${S}.2frame.tsv"
+    if [[ -s "$TF" && "$TF" -nt "$IVTAB" ]]; then
+        echo "[P5svgt] ${S}: two-frame table current"; exit 0
+    fi
+    CRAMTAB="${CRAMTAB:-${CRAMS:?CRAMS is unset; run through bin/refbias_run.sh}}"
+    REL="$(awk -F'\t' -v s="$S" '$1==s{print $2; exit}' "$CRAMTAB")"
+    [[ -n "$REL" ]] || { echo "FATAL: ${S} not in ${CRAMTAB}" >&2; exit 1; }
+    CRAM="${MTB_CRAM_ROOT:?MTB_CRAM_ROOT is unset}/${REL}"
+    [[ -s "$CRAM" ]] || { echo "FATAL: ${S}: no CRAM at ${CRAM}" >&2; exit 1; }
+    # The IS-clean H37Rv alignment from pass p1g, for element-proximal
+    # intervals: on plain H37Rv a read carrying element sequence has sixteen
+    # places to align. Required, so a missing one cannot silently change the
+    # instrument; TWOFRAME_NO_ISCLEAN=1 for a cohort that never ran p1g.
+    TF_EXTRA=()
+    IC="${P1GDIR:-refbias/p1g}/${S}.isclean.bam"
+    if [[ -s "$IC" ]]; then TF_EXTRA+=(--isclean-bam "$IC")
+    elif [[ -z "${TWOFRAME_NO_ISCLEAN:-}" ]]; then
+        echo "FATAL: ${S}: no p1g alignment at ${IC} (restore it with" \
+             "bin/archive_alignments.sh --restore, or set TWOFRAME_NO_ISCLEAN=1)" >&2
+        exit 1
+    fi
+    "${MTB_PY_VT:-$MTB_PY}" sv2frame/bin/sv_twoframe.py --intervals "$IVTAB" \
+        --sample "$S" --cram "$CRAM" --h37rv-fasta "${MTB_CRAM_REF:?MTB_CRAM_REF is unset}" \
+        "${TF_EXTRA[@]}" --out "${TF}.tmp.$$"
+    mv -f "${TF}.tmp.$$" "$TF"
+    exit 0 ;;
   --probes)
     if [[ -n "$IVTAB" ]]; then
         [[ -s "$IVTAB" ]] || { echo "FATAL: no ${IVTAB}" >&2; exit 1; }
@@ -117,8 +255,27 @@ print(f"  {len(files)} samples, {t:,} SV cells  " +
 print(f"  -> {out}")
 PY
     ;;
+  --project)
+    # ONE TASK PER REFERENCE, BEFORE THE PER-SAMPLE ARRAY. Filling the store
+    # from inside the per-sample tasks made every sample of an as-yet
+    # unprojected reference project it at the same time: on scale200 49 of 139
+    # projections repeated one another, about a third of the pass's CPU. Task i
+    # fills the store for the i-th distinct reference of the refmap (sorted);
+    # tasks past the last reference exit at once. The --states step still
+    # fills anything missing, so it is a no-op there when this step ran.
+    [[ -s "$PROBES" ]] || { echo "FATAL: run --probes first" >&2; exit 1; }
+    I="${SLURM_ARRAY_TASK_ID:?--project is an array step}"
+    mapfile -t _refs < <(awk -F'\t' 'NR>1 && $5!=""{print $5}' "$REFMAP" | sort -u)
+    if [[ "$I" -gt "${#_refs[@]}" ]]; then
+        echo "[P5svgt] task ${I}: only ${#_refs[@]} references; nothing to do"; exit 0
+    fi
+    REFID="${_refs[$((I - 1))]}"
+    RPATH="$(grep -m1 "^${REFID}#" "$PATHS" || true)"
+    [[ -n "$RPATH" ]] || { echo "FATAL: ${REFID} not a graph path" >&2; exit 1; }
+    fill_store "$REFID" "$RPATH" "ref_${REFID}"
+    exit 0 ;;
   --states) ;;
-  *) echo "usage: $0 --probes | --states | --merge   (or SVGTSTEP=...)" >&2; exit 2 ;;
+  *) echo "usage: $0 --catalogue | --twoframe | --probes | --project | --states | --merge   (or SVGTSTEP=...)" >&2; exit 2 ;;
 esac
 
 [[ -s "$PROBES" ]] || { echo "FATAL: run --probes first" >&2; exit 1; }
@@ -130,7 +287,14 @@ else
 fi
 [[ -n "${SAMPLE:-}" ]] || { echo "FATAL: no refmap row" >&2; exit 1; }
 OUT="${SVDIR}/${SAMPLE}.${OUTSUF}.tsv"
-[[ -s "$OUT" ]] && { echo "[P5svgt] ${SAMPLE}: already done"; exit 0; }
+# Done only if written AFTER the current probe list. The probes are rebuilt
+# from the SV matrix or interval catalogue by --probes, and SV keys shift when
+# cluster membership changes, so an older per-sample table either fails to join
+# or -- worse -- joins to the wrong cluster. The skip used to test existence.
+if [[ -s "$OUT" && "$OUT" -nt "$PROBES" ]]; then
+    echo "[P5svgt] ${SAMPLE}: already done against the current probes"; exit 0
+fi
+[[ -s "$OUT" ]] && echo "[P5svgt] ${SAMPLE}: output predates ${PROBES}; recomputing"
 
 REFID="$(awk -F'\t' -v s="$SAMPLE" '$1==s{print $5; exit}' "$REFMAP")"
 RPATH="$(grep -m1 "^${REFID}#" "$PATHS" || true)"
@@ -178,56 +342,8 @@ NPROBE="$(grep -c . "$PROBES")"
 MINFRAC="${MINFRAC:-95}"
 NMIN=$(( NPROBE * MINFRAC / 100 ))
 
-# THE STORE IS KEYED ON (REFERENCE, POSITION) AND LIVES UNDER THE BUILD, so it
-# is cohort-independent by construction. The per-cohort cache this replaced was
-# keyed on the reference plus a checksum of the probe LIST, under
-# ${WORK}/proj -- which meant scale200 and gwas1000 could not share a single
-# projection even where they select the same reference and use the same
-# catalogue. Measured: 81 of gwas1000's 150 references were already projected
-# for scale200 with the identical interval-mode probe set, and the old cache
-# would have rebuilt all 150 at about 134 CPU-minutes each. 181 CPU-hours of
-# duplicated odgi.
-#
-# bin/proj_store.py says how it stays consistent: append-only part files, and
-# readers take the first value for each position, so two tasks projecting the
-# same reference at once cannot corrupt it.
-PROJSTORE="${PROJSTORE:-${BUILD}/proj}"
-PROJDIR="${WORK}/proj"; mkdir -p "$PROJDIR" "$PROJSTORE"
 POS="${PROJDIR}/${REFID}.$(sha1sum "$PROBES" | cut -c1-16).pos"
-
-# Ask the store what it is missing, project only that, fold it back, then emit
-# the whole probe set from the store.
-MISS="${PROJDIR}/${REFID}.miss.$$"
-"$MTB_PY" bin/proj_store.py missing --store "$PROJSTORE" --ref "$REFID" \
-    --need "$PROBES" --out "$MISS"
-if [[ -s "$MISS" ]]; then
-    echo "[P5svgt] ${SAMPLE}: projecting $(grep -c . "$MISS") new positions for ${REFID}"
-    "$MTB_PY" graphframe/bin/frame_convert.py to-panel \
-        < "$MISS" > "${MISS}.panel"
-    "$ODGI" position -i "$OG" -F "${MISS}.panel" -r "$RPATH" -t "$NT" \
-        2> "${WORK}/${SAMPLE}.odgi.log" \
-      | "$MTB_PY" graphframe/bin/frame_convert.py from-panel \
-        > "${MISS}.pos"
-    # AN EMPTY RESULT IS NOT A FAILURE HERE, and treating it as one cost 12
-    # tasks. odgi legitimately drops positions that do not project into a given
-    # path -- 0.19% of them -- and the store asks for exactly the positions it
-    # does not yet have, so once every remaining one is undroppable the request
-    # comes back with nothing. GCF_965121955 sat at 39,620 of 39,685 stored and
-    # died on the last 65 every time. The real gate is the emit floor below,
-    # which asks whether the store can now answer the whole probe set well
-    # enough; that is the question that matters, and 39,620 of 39,685 is 99.8%.
-    if [[ -s "${MISS}.pos" ]]; then
-        "$MTB_PY" bin/proj_store.py add --store "$PROJSTORE" --ref "$REFID" \
-            --result "${MISS}.pos"
-    else
-        echo "[P5svgt] ${SAMPLE}: none of those positions project into ${REFID};"\
-             " the emit floor decides whether that matters"
-    fi
-    rm -f "${MISS}.panel" "${MISS}.pos"
-else
-    echo "[P5svgt] ${SAMPLE}: ${REFID} fully covered by the store"
-fi
-rm -f "$MISS"
+fill_store "$REFID" "$RPATH" "$SAMPLE"
 "$MTB_PY" bin/proj_store.py emit --store "$PROJSTORE" --ref "$REFID" \
     --need "$PROBES" --allow-missing --out "${POS}.$$"
 _got="$(grep -vc '^#' "${POS}.$$" || true)"
@@ -235,7 +351,12 @@ _got="$(grep -vc '^#' "${POS}.$$" || true)"
     echo "FATAL: ${SAMPLE}: the store emitted ${_got} of ${NPROBE} probes for "\
          "${REFID}, below the ${MINFRAC}% floor" >&2
     rm -f "${POS}.$$"; exit 1; }
-mv -f "${POS}.$$" "$POS"
+# THIS TASK'S OWN COPY, never a shared one. Samples of one reference used to
+# rename their copies onto one shared name, and on NFS renaming over a file
+# another task has open gives that reader ESTALE (the P5 anchor file, scale200
+# rerun, 2026-10-01). The store is what is shared; emitting from it is cheap.
+POS="${POS}.$$"
+trap 'rm -f "$POS"' EXIT
 echo "[P5svgt] ${SAMPLE}: ${REFID} projection ready (${_got} rows)"
 
 if [[ -n "$IVTAB" ]]; then
@@ -247,10 +368,20 @@ if [[ -n "$IVTAB" ]]; then
     # sv2frame/TWOFRAME_RESULTS.md. TWOFRAME points at that table; without it
     # inherited candidates come back NOCALL, which is the honest state.
     # TRUST_INHERITED=1 restores the pre-2026-09-27 behaviour.
-    TWOFRAME="${TWOFRAME:-sv2frame/${COHORT_TAG:-$(basename "$(dirname "$OUTDIR")")}/per_sample/${SAMPLE}.2frame.tsv}"
+    TWOFRAME="${TWOFRAME:-${TWOFRAMEDIR}/${SAMPLE}.2frame.tsv}"
     TF_ARGS=()
-    [[ -s "$TWOFRAME" ]] && TF_ARGS+=(--twoframe "$TWOFRAME")
-    [[ -n "${TRUST_INHERITED:-}" ]] && TF_ARGS+=(--trust-inherited)
+    if [[ -n "${TRUST_INHERITED:-}" ]]; then
+        TF_ARGS+=(--trust-inherited)
+    elif [[ -s "$TWOFRAME" && "$TWOFRAME" -nt "$IVTAB" ]]; then
+        TF_ARGS+=(--twoframe "$TWOFRAME")
+    else
+        # Missing or older than the catalogue: a stale table keys on interval
+        # ids that may no longer exist, which reads as "no second frame" for
+        # every interval and silently turns every inherited ALT into NOCALL.
+        echo "FATAL: ${SAMPLE}: no two-frame table newer than ${IVTAB} at" \
+             "${TWOFRAME}; run --twoframe (or TRUST_INHERITED=1)" >&2
+        exit 1
+    fi
     "$MTB_PY" bin/p5_sv_genotype.py --intervals "$IVTAB" --sample "$SAMPLE" \
         --reference "$REFID" --gvcf "$GVCF" --bam "$BAM" \
         --mapq-scope "${MAPQSCOPE:-is6110}" --min-mapq "${MINMAPQ:-30}" \

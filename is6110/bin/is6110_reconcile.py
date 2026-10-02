@@ -211,6 +211,13 @@ def main():
             sys.exit(f"{s}: no chromosome-side table at {jp}")
         rows, elem_pos, spanned, peaks, pos_cl, kept_idx = score_chromosome_side(
             jp, a.max_readthrough_frac, a.radius, a.min_peak)
+        # In --crossmap-dir mode a missing crossmap used to fall back to the
+        # empty (identity) map without a word, which leaves every stack
+        # downstream of an excised copy shifted. Every reference in every cohort
+        # so far has one (18, 90 and 150 checked), so a missing one is an error.
+        if a.crossmap_dir and s not in per_sample_xmap:
+            sys.exit(f"FATAL: {s}: no crossmap for its reference in "
+                     f"{a.crossmap_dir}; refusing to use an identity map")
         xm = per_sample_xmap.get(s, xmap)
 
         if s in expect and len(kept_idx) != expect[s]:

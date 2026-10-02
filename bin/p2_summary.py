@@ -56,6 +56,11 @@ def main():
     ap.add_argument("--p1-work", default="refbias/work/p1",
                     help="pass-1 H37Rv VCFs, for the burden comparison")
     ap.add_argument("--out", default="refbias/p2/p2_summary.tsv")
+    ap.add_argument("--allow-missing", action="store_true",
+                    help="exit 0 even when some samples have no output. Off by "
+                         "default: a short table silently drops those samples "
+                         "from every later pass, because P5 sizes itself from "
+                         "the refmap")
     a = ap.parse_args()
 
     rows, incomplete = [], []
@@ -124,6 +129,12 @@ def main():
     else:
         print(f"  all {len(rows)} small-variant VCFs carry the build stamp")
     print(f"\n  written: {a.out}")
+    if incomplete and not a.allow_missing:
+        print(f"FATAL: {len(incomplete)} samples have no usable output "
+              f"({', '.join(incomplete[:10])}{' ...' if len(incomplete) > 10 else ''}); "
+              f"rerun them, or pass --allow-missing to accept a partial table",
+              file=sys.stderr)
+        return 2
     return 0
 
 

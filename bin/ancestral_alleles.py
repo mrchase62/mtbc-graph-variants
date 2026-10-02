@@ -15,12 +15,21 @@ lookup -- no per-cohort reconstruction, and no cohort needs re-running to gain
 the annotation.
 
 THE METHOD, and its limits. Fitch's algorithm on the rooted tree: one upward
-pass computing state sets, then the root's set read as the ancestral state.
-Where the root set holds one state the call is unambiguous; where it holds two
-the site is genuinely tied under parsimony and `AA` is reported as `.` with
-`AA_TIED` rather than being resolved by a coin toss. Tied sites are the ones
-where a reader most needs to know the reconstruction is uncertain, which is
-why they are not silently broken.
+pass computing state sets, then a downward step from the root to the INGROUP
+node -- the MTBC ancestor, the root's child that is not the outgroup -- whose
+state is reported. AA is the state of the common ancestor of the genomes a
+cohort is drawn from, which is what "ancestral" means for them.
+
+WHY THE INGROUP AND NOT THE ROOT (review 3.7). The root is the canettii/MTBC
+split and has one outgroup genome on one side, so its set ties whenever that
+genome differs from the MTBC ancestor: 5,130 sites were reported `.`, and 4,759
+of them have one unambiguous state at the ingroup node. Where the root set was
+a single state, the ingroup's downward state is that same state, so no site
+that had an AA changes. The downward step is Fitch's own: the ingroup takes
+its upward set if that is one state; otherwise the outgroup polarises it, the
+ingroup taking the one state it shares with the outgroup's set. What is left
+is genuinely tied inside the MTBC and is reported `.` with TIED, not resolved
+by a coin toss.
 
 This is point-estimate parsimony, deliberately. samarray's `AncestorArray`
 computes the fraction of tied optimal reconstructions in which each node takes
@@ -91,9 +100,18 @@ def main():
     ap.add_argument("--alignment", required=True)
     ap.add_argument("--sites", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--outgroup", default="GCF_035581225",
+                    help="the outgroup leaf the tree is rooted on (canettii); "
+                         "the root's other child is the ingroup whose state is "
+                         "reported")
     a = ap.parse_args()
 
     children, root, leaves = parse_newick(open(a.tree).read())
+    rk = children.get(root, [])
+    if len(rk) != 2 or a.outgroup not in rk:
+        sys.exit(f"FATAL: the root must have two children, one of them the "
+                 f"outgroup {a.outgroup}; it has {rk}")
+    ingroup = rk[0] if rk[1] == a.outgroup else rk[1]
     seqs = read_fasta(a.alignment)
     missing = leaves - set(seqs)
     extra = set(seqs) - leaves
@@ -140,11 +158,15 @@ def main():
                 state[node] = set(); continue
             inter = set.intersection(*sets)
             state[node] = inter if inter else set.union(*sets)
-        r = state.get(root, set())
-        if len(r) == 1:
-            aa = next(iter(r)); flag = ""; unamb += 1
-        elif len(r) > 1:
-            aa = "."; flag = "TIED:" + "".join(sorted(r)); tied += 1
+        ing, og = state.get(ingroup, set()), state.get(a.outgroup, set())
+        if len(ing) > 1 and og:
+            pol_ = ing & og               # the outgroup polarises a tie
+            if len(pol_) == 1:
+                ing = pol_
+        if len(ing) == 1:
+            aa = next(iter(ing)); flag = ""; unamb += 1
+        elif len(ing) > 1:
+            aa = "."; flag = "TIED:" + "".join(sorted(ing)); tied += 1
         else:
             aa = "."; flag = "NODATA"; nocall += 1
         out.append((sites[s_i], aa, flag))
@@ -167,7 +189,7 @@ def main():
         for s, aa, _ in out)
     print(f"\n  sites               {n:,}")
     print(f"    unambiguous       {unamb:,}")
-    print(f"    tied at the root  {tied:,}")
+    print(f"    tied in the MTBC  {tied:,}")
     print(f"    no data           {nocall:,}")
     print(f"  polarity:")
     for k in ("ref_ancestral", "alt_ancestral", "unknown"):

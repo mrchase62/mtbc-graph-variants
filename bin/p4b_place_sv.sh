@@ -29,7 +29,15 @@ done
 source "$_mtb_env"
 cd "${SLURM_SUBMIT_DIR:-.}"
 
-BUILD="${MTB_BUILD_DIR:-$(find refbias/build -mindepth 1 -maxdepth 1 -type d | head -1)}"
+# Exactly one build, or MTB_BUILD_DIR. `find | head -1` picked whichever build
+# the filesystem listed first when there were several, while p4_place.sh
+# refused -- so two passes of one chain could run against different builds.
+BUILD="${MTB_BUILD_DIR:-}"
+if [[ -z "$BUILD" ]]; then
+    mapfile -t _c < <(find "${BUILD_ROOT:-refbias/build}" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
+    [[ "${#_c[@]}" -eq 1 ]] || { echo "FATAL: set MTB_BUILD_DIR (${#_c[@]} builds)" >&2; exit 1; }
+    BUILD="${_c[0]}"
+fi
 export MTB_BUILD_DIR="$BUILD"
 BUILD_ID="$(awk -F'\t' '$1=="build_id"{print $2}' "${BUILD}/build_info.tsv")"
 REFMAP="${REFMAP:-refbias/p1/refmap.tsv}"
@@ -37,7 +45,7 @@ P2DIR="${P2DIR:-refbias/p2}"
 OUTDIR="${OUTDIR:-refbias/p4b}"
 WORK="${WORK:-refbias/work/p4b}"
 OG="${OG:-$(ls graphs/CX333.s10k.k23.K15/*.smooth.final.og 2>/dev/null | head -1)}"
-ODGI="${MTB_ODGI:-/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/odgi/bin/odgi}"
+ODGI="${MTB_ODGI:?MTB_ODGI is unset; see config/project_env.sh}"
 H37RV_PATH="${H37RV_PATH:-GCF_000195955#1#NC_000962.3}"
 PATHS="${BUILD}/assets/paths.txt"
 MASK="${BUILD}/assets/repeat_mask.bed"
@@ -72,13 +80,22 @@ OUT="${OUTDIR}/${SAMPLE}.sv_placed.tsv"
 # while `odgi position` reads the panel frame the graph was built in. For 110 of
 # the 333 accessions those differ by a rotation and for 22 also by strand.
 # graphframe/docs/GRAPH_FRAME_RESOLUTION.md
+#
+# A header-only caller VCF passes [[ -s ]] and has nothing to test; frame_detect
+# then exits 2 and a bare $(...) under `set -e` killed the task. n=0 is "nothing
+# to test", not a mismatch, so it is let through.
 for _v in "$DELLY" "$DYSGU"; do
     [[ -s "$_v" ]] || continue
-    VFRAME="$("$MTB_PY" graphframe/bin/frame_detect.py --vcf "$_v" \
-        --accession "$REFID" --refs "${BUILD}/refs" | cut -f2)"
+    _fd_rc=0
+    _fd="$("$MTB_PY" graphframe/bin/frame_detect.py --vcf "$_v" \
+        --accession "$REFID" --refs "${BUILD}/refs")" || _fd_rc=$?
+    VFRAME="$(cut -f2 <<< "$_fd")"
+    _fd_n="$(grep -o 'n=[0-9]*' <<< "$_fd" | cut -d= -f2)"
     case "$VFRAME" in
         refs|either) ;;
-        *) echo "FATAL: ${SAMPLE}: ${_v} is in the '${VFRAME}' frame, not refs" >&2
+        *) [[ "${_fd_n:-}" == "0" ]] && continue
+           echo "FATAL: ${SAMPLE}: ${_v} is in the '${VFRAME}' frame, not refs" \
+                "(frame_detect exit ${_fd_rc}: ${_fd})" >&2
            exit 1 ;;
     esac
 done
@@ -108,8 +125,11 @@ else
 fi
 echo "[P4b] ${SAMPLE}: ${NBP} distinct breakpoints projected"
 
+GRAPH_VCF="${GRAPH_VCF:-$(dirname "$OG")/all_variants.nolab.vcf.gz}"
+[[ -s "$GRAPH_VCF" ]] || { echo "FATAL: no graph VCF at ${GRAPH_VCF}" >&2; exit 1; }
 "$MTB_PY" bin/p4b_place_sv.py --sample "$SAMPLE" --reference "$REFID" \
     --build-id "$BUILD_ID" --delly "$DELLY" --dysgu "$DYSGU" \
+    --graph-vcf "$GRAPH_VCF" \
     --positions "${WORK}/${SAMPLE}.bp.pos" --mask "$MASK" --out "$OUT"
 rm -f "${WORK}/${SAMPLE}.bp.txt"
 echo "[P4b] ${SAMPLE}: done"

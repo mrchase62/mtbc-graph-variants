@@ -85,7 +85,8 @@ def main():
     if a.mode == "add":
         d = os.path.join(a.store, a.ref)
         os.makedirs(d, exist_ok=True)
-        tmp = os.path.join(d, f".{os.getpid()}.{int(time.time()*1000)}.tmp")
+        stem = f"{os.getpid()}.{int(time.time()*1000)}"
+        tmp = os.path.join(d, f".{stem}.tmp")
         n = 0
         with open(tmp, "w") as o:
             for line in open(a.result):
@@ -93,7 +94,11 @@ def main():
                     continue
                 o.write(line)
                 n += 1
-        os.rename(tmp, tmp[:-4].replace("/.", "/") + ".pos")
+        # Build the final name from the stem, not by string surgery on the
+        # whole path: `.replace("/.", "/")` also rewrote any "/./" or "/../"
+        # in the STORE path, so a store given as a relative path renamed
+        # into a directory that does not exist.
+        os.rename(tmp, os.path.join(d, f"{stem}.pos"))
         print(f"  stored {n:,} projected positions for {a.ref}")
         return 0
 

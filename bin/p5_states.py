@@ -36,19 +36,41 @@ GVCF coverage is read from DP, never MIN_DP. Stage 4 found one GVCF block
 spanning positions 14 to 15,224 with DP 59 and MIN_DP 3, and using MIN_DP
 rejected 464 of 1,131 inherited differences spuriously.
 """
-import argparse, bisect, csv, gzip, os, sys
+import argparse, bisect, collections, csv, gzip, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mtb_norm import normalise, h37rv_key, node_key
+
+import importlib.util as _ilu
+_gfs = _ilu.spec_from_file_location(
+    "graph_frame", os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "graphframe", "bin", "graph_frame.py"))
+graph_frame = _ilu.module_from_spec(_gfs); _gfs.loader.exec_module(graph_frame)
+
+COMP = str.maketrans("ACGTN", "TGCAN")
 
 
 def op(p):
     return gzip.open(p, "rt") if p.endswith(".gz") else open(p)
 
 
-def load_gvcf_blocks(path):
-    """Sorted (start, end, dp) over the reference blocks and variant sites."""
-    blocks = []
+def load_gvcf(path):
+    """Reference blocks, and the positions where the sample is NOT reference.
+
+    Returns (blocks, alt_spans, alt_at):
+      blocks     sorted (start, end, dp) over lines whose GT is 0 -- reference
+                 blocks and hom-ref sites. Only these are evidence of REF.
+      alt_spans  sorted (start, end) covering every base of the REF allele of a
+                 line whose GT is a non-reference allele. A key inside one is
+                 not REF, whatever the blocks say: GATK starts the next block
+                 after POS, so bases inside a called deletion can sit in a
+                 reference block.
+      alt_at     pos -> (ref, called allele, dp) for those lines.
+
+    Counting every line as coverage, as this used to, made a sample REF at a
+    key for allele G while its own gVCF called allele A at that very base.
+    """
+    blocks, alt_spans, alt_at = [], [], {}
     for line in op(path):
         if line.startswith("#"):
             continue
@@ -72,6 +94,51 @@ def load_gvcf_blocks(path):
                 dp = int(vals[keys.index("DP")])
             except (ValueError, IndexError):
                 dp = 0
+        gt = vals[0].replace("|", "/").split("/")[0] if vals else "."
+        if gt == "0":
+            blocks.append((pos, max(end, pos), dp))
+        elif gt.isdigit():
+            ref = f[3].upper()
+            alts = f[4].upper().split(",")
+            i = int(gt)
+            called = alts[i - 1] if 0 < i <= len(alts) else "<NON_REF>"
+            alt_spans.append((pos, pos + max(len(ref), 1) - 1))
+            alt_at[pos] = (ref, called, dp)
+        # GT "." -- no call -- is neither REF nor ALT evidence
+    blocks.sort(); alt_spans.sort()
+    return blocks, alt_spans, alt_at
+
+
+def load_gvcf_blocks(path):
+    """Sorted (start, end, dp) over EVERY gVCF line, reference or variant.
+
+    The original reader, kept for p5_sv_genotype.py, which imports it: depth
+    across a deletion interval is read coverage whatever the genotype of each
+    line, so counting variant lines is right there. It is NOT evidence of REF
+    at a single key -- p5_states.py itself uses load_gvcf() for that.
+    """
+    blocks = []
+    for line in op(path):
+        if line.startswith("#"):
+            continue
+        f = line.rstrip("\n").split("\t")
+        if len(f) < 10:
+            continue
+        pos = int(f[1])
+        end = pos
+        for kv in f[7].split(";"):
+            if kv.startswith("END="):
+                try:
+                    end = int(kv[4:])
+                except ValueError:
+                    pass
+        keys, vals = f[8].split(":"), f[9].split(":")
+        dp = 0
+        if "DP" in keys:
+            try:
+                dp = int(vals[keys.index("DP")])
+            except (ValueError, IndexError):
+                dp = 0
         blocks.append((pos, max(end, pos), dp))
     blocks.sort()
     return blocks
@@ -87,6 +154,26 @@ def make_cov(blocks, min_dp):
         s, e, dp = blocks[i]
         return s <= p <= e and dp >= min_dp
     return covered
+
+
+def make_in_spans(spans):
+    """Membership in a sorted list of possibly overlapping closed spans."""
+    starts = [x[0] for x in spans]
+    # running max of span ends, so an early long span is not missed
+    reach, m = [], 0
+    for _, e in spans:
+        m = max(m, e); reach.append(m)
+
+    def inside(p):
+        # walk back from the last span starting at or before p while some
+        # earlier span could still reach p; the running max bounds the walk
+        j = bisect.bisect_right(starts, p) - 1
+        while j >= 0 and reach[j] >= p:
+            if spans[j][1] >= p:
+                return True
+            j -= 1
+        return False
+    return inside
 
 
 def main():
@@ -166,11 +253,14 @@ def main():
             dist = int(f[2])
         except (ValueError, IndexError):
             continue
+        # relation of R's refs sequence to H37Rv's here (frame_convert.py);
+        # needed to compare a called base in R with an H37Rv base
+        strand = f[3].strip() if len(f) > 3 and f[3].strip() in "+-" else "+"
         n_lines += 1
         if src in by_src:
             n_multi += 1          # the target path visits this position twice
             continue
-        by_src[src] = (tgt, dist)
+        by_src[src] = (tgt, dist, strand)
     projmap = {}
     for k in h_keys:
         projmap[k["key"]] = by_src.get(int(k["h37rv_pos"]))
@@ -195,7 +285,49 @@ def main():
             k = node_key(x["node"], x["node_offset"], nref, nalt)
         by_key.setdefault(k, dict(x, alt=nalt))
 
-    cov = make_cov(load_gvcf_blocks(a.gvcf), a.min_dp)
+    # WHERE THE SAMPLE HAS A PLACED NON-REFERENCE ALLELE, BY H37Rv POSITION.
+    # A key with no record of its own at such a position is not REF: the sample
+    # carries some other allele there. A SNP/MNP marks its bases and a deletion
+    # the bases it removes (not the anchor it keeps). An insertion leaves its
+    # anchor base unchanged, so it blocks only other INDEL keys at that anchor,
+    # never a SNP key there.
+    other_at, ins_anchor = set(), set()
+    for k2, x in by_key.items():
+        if not k2.startswith("h37rv:"):
+            continue
+        f2 = k2.split(":")
+        npos = int(f2[1])
+        nref, _, nalt = f2[2].partition(">")
+        if nref == nalt:
+            continue                                # a reversion states REF
+        if len(nref) > len(nalt):
+            other_at.update(range(npos + len(nalt), npos + len(nref)))
+        elif len(nalt) > len(nref):
+            ins_anchor.add(npos)
+        else:
+            other_at.update(range(npos, npos + len(nref)))
+
+    blocks, alt_spans, alt_at = load_gvcf(a.gvcf)
+    cov = make_cov(blocks, a.min_dp)
+    in_alt = make_in_spans(alt_spans)
+    n_other = collections.Counter()
+
+    def ref_state(p, canon, strand="+"):
+        """REF, or NOCALL with the reason, at R position p for a key whose
+        H37Rv reference allele is `canon`."""
+        if in_alt(p):
+            ra = alt_at.get(p)
+            # A SNP whose called base IS the H37Rv base is a reversion: the
+            # sample differs from R and agrees with H37Rv, so REF is right.
+            if ra and len(ra[0]) == 1 and len(ra[1]) == 1 and len(canon) == 1:
+                b = ra[1].translate(COMP) if strand == "-" else ra[1]
+                if b == canon and ra[2] >= a.min_dp:
+                    return "REF"
+            n_other["gvcf_non_ref"] += 1
+            return "NOCALL"
+        return "REF" if cov(p) else "NOCALL"
+
+    frames = graph_frame.Frames()
 
     rows = []
     # node -> the panel accessions whose path traverses it, so a node-frame
@@ -216,7 +348,8 @@ def main():
     if a.node_positions and os.path.exists(a.node_positions):
         for q in csv.DictReader(open(a.node_positions, newline=""), delimiter="\t"):
             nodepos[(q["node"], q["accession"])] = (
-                int(q["start"]), q["strand"], int(q.get("n_occurrences") or 1))
+                int(q["start"]), q["strand"], int(q.get("n_occurrences") or 1),
+                int(q["length"]) if q.get("length") else None)
         print(f"  node positions for {len(nodepos):,} (node, accession) pairs")
 
     counts = {"ALT": 0, "REF": 0, "ABSENT": 0, "NOCALL": 0}
@@ -282,16 +415,39 @@ def main():
                         # nothing. 8.8% of pairs.
                         state, allele = "NOCALL", ""
                     else:
-                        start, strand = hit[0], hit[1]
-                        p = start + off if strand == "+" else start - off
-                        state, allele = (("REF", canon) if cov(p)
-                                         else ("NOCALL", ""))
+                        # `start` is 1-based along the PANEL path (the GFA
+                        # walk). The key's node offset, as P4 writes it, is
+                        # already counted along the path's direction, so the
+                        # base is start + off on EITHER strand. Measured on the
+                        # pilot's references, reading the refs base and
+                        # comparing it with the key's reference allele:
+                        #
+                        #   node walked   old rule           this rule
+                        #   +             56.9%  (start+off, no frame change)
+                        #                                    100.0%
+                        #   -             15.3%  (start-off)  99.8%
+                        #
+                        # The + gain is the PANEL -> REFS conversion: the gVCF
+                        # is refs-frame and 110 of 333 accessions are rotated
+                        # or flipped between the two frames. The - gain is the
+                        # offset direction; start - off left the node whenever
+                        # off > 0.
+                        start = hit[0]
+                        pp = start + off
+                        p = frames.to_refs(a.reference, pp - 1) + 1
+                        st = ref_state(p, canon)
+                        state, allele = (st, canon if st == "REF" else "")
             elif pr is None or pr[1] != 0:
                 state, allele = "ABSENT", ""
-            elif cov(pr[0]):
-                state, allele = "REF", canon
-            else:
+            elif (int(k["h37rv_pos"]) in other_at
+                  or (int(k["h37rv_pos"]) in ins_anchor
+                      and len(canon) != len(k.get("canonical_alt") or canon))):
+                # the sample has a placed record here for a different allele
+                n_other["placed_other_allele"] += 1
                 state, allele = "NOCALL", ""
+            else:
+                st = ref_state(pr[0], canon, pr[2])
+                state, allele = (st, canon if st == "REF" else "")
         counts[state] += 1
         rows.append(dict(sample=a.sample, key=k["key"], state=state,
                          allele=allele, frame=k["frame"],
@@ -326,6 +482,10 @@ def main():
     print(f"  {a.sample}: {n} keys  " + "  ".join(
         f"{k} {v} ({100*v/n:.1f}%)" for k, v in counts.items()))
     print(f"    reversions resolved to REF rather than ALT: {reversions}")
+    print(f"    not REF because the sample carries another allele there: "
+          f"{n_other['placed_other_allele']} by placed record, "
+          f"{n_other['gvcf_non_ref']} by its gVCF")
+
     return 0
 
 

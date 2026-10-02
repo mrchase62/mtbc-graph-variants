@@ -78,6 +78,16 @@ def main():
                              status="no_projection"))
             continue
         lo, hi = sorted((ps[0], pe[0]))
+        # The termini sit on collapsed IS6110 nodes, so the two ends can land
+        # in DIFFERENT copies in R; the "span" is then hundreds of kb of
+        # single-copy sequence with a ratio near 1. Require the projected span
+        # to be about the element's own length.
+        if abs((hi - lo) - (e - s)) > max(100, (e - s) // 10):
+            rows.append(dict(sample=a.sample, reference=a.reference,
+                             h37rv_start=s, h37rv_end=e, r_start=lo, r_end=hi,
+                             median_depth="", depth_ratio="",
+                             status="span_mismatch"))
+            continue
         vals = [depth.get(p, 0) for p in range(lo, hi + 1)]
         med = statistics.median(vals) if vals else 0
         ratio = med / gmed

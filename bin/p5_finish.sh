@@ -39,7 +39,15 @@ for _c in "${MTB_ENV_FILE:-}" \
 done
 source "$_mtb_env"
 
-BUILD="${MTB_BUILD_DIR:-$(find refbias/build -mindepth 1 -maxdepth 1 -type d | head -1)}"
+# Exactly one build, or MTB_BUILD_DIR. `find | head -1` picked whichever build
+# the filesystem listed first when there were several, while p4_place.sh
+# refused -- so two passes of one chain could run against different builds.
+BUILD="${MTB_BUILD_DIR:-}"
+if [[ -z "$BUILD" ]]; then
+    mapfile -t _c < <(find "${BUILD_ROOT:-refbias/build}" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
+    [[ "${#_c[@]}" -eq 1 ]] || { echo "FATAL: set MTB_BUILD_DIR (${#_c[@]} builds)" >&2; exit 1; }
+    BUILD="${_c[0]}"
+fi
 export MTB_BUILD_DIR="$BUILD"
 
 # Paths were hard-coded to the pilot layout, so this script silently checked
@@ -53,6 +61,9 @@ OUTDIR="${OUTDIR:-refbias/p5}"
 REFMAP="${REFMAP:-${P1DIR}/refmap.tsv}"
 COHORT="${COHORT:-refbias/cohort.pilot.tsv}"
 export P1DIR P2DIR P4DIR P4BDIR OUTDIR REFMAP COHORT
+
+# the step, read here as well as below: the freshness guard depends on it
+P5FSTEP="${1:-${P5FSTEP:---all}}"
 
 # --- freshness guard --------------------------------------------------------
 # EVERY find HERE IS -maxdepth 1. Without it they recurse, and refbias/p5
@@ -82,7 +93,11 @@ fi
 # than a warning: the matrix would otherwise be built on 41% of the input.
 # Compared against the script's own mtime, because P4b has no later stage to
 # be older than.
-if [[ -d "$P4BDIR" ]]; then
+# Only the steps that READ P4b need this: --pre builds sv_matrix.tsv from it.
+# The merge reads sv_matrix.tsv, not P4b, so refusing it here blocked a VCF
+# rebuild for every cohort whenever p4b_place_sv.py changed, even when the SV
+# matrix was deliberately being kept.
+if [[ -d "$P4BDIR" && ( "$P5FSTEP" == "--all" || "$P5FSTEP" == "--pre" ) ]]; then
     stale_p4b=$(find "$P4BDIR" -maxdepth 1 -name '*.sv_placed.tsv' \
         ! -newer bin/p4b_place_sv.py 2>/dev/null | wc -l)
     if [[ "$stale_p4b" -gt 0 ]]; then
@@ -117,24 +132,34 @@ echo
 # sites were simply missing from it.
 #
 #   --pre     matrix, validation, sanity, SV matrix, P6 annotation
-#   --merge   the merged cohort VCF
+#   --merge   the merged cohort VCF; with VCF_SHARDS > 1, every shard in turn
+#             and then the assembly, in this one job (for running by hand)
+#   --merge-shard     one shard of the merged VCF: shard SLURM_ARRAY_TASK_ID-1
+#                     of VCF_SHARDS (or VCF_SHARD), written under vcf_parts/
+#   --merge-assemble  join the VCF_SHARDS shards into merged.vcf.gz, then
+#                     stamp and gate it
 #   --all     both, the default, for running it by hand
 P5FSTEP="${1:-${P5FSTEP:---all}}"
 case "$P5FSTEP" in
-  --all|--pre|--merge) ;;
-  *) echo "usage: $0 [--all|--pre|--merge]" >&2; exit 2 ;;
+  --all|--pre|--merge|--merge-shard|--merge-assemble) ;;
+  *) echo "usage: $0 [--all|--pre|--merge|--merge-shard|--merge-assemble]" >&2; exit 2 ;;
 esac
 
-if [[ "$P5FSTEP" != "--merge" ]]; then
+if [[ "$P5FSTEP" == "--all" || "$P5FSTEP" == "--pre" ]]; then
 echo "=== matrix ==="
 bash bin/p5_merge.sh --matrix
 echo
 echo "=== lineage recovery (the pilot's endpoint check) ==="
-"$MTB_PY" bin/p5_validate.py --matrix "${OUTDIR}/matrix.tsv" \
+# Every cohort consumer below reads the memory-mapped states array and the
+# per-site table that --matrix just wrote, not a dense keys x samples text
+# matrix: at 10,000 isolates that matrix is about 23 GB, and the sanity check
+# and the old merge each held all of it in memory.
+ARR=(--states-array "$OUTDIR" --keys "${OUTDIR}/keys.tsv" --sites "${OUTDIR}/sites.tsv")
+"$MTB_PY" bin/p5_validate.py "${ARR[@]}" \
     --refmap "$REFMAP" --out "${OUTDIR}/validation.tsv"
 echo
 echo "=== sanity checks ==="
-"$MTB_PY" bin/p5_sanity.py --matrix "${OUTDIR}/matrix.tsv" \
+"$MTB_PY" bin/p5_sanity.py "${ARR[@]}" \
     --refmap "$REFMAP" --cohort "$COHORT" \
     --p2-summary "${P2DIR}/p2_summary.tsv" --out "${OUTDIR}/sanity.tsv"
 echo
@@ -153,8 +178,12 @@ echo "=== P6 annotation ==="
 # table -- or, as happened on 2026-09-23, the pilot overwrote scale100's.
 P6DIR="${P6DIR:-refbias/p6}"
 mkdir -p "$P6DIR"
+# --p4-dir is passed too. It was not, so P6 read its default, the PILOT's
+# refbias/p4: for any other cohort every off-path site was annotated from the
+# pilot's carriers, or -- where that directory was absent -- from none at all
+# (11,533 scale200 sites came out offpath_no_carrier).
 "$MTB_PY" bin/p6_annotate.py --build "$BUILD" \
-    --matrix "${OUTDIR}/matrix.tsv" --refmap "$REFMAP" \
+    --sites "${OUTDIR}/sites.tsv" --refmap "$REFMAP" --p4-dir "$P4DIR" \
     --out "${P6DIR}/annotated.tsv"
 fi   # end --pre
 
@@ -180,14 +209,13 @@ _tag="$(basename "$(dirname "$OUTDIR")")"
 COHORT_NAME="${COHORT_NAME:-$_tag}"
 echo "  cohort name: ${COHORT_NAME}"
 
+# NOT resolved here either, for the same reason as IS6110_STATES below. This
+# loop used to fall back to the unprefixed is6110/results/p1i_cohort_keys.tsv
+# -- the PILOT's table -- for any cohort without its own, and because it then
+# passed --is6110-keys explicitly it bypassed the guard in merge_cohort_vcf.py
+# written to stop exactly that. merge_cohort_vcf.py maps the cohort name to its
+# own table and emits no IS6110 block, loudly, when there is none.
 IS6110_KEYS="${IS6110_KEYS:-}"
-if [[ -z "$IS6110_KEYS" ]]; then
-    _kt="$_tag"; [[ "$_kt" == "pilot" ]] && _kt=""
-    for _c in "is6110/results/${_kt}_p1i_cohort_keys.tsv" \
-              "is6110/results/p1i_cohort_keys.tsv"; do
-        [[ -s "$_c" ]] && { IS6110_KEYS="$_c"; break; }
-    done
-fi
 # The two state tables that turn presence-only blocks into genotypes. Both are
 # optional and the merge says so loudly when one is absent, because without
 # them the SV and IS6110 blocks carry no REF at all and nothing downstream that
@@ -203,10 +231,17 @@ fi
 # -- two key spaces with nothing in common, so the interval arm never reached
 # the VCF at all. Both are passed now: the catalogue supplies the deletions and
 # the caller matrix still supplies the insertions it cannot genotype.
-IVTAB="${IVTAB:-refbias/assets/sv_intervals.tsv}"
+# The catalogue is the cohort's own, written by p5_svgt.sh --catalogue. It used
+# to default to refbias/assets/sv_intervals.tsv, built once by hand from
+# scale200's caller matrix, which every cohort then shared.
+IVTAB="${IVTAB:-${OUTDIR}/sv_intervals.tsv}"
 IVSTATES="${IVSTATES:-${OUTDIR}/svgt_iv_states.tsv}"
 IV_ARGS=()
 if [[ -s "$IVTAB" && -s "$IVSTATES" ]]; then
+    # States genotyped against an older catalogue key on interval ids that may
+    # not exist any more; refuse rather than join them.
+    [[ "$IVSTATES" -nt "$IVTAB" ]] || { echo "FATAL: ${IVSTATES} is older than" \
+        "${IVTAB}; rerun pass p5svgt" >&2; exit 1; }
     IV_ARGS=(--sv-intervals "$IVTAB" --sv-interval-states "$IVSTATES")
     echo "  deletion block from ${IVTAB} genotyped in ${IVSTATES}"
 else
@@ -221,7 +256,13 @@ fi
 # nothing in common and must not be crossed.
 if [[ -z "${SV_STATES:-}" ]]; then
     for _c in "${OUTDIR}/svgt_states.tsv" "${OUTDIR}/sv_states.tsv"; do
-        [[ -s "$_c" ]] && { SV_STATES="$_c"; break; }
+        # Caller cluster keys shift whenever sv_matrix.tsv is rebuilt, so an
+        # overlay older than the matrix would join the wrong clusters.
+        if [[ -s "$_c" && "$_c" -nt "${OUTDIR}/sv_matrix.tsv" ]]; then
+            SV_STATES="$_c"; break
+        elif [[ -s "$_c" ]]; then
+            echo "  ignoring ${_c}: older than ${OUTDIR}/sv_matrix.tsv"
+        fi
     done
 fi
 [[ -s "${SV_STATES:-}" ]] || SV_STATES=""
@@ -249,15 +290,80 @@ else
     echo "  carry within-insert variation only, with no presence character"
 fi
 
-"$MTB_PY" bin/merge_cohort_vcf.py \
-    --matrix "${OUTDIR}/matrix.tsv" --sv-matrix "${OUTDIR}/sv_matrix.tsv" \
+# REF bases and the build id come from the build, not from the merge's
+# defaults: symbolic records used to carry REF=N, and --build-id defaulted to a
+# hard-coded id that any rebuild would have silently kept.
+H37RV_FASTA="${BUILD}/refs/GCF_000195955.fasta"
+[[ -s "$H37RV_FASTA" ]] || { echo "FATAL: no H37Rv FASTA at ${H37RV_FASTA}" >&2; exit 1; }
+BUILD_ID="$(awk -F'\t' '$1=="build_id"{print $2}' "${BUILD}/build_info.tsv")"
+[[ -n "$BUILD_ID" ]] || { echo "FATAL: no build_id in ${BUILD}/build_info.tsv" >&2; exit 1; }
+
+# The small-variant block comes from the states array --matrix wrote. A cohort
+# finished before the array existed still has matrix.tsv, which is used then.
+if [[ -s "${OUTDIR}/states.u8.npy" && -s "${OUTDIR}/states.meta.tsv" ]]; then
+    SMALL=(--states-array "$OUTDIR" --keys "${OUTDIR}/keys.tsv")
+elif [[ -s "${OUTDIR}/matrix.tsv" ]]; then
+    echo "  no states array in ${OUTDIR}; reading the legacy matrix.tsv"
+    SMALL=(--matrix "${OUTDIR}/matrix.tsv" --keys "${OUTDIR}/keys.tsv")
+else
+    echo "FATAL: neither states.u8.npy nor matrix.tsv in ${OUTDIR}; run --pre" >&2
+    exit 1
+fi
+# The ancestral allele table is a build asset (p0_prepare.sh --step ancestral).
+ANCESTRAL="${ANCESTRAL:-${BUILD}/assets/ancestral.tsv}"
+[[ -s "$ANCESTRAL" ]] || { echo "FATAL: no ancestral allele table at ${ANCESTRAL};" \
+    "run bin/p0_prepare.sh --step ancestral" >&2; exit 1; }
+MERGE=("$MTB_PY" bin/merge_cohort_vcf.py "${SMALL[@]}" \
+    --sv-matrix "${OUTDIR}/sv_matrix.tsv" --ancestral "$ANCESTRAL" \
+    --h37rv-fasta "$H37RV_FASTA" --build-id "$BUILD_ID" \
     ${IS6110_KEYS:+--is6110-keys "$IS6110_KEYS"} \
     ${IS6110_STATES:+--is6110-states "$IS6110_STATES"} \
     ${SV_STATES:+--sv-states "$SV_STATES"} \
     "${IV_ARGS[@]}" \
     "${ACC_ARGS[@]}" \
-    --cohort-name "$COHORT_NAME" \
-    --out "${OUTDIR}/merged.vcf.gz"
+    --cohort-name "$COHORT_NAME")
+
+# SHARDED BY GENOME REGION. One process holds every record's cells before it
+# writes: 8.5 GB at 997 isolates, about 260 GB projected at 10,000. Each shard
+# owns a contiguous H37Rv range and a contiguous range of node contigs, loads
+# only its own rows of every input, and writes record-only parts; the assembly
+# streams them after one header. The assembled file is byte-identical to the
+# single-process one (tests/run_tests.py checks it).
+VCF_SHARDS="${VCF_SHARDS:-1}"
+PARTS="${OUTDIR}/vcf_parts/s"
+mkdir -p "${OUTDIR}/vcf_parts"
+case "$P5FSTEP" in
+  --merge-shard)
+    I="${VCF_SHARD:-$(( ${SLURM_ARRAY_TASK_ID:?--merge-shard needs an array task or VCF_SHARD} - 1 ))}"
+    "${MERGE[@]}" --n-shards "$VCF_SHARDS" --shard "$I" --part-prefix "$PARTS" \
+        --out /dev/null
+    exit 0 ;;
+  --merge-assemble|--merge|--all)
+    if [[ "$VCF_SHARDS" -gt 1 ]]; then
+        if [[ "$P5FSTEP" != "--merge-assemble" ]]; then
+            for ((I = 0; I < VCF_SHARDS; I++)); do
+                "${MERGE[@]}" --n-shards "$VCF_SHARDS" --shard "$I" \
+                    --part-prefix "$PARTS" --out /dev/null
+            done
+        fi
+        # Parts from an earlier generation must not be assembled with this one.
+        # Only testable against the states array: a cohort still on the legacy
+        # matrix has no states.meta.tsv, and `find -newer <missing file>` fails,
+        # which under set -e and pipefail ended this job silently.
+        if [[ -s "${OUTDIR}/states.meta.tsv" ]]; then
+            stale=$(find "${OUTDIR}/vcf_parts" -maxdepth 1 -name 's.*.meta.json' \
+                    ! -newer "${OUTDIR}/states.meta.tsv" | wc -l)
+            if [[ "$stale" -gt 0 ]]; then
+                echo "FATAL: ${stale} VCF shard parts predate the states array; rerun the shards" >&2
+                exit 1
+            fi
+        fi
+        "${MERGE[@]}" --assemble --n-shards "$VCF_SHARDS" --part-prefix "$PARTS" \
+            --out "${OUTDIR}/merged.vcf.gz"
+    else
+        "${MERGE[@]}" --out "${OUTDIR}/merged.vcf.gz"
+    fi ;;
+esac
 
 # STAMP THE GRAPH PROVENANCE. bin/stamp_build_id.sh existed and was called by
 # p2_call.sh for the per-sample caller VCFs, but never here -- so the cohort
@@ -271,6 +377,12 @@ fi
 # carries the pggb fingerprint parsed from the graph filename, which is the part
 # that actually identifies the graph.
 bash bin/stamp_build_id.sh "${OUTDIR}/merged.vcf.gz"
+
+# THE DELIVERABLE MUST BE READABLE BY STANDARD TOOLS, checked here and not by a
+# consumer months later. bin/vcf_gate.sh fails on a GT index above the ALT
+# count, a record bcftools cannot parse, a REF that does not match H37Rv, or an
+# unsorted contig -- each of which the pipeline's own readers tolerated.
+bash bin/vcf_gate.sh "${OUTDIR}/merged.vcf.gz" "$H37RV_FASTA"
 
 echo
 echo "=== chain rebuilt from one generation ==="

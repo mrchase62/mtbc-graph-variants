@@ -297,13 +297,21 @@ def main():
                    else int(hit > 0 and hit >= other),
             top_elements=";".join(f"{p+1}:{n}" for p, n in top)))
 
+    # ALWAYS write the table, header-only when there are no sites. Returning
+    # without writing --out made the callers' `mv -f ${JUNC}.tmp` fail under
+    # set -e, so a sample with no candidate site lost its element-side scan and
+    # then got an empty VCF -- "no data" and "nothing there" made the same.
+    fields = ["sample", "pos", "clips_start", "clips_end", "readthrough",
+              "two_sided", "sa_records", "sa_at_is6110", "sa_elsewhere",
+              "is6110", "top_elements"]
     if not rows:
         print(f"  {a.sample}: no site reached --min-clips {a.min_clips}", file=sys.stderr)
-        return 0
     out = a.out or "/dev/stdout"
     with open(out, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t")
+        w = csv.DictWriter(fh, fieldnames=fields, delimiter="\t")
         w.writeheader(); w.writerows(rows)
+    if not rows:
+        return 0
     n_is = sum(r["is6110"] for r in rows)
     n_two = sum(r["two_sided"] for r in rows)
     print(f"  {a.sample}: {len(rows)} sites with >= {a.min_clips} clipped ends; "

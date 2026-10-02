@@ -53,17 +53,40 @@ insertion records are presence-only and should be treated as such.
 | p1g/p1i | `is6110/bin/` | element-arm references and junction calls |
 | p5svgt | `bin/p5_svgt.sh` | genotype deletion **absence** by depth, so the class is not presence-only |
 | acc | `accessory/bin/locus_presence_one.sh` | accessory locus presence, both instruments |
-| p5vcf | `bin/p5_finish.sh --merge` | one VCF, last, after every arm that contributes |
+| p5vcf | `bin/p5_finish.sh --merge` | one VCF, last, after every arm that contributes; `bin/vcf_gate.sh` then refuses it if standard tools cannot read it |
 
 Run it with `bash bin/refbias_run.sh --cohort <name>`.
+
+### Large cohorts
+
+The cohort-level P5 steps never build a dense samples-by-keys table. The matrix
+step writes the states once, as a memory-mapped array
+(`p5/states.u8.npy`, one byte per cell) plus a per-site table (`p5/sites.tsv`).
+Validation, sanity checks, annotation and the VCF merge all read those.
+
+The merged VCF is written in shards by genome region and then assembled; the
+result is byte-identical to a single-process merge. Two settings control this:
+
+| variable | default | effect |
+|---|---|---|
+| `VCF_SHARDS` | one per 500 isolates | number of merge shards (array tasks) |
+| `P5_DENSE_MATRIX` | `0` | `1` also writes the legacy `p5/matrix.tsv`, for tools that still read it |
+
+### Keeping data between runs
+
+While the graph is unchanged, three things need not be recomputed:
+
+- **Per-build caches.** These are the P0 builds (including the odgi projection store) and the IS6110 element catalogue. `bin/sync_back.sh` mirrors them to durable storage, and `bin/stage_in.sh` now restores them after a scratch purge.
+- **Alignments that later passes read.** `bash bin/refbias_run.sh --cohort <name> --only archive` writes lossless CRAMs of the matched-reference and element-free alignments, at about 37% of the BAM size. Each CRAM is verified against its BAM, and `sync_back.sh` copies them to durable storage.
+  - `ARCHIVE_DELETE_BAM=1` removes each verified BAM.
+  - `ARCHIVE_DROP_UNUSED=1` also removes the H37Rv and fixed-reference IS6110 alignments, which nothing after their own pass reads.
+- **Bringing alignments back.** After a purge, run `bin/stage_in.sh alignments`, then `--only restore`.
 
 ## Setup
 
     # 1. site paths -- gitignored, required, no defaults
-    cat > config/site.local.sh <<'EOF'
-    export MTB_CRAM_ROOT=/path/to/read/collection
-    export MTB_CRAM_REF=/path/to/reference/the/reads/were/encoded/against.fasta
-    EOF
+    cp config/site.local.sh.example config/site.local.sh
+    #    then set MTB_CRAM_ROOT, MTB_CRAM_REF and your tool paths in it
 
     # 2. check everything resolves
     bash bin/show_config.sh

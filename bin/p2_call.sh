@@ -61,11 +61,18 @@ BUILD_ID="$(awk -F'\t' '$1=="build_id"{print $2}' "${BUILD}/build_info.tsv")"
 
 REFMAP="${REFMAP:-refbias/p1/refmap.tsv}"
 CRAMMAP="${CRAMMAP:-refbias/cohort.crams.tsv}"
-CRAMROOT="${CRAMROOT:-${MTB_CRAM_ROOT}}"
-CRAMREF="${CRAMREF:-${CRAMROOT}/metadata/reference.fasta}"
+# The read collection is site configuration (config/site.local.sh), and the
+# reference it was encoded against is MTB_CRAM_REF. This used to default to
+# ${CRAMROOT}/metadata/reference.fasta -- one collection's layout -- while P1g
+# and P1i already read MTB_CRAM_REF, so a new collection either failed here or
+# was decoded against whatever file happened to sit at that path.
+CRAMROOT="${CRAMROOT:-${MTB_CRAM_ROOT:-}}"
+CRAMREF="${CRAMREF:-${MTB_CRAM_REF:-}}"
+MTB_CRAM_ROOT="$CRAMROOT" mtb_require_cram_root || exit 1
+[[ -n "$CRAMREF" ]] || { echo "FATAL: MTB_CRAM_REF is unset; set it to the reference the CRAMs were encoded against" >&2; exit 1; }
 OUTDIR="${OUTDIR:-refbias/p2}"
 WORK="${WORK:-refbias/work/p2}"
-DELLY_ENV="${DELLY_ENV:-/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/tb-profiler}"
+DELLY_ENV="${DELLY_ENV:-${MTB_DELLY_ENV:?MTB_DELLY_ENV is unset; see config/project_env.sh}}"
 DYSGU="${DYSGU:-refbias/work/svvenv/bin/dysgu}"
 THREADS="${SLURM_CPUS_PER_TASK:-8}"
 
@@ -116,23 +123,46 @@ CRAM="${CRAMROOT}/${RELPATH}"
 [[ -f "$CRAM" && -r "$CRAM" ]] \
     || { echo "FATAL: ${SAMPLE}: CRAM is not a readable file: ${CRAM}" >&2; exit 1; }
 
-if [[ -s "${OUTDIR}/${SAMPLE}.vcf.gz" && -s "${OUTDIR}/${SAMPLE}.delly.vcf" ]]; then
+# DONE MEANS THE MARKER, written last. Testing only for vcf.gz and delly.vcf
+# accepted a sample whose job died during dysgu (no dysgu VCF, delly never
+# stamped). Samples finished before the marker existed are recognised by their
+# complete outputs -- including a dysgu VCF with a #CHROM line -- and marked.
+DONE="${OUTDIR}/${SAMPLE}.p2.done"
+if [[ -s "$DONE" ]]; then
     echo "[P2] ${SAMPLE}: already done"; exit 0
+fi
+_legacy_complete() {
+    [[ -s "${OUTDIR}/${SAMPLE}.vcf.gz" && -s "${OUTDIR}/${SAMPLE}.delly.vcf" ]] || return 1
+    [[ -x "$DYSGU" ]] || return 0                     # dysgu not part of this site
+    [[ -s "${OUTDIR}/${SAMPLE}.dysgu.vcf" ]] || return 1
+    grep -q '^#CHROM' "${OUTDIR}/${SAMPLE}.dysgu.vcf"
+}
+if _legacy_complete; then
+    date -Is > "$DONE"
+    echo "[P2] ${SAMPLE}: already done (complete outputs from before the marker)"; exit 0
 fi
 echo "[P2] ${SAMPLE}: reference ${REFID}, build ${BUILD_ID}"
 
 FQ1="${WORK}/${SAMPLE}_1.fq"; FQ2="${WORK}/${SAMPLE}_2.fq"
-if [[ ! -s "$FQ1" ]]; then
+# Extract to temporary names and rename both only on success. Writing straight
+# into the final names meant a task killed mid-extraction (these run under 2-3
+# hour limits) left a truncated FQ1 that the rerun's `-s` test accepted, and the
+# isolate was then aligned from part of its reads.
+if [[ ! -s "$FQ1" || ! -s "$FQ2" ]]; then
+    rm -f "${FQ1}.tmp" "${FQ2}.tmp"
     "$MTB_SAMTOOLS" collate -@ 2 -u -O -T "${WORK}/${SAMPLE}.collate" \
         --reference "$CRAMREF" "$CRAM" \
-      | "$MTB_SAMTOOLS" fastq -@ 2 -n -1 "$FQ1" -2 "$FQ2" -0 /dev/null -s /dev/null -
+      | "$MTB_SAMTOOLS" fastq -@ 2 -n -1 "${FQ1}.tmp" -2 "${FQ2}.tmp" -0 /dev/null -s /dev/null -
+    mv -f "${FQ1}.tmp" "$FQ1"; mv -f "${FQ2}.tmp" "$FQ2"
 fi
+[[ $(( $(wc -l < "$FQ1") )) -eq $(( $(wc -l < "$FQ2") )) ]] \
+    || { echo "FATAL: ${SAMPLE}: ${FQ1} and ${FQ2} have different read counts" >&2; exit 1; }
 NR1=$(( $(wc -l < "$FQ1") / 4 ))
 [[ "$NR1" -gt 0 ]] || { echo "FATAL: ${SAMPLE}: no reads extracted" >&2; exit 1; }
 echo "[P2] ${SAMPLE}: ${NR1} read pairs"
 
 # --- small variants, in R coordinates ----------------------------------------
-SIM_FQ_PREFIX="${WORK}/${SAMPLE}" SIM_KEEP_FQ=1 SIM_GVCF=1 MTB_THREADS="$THREADS" \
+SIM_REQUIRE_FQ=1 SIM_FQ_PREFIX="${WORK}/${SAMPLE}" SIM_KEEP_FQ=1 SIM_GVCF=1 MTB_THREADS="$THREADS" \
     bash bin/simulate_and_call.sh "$REF" "$REF" "$WORK" "$SAMPLE" 1 150
 mv -f "${WORK}/${SAMPLE}.vcf.gz"     "${OUTDIR}/${SAMPLE}.vcf.gz"
 mv -f "${WORK}/${SAMPLE}.vcf.gz.tbi" "${OUTDIR}/${SAMPLE}.vcf.gz.tbi" 2>/dev/null || true
@@ -149,27 +179,40 @@ export LD_LIBRARY_PATH="${DELLY_ENV}/lib:${LD_LIBRARY_PATH:-}"
 "${DELLY_ENV}/bin/delly" call -g "$REF" -o "${WORK}/${SAMPLE}.delly.bcf" "$BAM" \
     > "${WORK}/${SAMPLE}.delly.log" 2>&1 || echo "[P2] ${SAMPLE}: delly nonzero exit" >&2
 if [[ -s "${WORK}/${SAMPLE}.delly.bcf" ]]; then
-    "$MTB_BCFTOOLS" view "${WORK}/${SAMPLE}.delly.bcf" > "${OUTDIR}/${SAMPLE}.delly.vcf"
+    "$MTB_BCFTOOLS" view "${WORK}/${SAMPLE}.delly.bcf" > "${OUTDIR}/${SAMPLE}.delly.vcf.tmp"
+    mv -f "${OUTDIR}/${SAMPLE}.delly.vcf.tmp" "${OUTDIR}/${SAMPLE}.delly.vcf"
 else
     echo "FATAL: ${SAMPLE}: delly produced no BCF" >&2; exit 1
 fi
 
 if [[ -x "$DYSGU" ]]; then
+    # A nonzero exit used to be logged and the partial stdout kept and stamped
+    # as a complete callset. Keep the output only on success; otherwise fail
+    # the sample so the gap is visible (once in the project's history so far).
+    _dy_rc=0
     "$DYSGU" run --clean -x -p "$THREADS" "$REF" \
-        "${WORK}/${SAMPLE}.dysgu_tmp" "$BAM" > "${OUTDIR}/${SAMPLE}.dysgu.vcf" \
-        2> "${WORK}/${SAMPLE}.dysgu.log" || echo "[P2] ${SAMPLE}: dysgu nonzero exit" >&2
+        "${WORK}/${SAMPLE}.dysgu_tmp" "$BAM" > "${OUTDIR}/${SAMPLE}.dysgu.vcf.tmp" \
+        2> "${WORK}/${SAMPLE}.dysgu.log" || _dy_rc=$?
     rm -rf "${WORK}/${SAMPLE}.dysgu_tmp"
+    if [[ "$_dy_rc" -ne 0 ]]; then
+        rm -f "${OUTDIR}/${SAMPLE}.dysgu.vcf.tmp"
+        echo "FATAL: ${SAMPLE}: dysgu exited ${_dy_rc}; see ${WORK}/${SAMPLE}.dysgu.log" >&2
+        exit 1
+    fi
+    mv -f "${OUTDIR}/${SAMPLE}.dysgu.vcf.tmp" "${OUTDIR}/${SAMPLE}.dysgu.vcf"
 else
     echo "[P2] ${SAMPLE}: dysgu not installed at ${DYSGU}" >&2
 fi
 
 # Stamp the SV VCFs too. simulate_and_call.sh already stamped the small-variant
 # VCF and GVCF, but delly and dysgu write their own headers.
-bash bin/stamp_build_id.sh "${OUTDIR}/${SAMPLE}.delly.vcf" \
-    $([[ -s "${OUTDIR}/${SAMPLE}.dysgu.vcf" ]] && echo "${OUTDIR}/${SAMPLE}.dysgu.vcf")
+_sv_vcfs=("${OUTDIR}/${SAMPLE}.delly.vcf")
+[[ -s "${OUTDIR}/${SAMPLE}.dysgu.vcf" ]] && _sv_vcfs+=("${OUTDIR}/${SAMPLE}.dysgu.vcf")
+bash bin/stamp_build_id.sh "${_sv_vcfs[@]}"
 
 rm -f "$FQ1" "$FQ2"
 echo "[P2] ${SAMPLE}: small $(zcat "${OUTDIR}/${SAMPLE}.vcf.gz" | grep -vc '^#'), "\
 "delly $(grep -vc '^#' "${OUTDIR}/${SAMPLE}.delly.vcf"), "\
 "dysgu $([[ -s "${OUTDIR}/${SAMPLE}.dysgu.vcf" ]] && grep -vc '^#' "${OUTDIR}/${SAMPLE}.dysgu.vcf" || echo 0)"
+date -Is > "$DONE"
 echo "[P2] ${SAMPLE}: done"

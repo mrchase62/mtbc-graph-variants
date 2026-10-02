@@ -1,0 +1,35 @@
+# Site configuration for this cluster. Copy to config/site.local.sh (gitignored)
+# and edit. config/project_env.sh sources it FIRST, from its own directory, so
+# anything set here overrides the defaults and every derived path follows it.
+#
+#   cp config/site.local.sh.example config/site.local.sh
+#   bash bin/show_config.sh
+
+# --- required: the read collection -----------------------------------------
+# Root of a CRAM or BAM collection, and the reference those files were encoded
+# against. No defaults, deliberately: see "Read source" in project_env.sh.
+export MTB_CRAM_ROOT=/path/to/read/collection
+export MTB_CRAM_REF=/path/to/reference/the/reads/were/encoded/against.fasta
+
+# --- roots -----------------------------------------------------------------
+# Fast scratch for working files, and durable storage for results.
+# export MTB_WORK=/path/to/scratch/MtbPangenome
+# export MTB_PERSIST=/path/to/durable/MtbPangenome
+
+# --- tools -----------------------------------------------------------------
+# Every tool is reached through a variable; nothing is assumed on PATH. The
+# defaults in project_env.sh are one cluster's installs -- set yours here.
+# export MTB_PY=/path/to/python3              # numpy, scipy, pandas, pysam
+# export MTB_QC_BIN=/path/to/env/bin          # samtools, bgzip, tabix, bedtools, bwa, minimap2
+# export MTB_BCFTOOLS=/path/to/bcftools
+# export MTB_ODGI=/path/to/odgi
+# export MTB_GATK_SIF=/path/to/gatk.sif
+# export MTB_DELLY_ENV=/path/to/conda/env/with/delly
+# export MTB_CONTAINERS=/path/to/durable/containers   # not scratch: purges took two
+# export MTB_SNPEFF_JAR=/path/to/snpEff.jar
+# export MTB_JAVA=/path/to/java
+
+# --- build ------------------------------------------------------------------
+# Pin the P0 build a chain runs against. Required when more than one build
+# directory has completed; bin/refbias_run.sh refuses to guess between them.
+# export MTB_BUILD_DIR=/path/to/refbias/build/<build-id>

@@ -112,12 +112,32 @@ def flank_positions(pos, svlen, flank):
     return [max(1, pos - flank), pos + length + flank]
 
 
-def read_sv_matrix(path):
-    rows = list(csv.DictReader(open(path, newline=""), delimiter="\t"))
-    meta = ["key", "svtype", "h37rv_pos", "svlen", "size_band", "n_alt",
-            "n_both_callers", "src", "max_qual", "qual_band", "stage11_ppv",
-            "qual_from", "component"]
-    samples = [c for c in (rows[0].keys() if rows else []) if c not in meta]
+SV_META = ["key", "svtype", "h37rv_pos", "svlen", "size_band", "n_alt",
+           "n_both_callers", "src", "max_qual", "qual_band", "stage11_ppv",
+           "qual_from", "component"]
+
+
+def read_sv_matrix(path, keep_sample=None):
+    """Rows of the SV matrix with the per-row columns and, at most, ONE
+    sample's column.
+
+    Every per-sample task used to load the whole matrix -- every row with
+    every sample's cell, as dicts. At 997 isolates that is 169 MB of text and
+    2.2 GB of memory per task; at 10,000 it would be about 9 GB of text, per
+    task. A task only ever reads its own sample's cell, so only that column is
+    kept, and the probe step (keep_sample=None) keeps none. A sample the matrix
+    does not name gets no cell, which callers read as NOCALL, as before.
+    """
+    with open(path, newline="") as fh:
+        rdr = csv.reader(fh, delimiter="\t")
+        hdr = next(rdr, [])
+        samples = [c for c in hdr if c not in SV_META]
+        keep = [(i, c) for i, c in enumerate(hdr) if c in SV_META]
+        if keep_sample is not None and keep_sample in hdr:
+            keep.append((hdr.index(keep_sample), keep_sample))
+        rows = []
+        for f in rdr:
+            rows.append({c: (f[i] if i < len(f) else "") for i, c in keep})
     return rows, samples
 
 
@@ -405,7 +425,8 @@ def main():
             return 0
         return genotype_intervals(a, ivs)
 
-    rows, samples = read_sv_matrix(a.sv_matrix)
+    rows, samples = read_sv_matrix(a.sv_matrix,
+                                   keep_sample=None if a.probes_out else a.sample)
     dels = [r for r in rows if r["svtype"] == "DEL"]
 
     if a.probes_out:
@@ -477,10 +498,21 @@ def main():
                 # interval, which is the inherited ALT the matrix's `component`
                 # column calls `inherited`. Without covered flanks the
                 # projection may simply have failed, and that stays ABSENT.
-                if flank_ok and not a.no_promote:
+                if flank_ok and not a.no_promote and a.trust_inherited:
                     state, why = "ALT", ("inherited: the interval is absent "
                                          "from this sample's reference and "
                                          "its flanks are covered")
+                elif flank_ok and not a.no_promote:
+                    # THE SAME RULE AS INTERVAL MODE (review 3.9). Promoting
+                    # on the graph lookup plus a covered flank is what the
+                    # two-frame check contradicted 26.5% of the time on
+                    # scale200; interval mode stopped doing it, and this mode
+                    # has no second frame to confirm with, so the inherited
+                    # candidate is NOCALL. --trust-inherited restores the old
+                    # behaviour for reproducing earlier output.
+                    state, why = "NOCALL", ("inherited_unconfirmed: absent from "
+                                            "this sample's reference, flanks "
+                                            "covered, no second frame")
                 else:
                     state, why = "ABSENT", (f"{len(ok)}/{len(probes)} interior "
                                             f"probes project, flanks "

@@ -57,7 +57,16 @@ def main():
            # which are named after the cohort rather than placed under OUTROOT.
            "NAME": reg["cohort"]}
 
+    # The IS6110 result tables are not all "<cohort>_...": the pilot's are
+    # unprefixed and scale100's carry "scale_", which is what p1i_vcf.sh,
+    # p1i_p5states.sh and merge_cohort_vcf.py all use. Resolving the contract's
+    # ${NAME}_ literally sent the check looking for pilot_p1i_cohort_keys.tsv
+    # and refused a correct submission.
+    is_pfx = {"pilot": "", "pilot_rerun": "", "scale100": "scale_"}.get(
+        reg["cohort"], reg["cohort"] + "_")
+
     def resolve(p):
+        p = p.replace("is6110/results/${NAME}_", "is6110/results/" + is_pfx)
         for k, v in sub.items():
             p = p.replace("${" + k + "}", v)
         return p

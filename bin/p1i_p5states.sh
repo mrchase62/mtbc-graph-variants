@@ -5,8 +5,8 @@
 #SBATCH -t 0-08:00
 #SBATCH -p shared
 #SBATCH --mem=16000
-#SBATCH --output=slurm/P1ip5_%j.out
-#SBATCH --error=slurm/P1ip5_%j.err
+#SBATCH --output=slurm/P1ip5_%A_%a.out
+#SBATCH --error=slurm/P1ip5_%A_%a.err
 #
 # Pass p1is: put the IS6110 arm into P5's key space, then EARN a REF for every
 # isolate that did not report a site.
@@ -61,16 +61,57 @@ OUT1K="${RES}/${TAG}p5_is6110_keys.tsv"
 OUT1S="${RES}/${TAG}p5_is6110_states.tsv"
 OUT2="${RES}/${TAG}p5_is6110_states.stage2.tsv"
 
-echo "=== stage 1: into P5's key space ==="
-"$MTB_PY" is6110/bin/is6110_p5_merge.py \
-    --cohort-keys "$KEYTAB" --refmap "$REFMAP" \
-    --out-keys "$OUT1K" --out-states "$OUT1S"
+# STEPS. Stage 2 used to be one serial job: an odgi load per distinct reference
+# and a samtools pass per sample, all in one process -- 29 minutes at 200
+# isolates, 99 at 997, and on course for a day at 10,000. It is now three
+# steps the runner submits as two arrays and a join; --all still runs every
+# step in this one job.
+#
+#   --stage1    stage 1, cohort-wide and cheap; also one table per sample
+#   --project   stage 2, one reference per array task (task i = i-th distinct
+#               reference of the refmap; tasks past the last exit 0)
+#   --sample    stage 2, one sample per array task
+#   --merge     stage 2, the cohort table
+#   --all       all of the above, in order (default)
+P1ISSTEP="${1:-${P1ISSTEP:---all}}"
+case "$P1ISSTEP" in
+  --all|--stage1|--project|--sample|--merge) ;;
+  *) echo "usage: $0 [--all|--stage1|--project|--sample|--merge]" >&2; exit 2 ;;
+esac
+STAGE1DIR="${P1IDIR}/p5stage1"
+STAGE2=("$MTB_PY" is6110/bin/is6110_p5_stage2.py
+    --cohort-keys "$KEYTAB" --stage1-dir "$STAGE1DIR" --refmap "$REFMAP"
+    --isclean-dir "$P1IDIR" --workdir "${P1IDIR}/p5stage2" --out "$OUT2"
+    --threads "${SLURM_CPUS_PER_TASK:-1}")
 
-echo
-echo "=== stage 2: earn REF for the non-carriers ==="
-"$MTB_PY" is6110/bin/is6110_p5_stage2.py \
-    --cohort-keys "$KEYTAB" --stage1-states "$OUT1S" --refmap "$REFMAP" \
-    --isclean-dir "$P1IDIR" --workdir "${P1IDIR}/p5stage2" \
-    --out "${OUT2}.tmp"
-mv -f "${OUT2}.tmp" "$OUT2"
-echo "written: ${OUT2}"
+if [[ "$P1ISSTEP" == "--all" || "$P1ISSTEP" == "--stage1" ]]; then
+    echo "=== stage 1: into P5's key space ==="
+    "$MTB_PY" is6110/bin/is6110_p5_merge.py \
+        --cohort-keys "$KEYTAB" --refmap "$REFMAP" \
+        --out-keys "$OUT1K" --out-states "$OUT1S" --out-states-dir "$STAGE1DIR"
+    [[ "$P1ISSTEP" == "--stage1" ]] && exit 0
+fi
+
+# The graph and its path list come from the build, never from the script's
+# defaults, which are a relative glob and a hard-coded build id.
+BUILD="${MTB_BUILD_DIR:?MTB_BUILD_DIR is unset; run through bin/refbias_run.sh}"
+OG="${OG:-$(awk -F'\t' '$1=="graph"{print $2}' "${BUILD}/build_info.tsv")}"
+[[ -s "$OG" ]] || { echo "FATAL: no graph at '${OG}'" >&2; exit 1; }
+[[ -s "${BUILD}/assets/paths.txt" ]] || { echo "FATAL: no ${BUILD}/assets/paths.txt" >&2; exit 1; }
+STAGE2+=(--graph "$OG" --paths "${BUILD}/assets/paths.txt"
+         --store "${BUILD}/proj_is6110")
+
+case "$P1ISSTEP" in
+  --project)
+    "${STAGE2[@]}" --mode project --index "${SLURM_ARRAY_TASK_ID:?--project is an array step}" ;;
+  --sample)
+    "${STAGE2[@]}" --mode sample --index "${SLURM_ARRAY_TASK_ID:?--sample is an array step}" ;;
+  --merge)
+    "${STAGE2[@]}" --mode merge
+    echo "written: ${OUT2}" ;;
+  --all)
+    echo
+    echo "=== stage 2: earn REF for the non-carriers ==="
+    "${STAGE2[@]}" --mode all
+    echo "written: ${OUT2}" ;;
+esac

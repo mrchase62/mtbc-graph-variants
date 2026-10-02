@@ -38,6 +38,9 @@ median is what is written.
 """
 import argparse, collections, csv, datetime, gzip, os, statistics, sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from is6110_seam import Seams
+
 
 def read_fasta_one(path):
     name, buf = None, []
@@ -52,15 +55,63 @@ def read_fasta_one(path):
 
 
 def load_excisions(path):
-    """Both bases adjacent to each excised span; a junction sits AT a seam, so a
-    stack reports orig_start-1 or orig_end+1, never orig_start."""
-    left, right = {}, {}
-    if os.path.exists(path):
-        for r in csv.DictReader(open(path), delimiter="\t"):
-            s0, e0 = int(r["orig_start"]), int(r["orig_end"])
-            left[s0 - 1] = (s0, e0)
-            right[e0 + 1] = (s0, e0)
-    return left, right
+    """The reference's removed spans. A site within is6110_seam.SEAM_SLOP of
+    one is its own copy (ref_shared); the rule is shared with promotion and
+    flank placement. It was an exact match on the seam base here, which made
+    a site 1-3 bp off the seam, inside the target-site duplication, an ALT."""
+    return Seams(path)
+
+
+def cluster_keys(obs, window):
+    """{(sample, r_pos): canonical position} for each coordinate axis.
+
+    One insertion seen in several isolates can be placed a few bases apart --
+    the stack peak sits on either copy of the target-site duplication, or a
+    base of wobble -- and each placement became its own key (review 4.5).
+    Distances between neighbouring distinct H37Rv keys in gwas1000 (2026-09-30):
+
+        1 bp 204   2 bp 137   3 bp 74   4 bp 46   5 bp 40   6 bp 29   7 bp 16
+        15-24 bp: about 12 per bp, the background of distinct nearby insertions
+
+    Merging at a distance is right when the excess over background is larger
+    than the background, which holds to 6 bp (29 against 12) and fails at 7
+    (16 against 12), hence --key-window 6. No two keys within 11 bp ever
+    occur in the same isolate.
+
+    The rule: sort the distinct positions; a cluster starts at its first
+    position, and each next position joins the earliest cluster whose START is
+    within `window` (so a chain of 1 bp steps cannot grow without bound) and
+    holds none of the isolates carrying it -- two sites in one isolate are two
+    insertions. Otherwise it starts a new cluster. The canonical position is the one carried by the most
+    isolates, ties to the smallest. Clustering is across the cohort, so a key
+    can differ between cohorts by a few bases; within a cohort it is fixed.
+
+    obs: iterable of (axis, pos, sample, r_pos); positions are clustered within
+    an axis only (one axis for H37Rv, one per graph node).
+    """
+    by = collections.defaultdict(lambda: collections.defaultdict(set))
+    site = collections.defaultdict(list)
+    for axis, pos, sample, r_pos in obs:
+        by[axis][pos].add(sample)
+        site[(axis, pos)].append((sample, r_pos))
+    out = {}
+    for axis, carriers in by.items():
+        clusters = []
+        for pos in sorted(carriers):
+            # the earliest cluster still open (start within window) that no
+            # isolate carrying this position is already in
+            for c in clusters[-(window + 2):] if window > 0 else []:
+                if pos - c["start"] <= window and not (carriers[pos] & c["samples"]):
+                    c["pos"].append(pos); c["samples"] |= carriers[pos]
+                    break
+            else:
+                clusters.append(dict(start=pos, pos=[pos], samples=set(carriers[pos])))
+        for c in clusters:
+            canon = min(c["pos"], key=lambda q: (-len(carriers[q]), q))
+            for q in c["pos"]:
+                for k in site[(axis, q)]:
+                    out[k] = canon
+    return out
 
 
 def gff_lengths(path):
@@ -88,7 +139,8 @@ HDR_COMMON = [
     '##INFO=<ID=IS6110_READS,Number=1,Type=Integer,Description="Uniquely-placed element-side reads supporting the junction">',
     '##INFO=<ID=IS6110_SPAN,Number=1,Type=Integer,Description="Distance in bp between the two flank junction coordinates">',
     '##INFO=<ID=IS6110_SVLEN_SRC,Number=1,Type=String,Description="How SVLEN was obtained: ref_median (median measured element length in this sample matched reference) or measured_locus">',
-    '##INFO=<ID=IS6110_H37RV,Number=1,Type=Integer,Description="H37Rv coordinate from flank placement, both flanks required to agree">',
+    '##INFO=<ID=IS6110_H37RV,Number=1,Type=Integer,Description="H37Rv coordinate of this insertion: flank placement, both flanks required to agree, then the canonical position of placements within --key-window bp across the cohort">',
+    '##INFO=<ID=IS6110_H37RV_PLACED,Number=1,Type=Integer,Description="This isolate\'s own flank-placed H37Rv coordinate, present only where it differs from IS6110_H37RV">',
     '##INFO=<ID=IS6110_H37RV_STATE,Number=1,Type=String,Description="empty: H37Rv carries no copy at this locus. occupied: it does. unplaced: the two flanks did not agree or did not place uniquely">',
     '##INFO=<ID=IS6110_NODE,Number=1,Type=String,Description="Pangenome graph node key, always recorded. It is the only identity a site has when IS6110_H37RV_STATE is unplaced, and is build-scoped: see IS6110_BUILD">',
     '##INFO=<ID=IS6110_BUILD,Number=1,Type=String,Description="Build id; graph node ids are build-scoped">',
@@ -110,6 +162,10 @@ def main():
     ap.add_argument("--build-id", default="7713a8d71d8e")
     ap.add_argument("--outdir", default="refbias/p1i/vcf")
     ap.add_argument("--keys-out", default="is6110/results/p1i_cohort_keys.tsv")
+    ap.add_argument("--key-window", type=int, default=6,
+                    help="merge keys of one insertion placed up to this many "
+                         "bases apart across isolates; 0 disables. See "
+                         "cluster_keys for how 6 was measured")
     a = ap.parse_args()
     os.makedirs(a.outdir, exist_ok=True)
 
@@ -134,8 +190,37 @@ def main():
                     else "one_sided")
         sites[r["sample"]].append(dict(r, evidence=evidence))
 
-    seqs, exc, medlen, hcontig = {}, {}, {}, None
-    _, h37seq = read_fasta_one(a.h37rv)
+    seqs, exc, medlen = {}, {}, {}
+    hcontig, h37seq = read_fasta_one(a.h37rv)
+    # The derived VCF's CHROM is --h37rv-contig, but its bases come from this
+    # FASTA. They agree today (NC_000962.3); make a mismatch an error rather
+    # than a VCF whose CHROM names a different sequence from its REF bases.
+    if hcontig.split()[0] != a.h37rv_contig:
+        sys.exit(f"FATAL: --h37rv-contig {a.h37rv_contig!r} does not match the "
+                 f"H37Rv FASTA's contig {hcontig.split()[0]!r}")
+    # Each site's H37Rv position or graph node, exactly as placed, then one
+    # canonical position per insertion across the cohort (cluster_keys).
+    def placement(sample, p):
+        fr = flank.get((sample, p), {})
+        v = fr.get("verdict", "")
+        hstate = ("empty" if v == "placed_h37rv_empty" else
+                  "occupied" if v == "placed_h37rv_occupied" else "unplaced")
+        hpos = fr.get("h37rv_pos", "") if hstate != "unplaced" else ""
+        return fr, hstate, hpos
+    obs_h, obs_n = [], []
+    for sample in ref_of:
+        for s in sites.get(sample, []):
+            p = int(s["orig_pos"])
+            fr, _, hpos = placement(sample, p)
+            if hpos:
+                obs_h.append(("h37rv", int(hpos), sample, p))
+            elif fr.get("node"):
+                obs_n.append((fr["node"], int(fr.get("node_offset") or 0), sample, p))
+    canon_h = cluster_keys(obs_h, a.key_window)
+    canon_n = cluster_keys(obs_n, a.key_window)
+    n_moved = (sum(1 for o in obs_h if canon_h[(o[2], o[3])] != o[1])
+               + sum(1 for o in obs_n if canon_n[(o[2], o[3])] != o[1]))
+
     keys_rows = []
     today = datetime.date.today().strftime("%Y%m%d")
     n_alt = n_ref = n_filt = 0
@@ -160,18 +245,19 @@ def main():
             L = gff_lengths(os.path.join(a.gff_dir, f"{ref}.is6110.gff"))
             medlen[ref] = int(statistics.median(L)) if L else 1355
         contig, gseq = seqs[ref]
-        exl, exr = exc[ref]
 
         recs_r, recs_h = [], []
         for s in sorted(sites.get(sample, []), key=lambda x: int(x["orig_pos"])):
             p = int(s["orig_pos"])
-            shared = (p in exl) or (p in exr)
-            fr = flank.get((sample, p), {})
-            v = fr.get("verdict", "")
-            hstate = ("empty" if v == "placed_h37rv_empty" else
-                      "occupied" if v == "placed_h37rv_occupied" else "unplaced")
-            hpos = fr.get("h37rv_pos", "") if hstate != "unplaced" else ""
-            node = f"{fr.get('node','')}:{fr.get('node_offset','')}" if fr.get("node") else ""
+            shared = exc[ref].shared(p)
+            fr, hstate, hpos_raw = placement(sample, p)
+            node_raw = (f"{fr.get('node','')}:{fr.get('node_offset','')}"
+                        if fr.get("node") else "")
+            hpos, node = hpos_raw, node_raw
+            if hpos_raw:
+                hpos = str(canon_h[(sample, p)])
+            elif node_raw:
+                node = f"{fr['node']}:{canon_n[(sample, p)]}"
             info = [f"SVTYPE=INS", f"SVLEN={medlen[ref]}",
                     f"MEINFO=IS6110,1,{medlen[ref]},+",
                     f"IS6110_EVIDENCE={s['evidence']}",
@@ -183,6 +269,8 @@ def main():
                     f"IS6110_H37RV_STATE={hstate}", f"IS6110_BUILD={a.build_id}"]
             if hpos:
                 info.append(f"IS6110_H37RV={hpos}")
+                if hpos != hpos_raw:
+                    info.append(f"IS6110_H37RV_PLACED={hpos_raw}")
                 if fr.get("ismapper") != "":
                     info.append(f"IS6110_ISM={fr.get('ismapper')}")
             if node:
@@ -197,7 +285,8 @@ def main():
                 frame="h37rv" if hpos else "node",
                 key=f"h37rv:{hpos}" if hpos else f"node:{node}",
                 h37rv_pos=hpos, h37rv_state=hstate, node=node,
-                reads=s["reads_q"], ismapper=fr.get("ismapper", "")))
+                reads=s["reads_q"], ismapper=fr.get("ismapper", ""),
+                h37rv_pos_placed=hpos_raw, node_placed=node_raw))
 
             if shared:
                 n_ref += 1
@@ -231,8 +320,24 @@ def main():
         write(os.path.join(a.outdir, f"{sample}.is6110.h37rv.vcf"),
               a.h37rv_contig, len(h37seq), recs_h)
 
+    # A site with neither an H37Rv position nor a graph node has no identity
+    # in P5's key space. It used to be written as the key "node:", which
+    # is6110_p5_merge.py then skipped without a word: 1,800 gwas1000 rows, 816
+    # of them ALT, because p1i_vcf.sh ran the projection without --all-stacks.
+    # Every stack gets a flank row under --all-stacks, so an empty key now
+    # means an upstream step was skipped -- stop rather than drop sites.
+    unkeyed = [k for k in keys_rows if not k["h37rv_pos"] and not k["node"]]
+    if unkeyed:
+        ex = ", ".join(f'{k["sample"]}@{k["r_pos"]}' for k in unkeyed[:5])
+        sys.exit(f"FATAL: {len(unkeyed)} sites have no H37Rv position and no "
+                 f"graph node (e.g. {ex}); was is6110_project_sites.py run with "
+                 f"--all-stacks?")
+
+    KEY_FIELDS = ["sample", "reference", "build_id", "evidence", "site_class",
+                  "r_pos", "state", "frame", "key", "h37rv_pos", "h37rv_state",
+                  "node", "reads", "ismapper", "h37rv_pos_placed", "node_placed"]
     with open(a.keys_out, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(keys_rows[0]), delimiter="\t")
+        w = csv.DictWriter(fh, fieldnames=KEY_FIELDS, delimiter="\t")
         w.writeheader(); w.writerows(keys_rows)
 
     unplaced = sum(1 for k in keys_rows if k["frame"] == "node")
@@ -241,6 +346,8 @@ def main():
           f"   of which LowSupport {n_filt}")
     print(f"    REF in that frame, no record written          : {n_ref}")
     print(f"    carried on a graph node key, no H37Rv position: {unplaced}")
+    print(f"    moved to their insertion's canonical key       : {n_moved}"
+          f"   (--key-window {a.key_window})")
     print(f"\n  per sample: {a.outdir}/<sample>.is6110.vcf        (authoritative)")
     print(f"              {a.outdir}/<sample>.is6110.h37rv.vcf  (derived)")
     print(f"  cohort keys: {a.keys_out}")
