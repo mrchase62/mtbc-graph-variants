@@ -105,8 +105,23 @@ LINTAB="${LINTAB:-refbias/${C}.phenotype.tsv}"
     ${ACCPRES:+--accessory-presence "$ACCPRES"} \
     --out "assoc/${C}/scan.tsv"
 echo "=== 5b. IS6110, collapsed to genes"
+# The burden takes the same lineage table as the scan. Without it the lineage
+# null is skipped and p_lineage is written blank, which gwas1000 and scale200
+# both did through 2026-10-02.
 "$MTB_PY_VT" assoc/bin/is6110_gene_burden.py --events "assoc/${C}/events" \
-    --phenotype "$PHENO" --out "assoc/${C}/is6110_gene.tsv"
+    --phenotype "$PHENO" ${LINTAB:+--lineages "$LINTAB"} \
+    --out "assoc/${C}/is6110_gene.tsv"
+# THE SAME BURDEN FOR SMALL VARIANTS AND SVs. These were run by hand from
+# 2026-09-25 and never added here, so the 2026-10-02 rerun archived them and
+# produced neither. The small-variant burden is where loss-of-function
+# resistance shows up (pncA, ethA, gid, the fabG1 and embA promoters): many
+# distinct rare alleles, none testable alone, many origins per gene.
+for _cls in small sv; do
+    echo "=== 5c. ${_cls} variants, collapsed to genes"
+    "$MTB_PY_VT" assoc/bin/is6110_gene_burden.py --events "assoc/${C}/events" \
+        --phenotype "$PHENO" ${LINTAB:+--lineages "$LINTAB"} --cls "$_cls" \
+        --out "assoc/${C}/${_cls}_gene.tsv"
+done
 
 echo
 echo "=== 6. chain audit: is every class and key space still accounted for?"
