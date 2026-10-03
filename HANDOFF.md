@@ -297,9 +297,32 @@ The ctpG to Rv1996 block is a deletion hotspot: RD743 (lineage 5), RD174
 (lineage 4.3.4), and our lineage 3 in-frame ctpG deletion about 570 bp
 upstream of RD743.
 
-Not checked: Bespiatykh's Tables S1 to S3 (not in the tree) and the Behruznia
-full text. The five deletions should be confirmed by PCR or against
-long-read assemblies.
+**Supplementary tables, added to the working tree 2026-10-03.** These are
+Bespiatykh's Tables S1 to S3 (`msphere.00535-21-st00*.xlsx`) and Behruznia's
+files 9 to 11 (`584580_file*.xlsx`).
+
+- **Bespiatykh Table S3** (the complete RD list, 213 rows, 187 with
+  coordinates):
+  - None of the five lineage-wide hits overlaps any RD.
+  - 13 of gwas1000's 89 overlap a listed RD, mostly as small deletions
+    inside larger historical RDs.
+  - The full matches are RD145 (HSD3), RD121, RDoryx_4 and DS20 (2.27 kb,
+    PPE37 and metH, lineage 4.1.1.3).
+- **Behruznia file 11** (the RDs and genes per lineage, from Panaroo and
+  Pangraph, matched by locus tag):
+  - scale200's 1,449 bp PE_PGRS53 (Rv3507) deletion in 7 lineage 4.2
+    isolates is their new **"New-L4.2"**. It has the same gene and lineage,
+    an independent confirmation of a deletion our method found.
+  - None of the five lineage-wide hits has a gene in their tables.
+- **Conclusion.** The five lineage-wide deletions are not described in either
+  paper's full tables, and both methods are blind to them by design:
+  - Bespiatykh calls only deletions over 200 bp, and these are 63 to 135 bp;
+  - Behruznia scores whole-gene presence, and these are in-frame losses of
+    21 to 45 codons, or removals of 3' gene ends.
+
+  They are candidate previously unreported small lineage markers. Next steps:
+  confirm them by PCR or against long-read assemblies, and search the
+  literature beyond these two papers.
 
 ### Cost
 
