@@ -258,8 +258,48 @@ Caveats:
 - Most of the 89 are under 1 kb with 2 to 4 carriers.
 - Many are in PE/PPE genes.
 - 51 are caller-only.
-- "Not a known RD" means not in that 135-RD list. A literature check was
-  started 2026-10-03.
+- "Not a known RD" means not in that 135-RD list.
+
+**Literature check (2026-10-03, `analysis/rd_crossref/LITERATURE.md`).**
+
+Sources: a web search, the Bespiatykh et al. 2021 PDF in the working tree, and
+an overlap test against RDscan's `RD.bed`. That file is the paper's full
+curated set of 79 lineage-specific RDs, including its new RD301 to RD317 and
+RD743.
+
+Already described:
+
+- the 4.75 kb deletion (Rv1353c to Rv1356c, lineage 4.1.2.1) is **HSD3, also
+  called RD145**, a Haarlem-specific deletion. It is missing from our 135-RD
+  list;
+- the nrdZ deletion matches **RD121**;
+- the 3.5 kb lineage 2.2.1 deletion lies inside **RDoryx_4**, an independent
+  deletion of the same region.
+
+No report found for the five lineage-wide hits, all of them in several panel
+assemblies:
+
+- rho (Rv1297): 135 bp, in-frame (codons about 115 to 159), lineages 6 and 9.
+  rho is essential, and this probably falls in the mycobacteria-specific
+  N-terminal insertion domain (inferred from position);
+- ctpG: 63 bp, in-frame, lineage 3;
+- Rv0209: 105 bp, in-frame, lineage 1.2.1.2;
+- the 3' ends of sppA and Rv0725c: 119 bp, all of lineage 5;
+- the 3' ends of arsB2 and Rv3579c: 104 bp plus 65 bp, 41 lineage 5
+  isolates.
+
+Bespiatykh's method calls only deletions over 200 bp (low-coverage regions
+of 100 bp or more). All five are 63 to 135 bp, so their absence from that map
+is expected. The graph and interval approach finds lineage markers that
+coverage-based RD scans miss.
+
+The ctpG to Rv1996 block is a deletion hotspot: RD743 (lineage 5), RD174
+(lineage 4.3.4), and our lineage 3 in-frame ctpG deletion about 570 bp
+upstream of RD743.
+
+Not checked: Bespiatykh's Tables S1 to S3 (not in the tree) and the Behruznia
+full text. The five deletions should be confirmed by PCR or against
+long-read assemblies.
 
 ### Cost
 
