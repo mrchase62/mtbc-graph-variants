@@ -232,6 +232,113 @@ All in the working tree, synced to durable storage:
 The current results are the files directly under `assoc/<cohort>/`. The last
 sync was 2026-10-02, after the burdens.
 
+## 0c. Scaling to 10,000-40,000 samples (assessment, 2026-10-03)
+
+**10,000 is feasible after a known set of engineering changes. 40,000 is not
+feasible as the pipeline stands.** Per-sample compute is no longer the limit.
+The limits are the cohort-wide steps, the association tree, job submission and
+storage.
+
+Figures are measured on gwas1000 and scale200 unless marked as estimates.
+Projections come from the working tree's `refbias/SCALING_MEASURED.md` and
+`refbias/WHY_SCALE200_DID_NOT_PREDICT_GWAS1000.md`. Some of their open items
+were checked against the current code; parts of those documents predate it.
+
+### What scales well
+
+- **Per-sample passes are linear, with flat memory.** The gwas1000 rerun from
+  P3 onward cost 348 billing-hours (330 CPU-hours) for 997 isolates, about 0.35
+  billing-hours per sample. It covered P3 to P5, IS6110 stage 2, SV
+  genotyping and accessory presence. No per-sample task ran longer than
+  15 minutes.
+
+  | step | billing-hours |
+  |---|---|
+  | SV projection | 158 |
+  | p3 | 66 |
+  | p4b | 49 |
+  | p5states | 19 |
+  | p5sv2frame | 16 |
+  | p4 | 14 |
+  | everything else | under 7 each |
+
+- **P5 states is fixed.** It was 74% of the compute in older measurements
+  and grew as n^1.39. With the projection cache it took 19 billing-hours on
+  gwas1000, with a longest task of 1.3 minutes.
+- **The dense `matrix.tsv` is gone.** P5 writes sparse per-sample states. The
+  merge and the VCF took minutes at 1,000 samples (p5vcf 3.6 min).
+- **SV projection is per reference** (up to 333), not per sample.
+
+### Estimated cost from raw reads
+
+The per-sample passes cost about 1 to 1.5 CPU-hours per sample, including P1
+and P2, which the rerun reused. The docs project about 18,000 CPU-hours at
+10k.
+
+| cohort | compute (estimate) | scratch disk |
+|---|---|---|
+| 10k | 15,000 to 20,000 CPU-hours, about 10,000 billing-hours | about 5.5 TB |
+| 40k | about 60,000 to 80,000 CPU-hours | about 22 TB |
+
+The disk figures use gwas1000's 0.55 GB per sample: 282 GB of outputs plus
+270 GB of P1 and P2 alignments. Archived as CRAM, alignments take about
+90 MB per sample.
+
+### What breaks
+
+1. **Job submission.**
+   - The cluster limit is 10,100 submitted jobs, counting array tasks, so one
+     10k pass already hits it. The runner must submit in chunks.
+   - A single failed task cancels every afterok dependent, and at 40k failures
+     are certain. Dependencies need automatic retry first.
+   - At the default throttle of 50, 10k takes about 28 days. It needs 200
+     to 500.
+2. **Records grow as about n^0.5.** They went from 87,702 at 200 samples to
+   200,444 at 1,000. Estimates: about 650k at 10k, about 1.3M at 40k.
+   - **The states array** (samples × keys, uint8) grows from 0.2 GB to about
+     6.5 GB at 10k and about 50 GB at 40k. At 40k it needs memory-mapping or
+     a sparse format.
+   - **`p5_validate`** (called from `p5_finish.sh`) compares every pair of
+     samples, so its cost grows with the square of the cohort. It should
+     switch to a sample of pairs.
+3. **The association chain is the hardest wall.**
+   - The event matrix is variants × branches: 200k × 2k at 1,000 samples,
+     about 1.3M × 80k at 40k (about 10^11 cells).
+   - The scan's descendant matrix and permutation tables each reach several
+     GB at 40k.
+   - This needs a sparse or chunked redesign, not a larger memory request.
+4. **The tree.**
+   - IQ-TREE GTR+F+ASC+G4 with 1,000 UFBoot cost 49 billing-hours for 1,330
+     tips and 10 for 533, growing faster than the tip count.
+   - At 10k to 40k tips this is impractical. The options are a faster method
+     (FastTree or VeryFastTree) or placement onto a fixed backbone (UShER or
+     MAPLE).
+   - It is a scientific decision, because the tree drives the convergence
+     tests.
+5. **Storage.**
+   - About 22 TB of scratch at 40k, on netscratch, which is purged without
+     warning.
+   - Durable storage is limited (63 GB used now), so alignments must be
+     archived as CRAM batch by batch.
+   - The read collection is a colleague's transient copy.
+6. **The reference panel, which no cohort size fixes.**
+   - The QC-pass pool is 47,815 isolates: lineage 4 24,783, lineage 2 14,335,
+     lineage 3 4,950, lineage 1 3,406, lineage 6 176, lineage 5 116.
+   - The 333-genome panel is thin for lineage 1, where matched references are
+     up to about 900 SNPs away, and for lineages 5 and 6.
+   - A 40k cohort would mostly add lineages 2 and 4.
+
+### Recommendation
+
+1. Run a 2,000 to 3,000 cohort as a scaling test before 10k, recording Elapsed
+   and MaxRSS for every step and fitting the curves. scale200 was a
+   correctness test, not a scaling test: gwas1000, 5 times larger, cost 11 to
+   55 times more in three steps and broke four.
+2. Before 10k: chunked, retry-aware submission and a higher throttle (item 1);
+   P5 at scale (item 2); a decision on the tree method (item 4).
+3. Before 40k: also the association chain redesign (item 3) and a storage
+   plan (item 5).
+
 ## 1. State before the rerun (2026-09-30)
 
 The review fixes (`deefef7`, `0a3f712`, 2026-09-29) changed P3, P4, P4b, P5
@@ -452,8 +559,8 @@ gwas1000 before submitting it.
   not re-applied.
 - **The 1% small/masked warning** in both chain audits predates the rerun and
   has not been explained.
-- **Not started:** the per-reference coordinate map from the 10k scaling
-  plan, and a review of about 15 GB of "possible junk".
+- **Not started:** the scaling work in section 0c, the per-reference
+  coordinate map from the 10k scaling plan, and a review of about 15 GB of "possible junk".
 - **The 50 (sample, key) pairs** that occur twice in gwas1000's key table
   predate today's changes. They are worth a look, but they do not block.
 
