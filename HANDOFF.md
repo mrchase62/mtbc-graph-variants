@@ -339,6 +339,78 @@ The disk figures use gwas1000's 0.55 GB per sample: 282 GB of outputs plus
 3. Before 40k: also the association chain redesign (item 3) and a storage
    plan (item 5).
 
+### Lab libraries reviewed for scaling (2026-10-03, read-only)
+
+Two of Peter Culviner's libraries were read, not run, to see whether they
+help with the items above. Neither is a drop-in fix.
+
+**samarray** (`/n/netscratch/sfortune_lab/Lab/mchase/samarray`, v0.1.0, last
+commit 2026-08-27). "SAM" means SAM/BAM/CRAM; it is not a job-array tool. It
+stores a cohort's calls, alignments, ancestral states and events as TileDB
+arrays.
+
+| item | does it help? |
+|---|---|
+| 1. Job submission | Partly. Work runs on a few long-lived Dask workers on Slurm, so the job count stays small. But one failed task stops the run, it cannot resume, and it runs only its own Python functions, not shell passes. |
+| 2. States array, pairwise validator | Partly. `VariantArray` stores calls sparsely, with zstd compression. Queries load dense into memory unless chunked. There is no pairwise-distance code. |
+| 3. Event matrix | Partly. `EventArray` stores per-branch events sparsely; `AncestorArray` runs chunked multistate Fitch with bounded memory. There is no permutation or association code. |
+| 4. Tree | Indirectly. It builds no trees, but `writeSNPAlignment` exports MAPLE format (single contig only), and MAPLE is built for very large datasets. |
+| 5. Storage | No. `CRAMArray` copies existing CRAMs into its own store. |
+
+Risks:
+
+- no test suite (removed as stale);
+- single-author research code, still changing;
+- runs only in its author's separate conda environment;
+- pickled metadata, which ties arrays to a Python version;
+- some functions raise NotImplementedError.
+
+It is used once in the working tree (`is6110/bin/is6110_clipend_scan.py`,
+for its Dask depth computation). `bin/ancestral_alleles.py` and
+`is6110/bin/is6110_junctions.py` chose not to adopt it.
+
+**mtbvartools** (v0.1.0dev, 2024-2025, no tests) is a toolkit for download,
+mapping, calling, VCF merge, PastML reconstruction and tree metrics.
+
+- **Item 1, job submission.** `scripts/slurm_dask_splitter.py` runs one shell
+  command per sample on a small pool of Dask workers on Slurm. A failed task
+  cancels nothing else. But the scheduler must stay alive for the whole run,
+  and there is no retry or record of what finished.
+- **Item 3, event matrix: the weak point.** The event matrix is stored in its
+  `CallBytestream`, a pair of `KeyedByteArray` files.
+  - Every row is dense and zlib-compressed on its own.
+  - The matrix is stored twice, once in each orientation.
+  - The whole index is loaded into memory.
+  - Reading a column decodes every row.
+  - A file cannot be appended to once closed.
+  - This is workable at 200k × 2k, not at about 1.3M × 80k.
+- **Reconstruction and tree metrics.** `writeAncestorCalls` runs PastML in
+  100-variant blocks, very slow at 40k. The tree metrics are roughly quadratic
+  in tip count.
+- It builds no trees and has nothing for storage.
+
+**Reproducibility issue.** The association environment (`MTB_PY_VT`,
+`mtb_isolates_cluster`) does not load the netscratch copy of mtbvartools. It
+loads an editable install at `/n/boslfs02/LABS/sfortune_lab/Lab/mchase/mtbvartools`
+with uncommitted changes: `conversions.py` adds `writeNodeStates`,
+`writeAncestralFastas`, `writeNodeVariantStates_stream` and
+`make_informative_variant_index`, and there are new PastML scripts. The event
+matrix depends on code in no commit.
+
+**Conclusions:**
+
+1. **Job submission.** Both offer the same Dask worker-pool idea, without the
+   retry, resume and per-sample completion records `refbias_run.sh` relies on.
+   The smaller change is in our runner: each array task processes K samples
+   and writes a done-marker per sample.
+2. **Cohort-wide data at 40k** (states, events, ancestral states). samarray's
+   sparse TileDB arrays are the right kind of design. Adopting them is a
+   substantial rewrite onto an untested dependency; they can also serve as a
+   model for our own sparse format.
+3. **The tree.** samarray's MAPLE export points to a realistic option for 10k
+   to 40k tips.
+4. **Storage.** Neither library helps.
+
 ## 1. State before the rerun (2026-09-30)
 
 The review fixes (`deefef7`, `0a3f712`, 2026-09-29) changed P3, P4, P4b, P5
