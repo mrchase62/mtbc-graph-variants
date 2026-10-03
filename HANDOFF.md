@@ -211,6 +211,56 @@ present before the rerun.
 | accessory-genome variant audit, gwas1000 | per isolate, including IS6110 | `accessory_audit/` |
 | IS6110 simulated-read benchmark against detettore6110 | comparison only; nothing adopted | `is6110_simbench/REPORT.md` |
 
+### RD cross-reference against Behruznia et al., eLife 2024 (`analysis/rd_crossref/`)
+
+This reruns the working tree's `accessory/bin/rd_crossref.py`, unchanged, on
+each cohort's current catalogue (`refbias/<cohort>/p5/sv_intervals.tsv`) and
+interval states. The 2026-09-28 result was on scale200's pre-rerun catalogue.
+
+| | scale200 09-28 (stale) | scale200 now | gwas1000 now |
+|---|---|---|---|
+| known RDs with a catalogued interval | 129 / 135 | 123 / 135 | 131 / 135 |
+| RDs under 1 kb | 40 / 44 | 37 / 44 | 42 / 44 |
+| polymorphic insertion loci that define a lineage | 0 of 57 | 0 of 57 | 0 of 110 |
+| RD lineage concordance: agree / unresolvable / mismatch | 33 / 3 / 19 | 41 / 3 / 20 | 37 / 4 / 29 |
+
+- **Both of the paper's predictions hold.** Deletions recover the known RDs,
+  and insertions do not define lineages.
+- **scale200 lost 6 RDs.** All were caller-only singletons that the
+  recurrent-only catalogue (`SVCAT_MIN_CARRIERS=2`) now excludes.
+- **The concordance mismatches predate the rerun.** Most share their interval
+  with another RD (16 of 29 in gwas1000) or sit near IS6110 (18 of 29). The
+  mismatches have not been resolved per RD.
+
+### Stably inherited deletions that are not known RDs (`analysis/rd_crossref/novel_stable.py`)
+
+These are single-origin, never-reverted deletion intervals (at least 2
+carriers, 80% or more of branches resolved) with no overlap with the 135
+known RDs.
+
+| | gwas1000 | scale200 |
+|---|---|---|
+| single-origin, never reverted | 167 | 101 |
+| not a known RD | 89 | 51 |
+| of those, carriers form exactly one clade | 73 | 42 |
+| in several panel assemblies | 19 | 30 |
+
+Lineage-wide examples in gwas1000, all in several panel assemblies:
+
+- 135 bp in rho: all of lineage 6 and lineage 9, nothing else;
+- 119 bp in Rv0725c/sppA: all of lineage 5;
+- 63 bp in ctpG: all of lineage 3, plus 1 lineage 4 (probably a miscall);
+- 105 bp in Rv0209: 43 lineage 1.2.1.2;
+- 4.75 kb over Rv1353c to Rv1356c: 27 lineage 4.1.2.1.
+
+Caveats:
+
+- Most of the 89 are under 1 kb with 2 to 4 carriers.
+- Many are in PE/PPE genes.
+- 51 are caller-only.
+- "Not a known RD" means not in that 135-RD list. A literature check was
+  started 2026-10-03.
+
 ### Cost
 
 | step | billing-hours |
