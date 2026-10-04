@@ -452,6 +452,49 @@ The disk figures use gwas1000's 0.55 GB per sample: 282 GB of outputs plus
 3. Before 40k: also the association chain redesign (item 3) and a storage
    plan (item 5).
 
+### Measured costs and cheaper ways to run the current methods (2026-10-04)
+
+Full analysis: `analysis/scaling/COSTS_AND_IMPROVEMENTS.md`. gwas1000 (997
+samples) cost about 2,130 billing-hours, about 2.1 per sample. At current
+requests 10k would be about 21,000.
+
+| step | billing-hours | requested | used |
+|---|---:|---|---|
+| P2 (matched-reference alignment and calling) | 932 | 8 cores, 16 GB | 1.6 cores, 1.3 GB (max 6.3) |
+| P1 (H37Rv alignment and reference selection) | 597 | 8 cores, 16 GB | 1.9 cores, 1.4 GB (max 2.4) |
+| SV projection (per reference; 150 used) | 158 | 4 cores, 2 GB | right-sized |
+| P1g, P1i (IS6110 stage 1) | 101 + 100 | 4 cores, 8 GB | 66% CPU, 1.0 GB |
+| P3 to P5, tree, association, the rest | about 270 | mostly right-sized | |
+
+P1 and P2 are 72% of the cost and use about a quarter of their cores and a
+tenth of their memory.
+
+**Proposed, in order. Nothing is changed yet.**
+
+| | change | saving | method change? |
+|---|---|---|---|
+| A | P1 and P2 to 4 cores, 4 GB | about -54% on them, about 8,000 billing-hours at 10k | no |
+| B | P1g and P1i to 2 GB | about -25% | no |
+| C | serial_requeue for short per-sample tasks | half the billing again | no, but needs E first |
+| D | a cheaper P1 reference selector (panel-informative sites from a read subsample, or k-mer sketch distance) | most of P1 | **yes**: inventory everything that reads P1's VCF, then validate against gwas1000's refmap |
+| E | several samples per array task, retry before releasing dependents, throttle 200 to 500 | needed at 10k regardless (one 10k pass hits the 10,100-job limit) | no |
+| F | precompute per-reference products once for all 333 references | new cohorts pay nothing for them | no |
+| G | reuse per-sample results across cohorts, keyed by (sample, build version) | | no; valid only while the code is unchanged |
+| H | CRAM-archive alignments per batch | 5.5 TB down to 1.5 TB at 10k | no |
+| I | the cohort-level steps (states array, validator, event matrix, tree) | | design work |
+
+**Estimated cost per sample:**
+
+| changes | per sample |
+|---|---|
+| current | 2.1 |
+| A + B | about 1.0 |
+| plus C | about 0.5 |
+| plus D | about 0.35 |
+
+**Order:** A and B, measured on scale200 first; then E; then F, G, H; then D
+after validation; then I before any cohort above about 2,000.
+
 ### Option: one linear CX333 reference instead of per-isolate matched references (2026-10-03)
 
 Raised for scaling beyond about 1,000 samples. Discussed, not built.
@@ -502,8 +545,8 @@ IS6110 at real copy number, provenance for every position.
   references cut apparent variant burden by 88% on real reads (T8). A
   mid-tree reference achieves only part of that (MTBC0: 17.6%).
 
-**Why it matters for scaling.** A single reference removes every
-per-reference cost:
+**Why it matters for scaling: corrected 2026-10-04, it mostly does not.** A
+single reference would remove every per-reference cost:
 
 - **SV projection:** run per reference, it was 158 of gwas1000's 348
   billing-hours (section 0c);
@@ -512,8 +555,13 @@ per-reference cost:
   IS6110 projection store;
 - **one bwa index** instead of one per panel genome.
 
-The trade is per-isolate false-positive suppression and some of the
-interpretive gain, for a simpler and cheaper pipeline at 10k or more.
+But those costs are bounded by the panel (at most 333 references), not by the
+number of samples, and can be precomputed once and reused across cohorts. They
+are not a scaling bottleneck. The 10k to 40k blockers in this section are
+independent of the reference choice. Design, assumptions and recommendation:
+`analysis/refeval_cx333/DESIGN_NOTES.md`. **Recommendation: keep matched
+references.** The CX333 linear reference is optional research only. Its
+backbone is built (`analysis/refeval_cx333/ref/`); no arm was submitted.
 
 **To decide it.** Build the backbone and accessory contigs (cheap), then run
 the REFEVAL harness: 35 genomes, assembly-derived truth, only the reference
