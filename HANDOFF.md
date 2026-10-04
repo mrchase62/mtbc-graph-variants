@@ -997,6 +997,87 @@ billing-hours and 3.3 GB. **Decision (user): do not precompute.** The store
 fills lazily the first time a cohort needs a reference and is reused after.
 GCF_000023625 stays filled.
 
+## 0g. Forward strategy: a lineage 1-4 panel, and lessons for the next build (2026-10-04)
+
+A discussion note, **no change now**: `analysis/strategy/L1_4_GRAPH_STRATEGY.md`.
+Related: `analysis/external_assemblies/PANEL_CANDIDATES.md`.
+
+**Why consider it.** The genotyping need is lineages 1 to 4. In CX333, the 46
+of 332 genomes outside L1-4 (lineages 5 to 9, animal lineages, M. canettii)
+supply a large share of the variation:
+
+| | share from non-L1-4 genomes only |
+|---|---:|
+| SNP records | 43% |
+| indel and SV records | 30% |
+| SV events of 250 bp or more | 37% |
+| allele sequence | 29% |
+
+M. canettii is the largest single contributor.
+
+**Assessment.** A lineage 1-4 graph plus a separately held outgroup is the
+better long-run design for L1-4 genotyping.
+
+- **Gains:**
+  - a simpler graph: fewer and shallower nested snarls, the complexity that
+    defeated vg giraffe;
+  - cheaper per-reference projection;
+  - a cleaner accessory catalogue and RD set;
+  - panel slots freed to rebalance within L1-4;
+  - no loss for L1-4 matched references (no gwas1000 isolate was matched
+    across lineages).
+- **Costs:**
+  - non-L1-4 isolates have no close reference; screen them out by barcode
+    lineage before P2;
+  - **the outgroup must move out of the graph:** keep one or two canettii
+    genomes aligned separately to H37Rv, and give `add_outgroup.py` that source
+    instead of the graph VCF;
+  - MTBC-root and animal-lineage questions are no longer answerable from the
+    graph.
+- **Timing:** do it at the next panel rebuild, with the rebuild items in
+  section 0f. Any panel change is a rebuild and a full rerun.
+
+**Panel-building inputs gathered so far:**
+
+- **90 clean candidates** from the QC'd Marin and Behruznia assemblies
+  (`panel_candidates.tsv`).
+  - 27 are about 300 or more differences from any CX333 genome.
+  - The useful gaps they fill: M. orygis (none in CX333), lineage 1.1.2,
+    lineage 2.2.2, lineage 4.8, lineage 4.1.3 and 4.6.
+  - They add almost nothing to lineages 5 to 9.
+- **Behruznia's 11 gap-filling genomes are already all in CX333.**
+- **GCF_045348265** (one of them, ITM-2003-01539) carries the poly-A artifact
+  (section 0f).
+
+**Lessons to carry forward** (the note gives detail):
+
+1. Assembly QC beyond CX333's screens: the long-read indel and
+   private-homopolymer-indel checks, a single-base run-length rule, and
+   sequencing technology verified from the sequence, not the metadata.
+2. Foreign-DNA screen: a small one-per-sublineage background, the IS6110
+   re-check, the outgroup exempt; fix RUNBOOK.md.
+3. Sample for balance within L1-4:
+   - cap lineage 2.2.1;
+   - fill L1 and L3 sublineages and L2.1 and L2.2.2;
+   - collapse clonal clusters (`snp_nonredundant.py`);
+   - add GenBank-only complete genomes, not just RefSeq.
+4. Prefer assemblies with public reads (HiFi where possible), so they can be
+   rebuilt with your own assembly pipeline.
+5. Record panel provenance at build time.
+6. The decomposed VCF splits events across records and nests most SNPs: pool
+   records and read all levels.
+7. Projection is per reference and bounded by the panel. Keep the lazy store;
+   test pairwise-alignment liftover against odgi.
+8. Keep matched references. Core accuracy is limited by PE/PPE and by GATK's
+   blindness at 500 bp and above, not by the reference.
+9. Every new variant class needs absence genotyping (REF and ALT observed).
+10. Everything that produces a result goes in the chain script, with the audit
+    listing every expected product. The scan and burden omissions were all
+    hand-run steps.
+11. Positive controls in every association report.
+12. Run documented settings, and reconcile the run documentation
+    (RUNBOOK.md against QC_PIPELINE.md).
+
 ## 1. State before the rerun (2026-09-30)
 
 The review fixes (`deefef7`, `0a3f712`, 2026-09-29) changed P3, P4, P4b, P5
