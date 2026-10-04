@@ -926,6 +926,60 @@ CX333:
   PacBio sets, then unflagged Hall. Avoid, or reassemble from reads, the three
   PRJNA270004 genomes and the flagged ONT isolates.
 
+**CX333's own foreign-DNA calls re-checked, and two artifacts found
+(2026-10-04)** (`analysis/external_assemblies/qc/cx333_foreign_recheck/`:
+`README.md`, `foreign_insertions.cx333.recheck.tsv`; script
+`bin/cx333_foreign_recheck.py`; the working tree was read, not written).
+
+CX333's screen called 54 inserts FOREIGN in 24 genomes. All are accounted for:
+
+| explanation | inserts |
+|---|---:|
+| IS6110 copies (the asm10 seed-filter false positive) | 27 |
+| M. canettii divergence (CIPT 140010059: 14; ET1291: 9) | 23 |
+| attB vectors in the two genomes already excluded as engineered | 2 |
+| **kilobase single-base runs: assembly artifacts** | **2** |
+
+No engineered DNA was missed. **The two artifacts are in CX333 panel genomes.**
+Both genomes are otherwise clean (SNP, indel and private homopolymer-indel
+counts normal for their sublineage; no scrambling; no Ns).
+
+| genome | strain | lineage | artifact | assembly metadata (NCBI) |
+|---|---|---|---|---|
+| GCF_045348265 | ITM-2003-01539 (one of Behruznia's 11 sequenced genomes; SRR34323114, 156x) | 4.6.1.1 | 1,243 bp of A at H37Rv 545,413 | Flye 2.9.2, ONT MinION: a genuine ONT assembly. The poly-A is most likely a low-quality or adapter-derived stretch Flye kept and mismatch polishing could not remove |
+| GCF_050259585 | SY-1 (M. caprae) | La2 | 1,121 bp of G at H37Rv 1,594,703 | **long-read status doubtful:** "PacBio", but assembled with SOAPdenovo v2.04, a short-read assembler. Long poly-G is the two-colour Illumina (NextSeq/NovaSeq) no-signal artifact. Likely a short-read assembly with PacBio gap-filling, or wrong metadata. CX333's provenance screen took the label and passed it (5 or more insertions of 50 bp or more) |
+
+- **Effect now: small.** Each artifact is a private insertion on one genome's
+  path in the graph; no read maps to a kilobase single-base run.
+- **One isolate is affected:** gwas1000 SAMEA112806781 uses GCF_045348265 as
+  its matched reference and gets about 1.2 kb of NOCALL at a position H37Rv
+  lacks. No scale200 isolate uses either genome.
+- **Decision (2026-10-04): do not remove them now.** Removal means a graph
+  rebuild (3 days, 48 cores) and a full rerun of every cohort, against the
+  one-rerun rule, for a negligible effect.
+
+**At the next panel rebuild:**
+
+1. **Mask both runs with N,** or replace the assemblies if corrected versions
+   exist.
+2. **Add a run-length rule** to the assembly QC: mask or reject any single-base
+   run over about 100 bp. No current CX333 screen tests for it; it would catch
+   both.
+3. **Do not trust assembler or technology metadata alone.** SY-1 shows a
+   "long-read" label can sit on a short-read assembly. Add the read-free
+   long-read checks used on the external assemblies (indel and
+   private-homopolymer-indel excess) to the panel QC.
+4. **Fix the foreign-DNA screen:**
+   - RUNBOOK.md: use a small one-per-sublineage background (QC_PIPELINE.md
+     section 1.4);
+   - re-check FOREIGN calls with the minimap2 frequency filter off and against
+     IS6110 (`bin/foreign_recheck.py`), so IS6110 copies stop reading as
+     foreign;
+   - exempt the outgroup.
+5. **Optional, only alongside a rerun:** exclude the two genomes from
+   matched-reference selection. That changes SAMEA112806781's reference, so
+   it follows the one-rerun rule.
+
 **Projection precompute: measured, and declined (2026-10-04).** Job 50407681
 filled GCF_000023625 with all 244,005 store positions:
 
