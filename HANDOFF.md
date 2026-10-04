@@ -483,6 +483,21 @@ tenth of their memory.
 | H | CRAM-archive alignments per batch | 5.5 TB down to 1.5 TB at 10k | no |
 | I | the cohort-level steps (states array, validator, event matrix, tree) | | design work |
 
+**F, measured 2026-10-04: per-reference precompute is not worth it.**
+Precomputing the full position set costs about 6.9 billing-hours per reference
+(section 0f), about 1,200 for the remaining 173. Keep the lazy store.
+
+**J (idea, a method change, not done): projection from pairwise alignment
+instead of `odgi position`.** odgi walks the 540 MB graph for every position
+(1.7 h per reference). A whole-genome alignment of each reference to H37Rv
+(minimap2 asm5) takes about 1.5 s and gives most of the same coordinate map.
+
+- Validate against the 159 filled references in the store, outside complex
+  regions.
+- If they agree, P5 key and SV-probe projection costs drop by orders of
+  magnitude.
+- Needs full validation and approval before it goes near the chain.
+
 **Estimated cost per sample:**
 
 | changes | per sample |
@@ -858,12 +873,22 @@ the length outliers, then the 30 clean PacBio isolates as controls.
 The source metadata are in the session scratch. `build_table.py` documents how
 to rebuild them.
 
-**Also in progress:** the one-reference projection measurement (section 0c,
-F). Job 50407681 fills GCF_000023625 with the store's 244,005 positions. It
-had run over 1 h 13 min at the time of writing, against gwas1000's
-16-minute average per reference, so the full-position fill costs much more per
-reference than estimated. Report the final figure before deciding on the other
-173.
+**Projection precompute: measured, and declined (2026-10-04).** Job 50407681
+filled GCF_000023625 with all 244,005 store positions:
+
+| | value |
+|---|---|
+| wall time | 1 h 44 min on 4 cores |
+| CPU time | 5 h 26 min (87% efficient) |
+| peak memory | 0.66 GB |
+| cost | **about 6.9 billing-hours per reference** |
+| store growth | 19 MB |
+
+gwas1000's 1.05 per reference was for its 58k SV probes only; odgi cost
+scales with positions. Filling the other 173 references would be about 1,200
+billing-hours and 3.3 GB. **Decision (user): do not precompute.** The store
+fills lazily the first time a cohort needs a reference and is reused after.
+GCF_000023625 stays filled.
 
 ## 1. State before the rerun (2026-09-30)
 
