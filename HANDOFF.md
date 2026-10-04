@@ -790,6 +790,81 @@ Full notes: `analysis/insertions/INSERTION_GAP_ASSESSMENT.md`, assessing
 Nothing reaches the chain before it is prototyped, benchmarked and approved
 under the one-rerun rule.
 
+## 0f. External long-read truth sets: Marin 2024 and Behruznia 2024 (2026-10-04)
+
+Purpose: an independent check of assembly reliability, and later the
+insertion-gap benchmark (section 0e). Nothing downloaded yet except Marin's
+supplementary zip; download location and isolate set are pending the user's
+decision.
+
+**Where the data is:**
+
+- **Marin et al., Bioinformatics 2025 (PMC12119186):** 151 Mtb clinical
+  isolates.
+  - Assemblies (hybrid and short-read) on Zenodo 10846276.
+  - Run accessions in Supplementary File S2 (zip via Europe PMC; PMC itself
+    serves a JavaScript page instead of the file).
+  - Analysis repo: github.com/farhat-lab/mtb-pg-benchmarking-2024paper.
+
+| set | data | isolates | long + short reads public |
+|---|---|---:|---:|
+| A | PacBio RS II + Illumina | 27 | 26 |
+| B | PacBio Sequel II + Illumina (PacBio runs found at ENA by BioSample) | 21 | 20 |
+| C | PacBio HiFi, "TRUST PB Set 1" | 8 | 0: PRJNA1250160 still unreleased at ENA and SRA (checked 2026-10-04) |
+| D | ONT, Hall 2022 Madagascar | 78 | 62 |
+| E | ONT + Illumina, Peker 2021 | 17 | 17 |
+| **total** | | **151** | **125**: about 101 GB long-read + 50 GB short-read FASTQ; median 150x and 96x |
+
+  R21770's only Illumina run is 2.7x. Most of these isolates are not in CX333.
+
+- **Behruznia et al. 2024, the 200 non-Marin genomes:**
+  - 24 have long and short reads under one BioSample; 4 duplicate Marin, so
+    **20 are new** (about 57 GB). They include 7 La1, lineage 8, M. orygis and
+    M. microti; 13 are CX333 genomes, which suits a leave-one-out test.
+  - Mb3601's PacBio run has no FASTQ at ENA.
+  - The 11 ITM genomes Behruznia sequenced show long-read runs only.
+
+**Assembly reliability, from Marin's own statistics**
+(`analysis/marin_assembly_qc/`: a per-isolate table, `README.md`, flag rules).
+
+Median Pilon changes per assembly, by data type:
+
+| data | median | max |
+|---|---:|---:|
+| HiFi | 0 | 1 |
+| PacBio RS II (ChinerOms) | 20 | |
+| Sequel II (TB Portals) | 54 | |
+| RS II (Farhat Peru) | 190 | |
+| ONT Hall | 474 | |
+| ONT Peker | **3,294** | **11,817** |
+
+Flags:
+
+| flag | isolates |
+|---|---:|
+| homopolymer-indel signature | 104 |
+| 1,000 or more corrections | 35 |
+| no public short reads | 18 |
+| length outlier (crude) | 12 |
+| no flags (natural controls) | 30 |
+
+The long-read F2 measures read error, not mixture, so it is not used. Pilon
+fixes only what short reads see; heavily corrected assemblies are the most
+likely to keep repeat, collapse and misjoin errors.
+
+**Suggested check order:** Peker (17), flagged Hall isolates with short reads,
+the length outliers, then the 30 clean PacBio isolates as controls.
+
+The source metadata are in the session scratch. `build_table.py` documents how
+to rebuild them.
+
+**Also in progress:** the one-reference projection measurement (section 0c,
+F). Job 50407681 fills GCF_000023625 with the store's 244,005 positions. It
+had run over 1 h 13 min at the time of writing, against gwas1000's
+16-minute average per reference, so the full-position fill costs much more per
+reference than estimated. Report the final figure before deciding on the other
+173.
+
 ## 1. State before the rerun (2026-09-30)
 
 The review fixes (`deefef7`, `0a3f712`, 2026-09-29) changed P3, P4, P4b, P5
