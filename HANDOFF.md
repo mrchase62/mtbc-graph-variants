@@ -452,6 +452,75 @@ The disk figures use gwas1000's 0.55 GB per sample: 282 GB of outputs plus
 3. Before 40k: also the association chain redesign (item 3) and a storage
    plan (item 5).
 
+### Option: one linear CX333 reference instead of per-isolate matched references (2026-10-03)
+
+Raised for scaling beyond about 1,000 samples. Discussed, not built.
+
+**The idea.** Build one linear reference for bwa from the CX333 graph:
+
+- **Backbone:** an ancestral sequence reconstructed from the graph, rooted on
+  ET1291 (M. canettii). It would be a local, QC'd equivalent of MTBC0.
+- **Extra contigs:** the non-redundant accessory sequence above a frequency
+  floor (say 5% of genomes or more), as decoy or ALT contigs.
+- **Coordinates:** a graph-derived liftover to H37Rv.
+
+**What an imputed (ancestral) genome buys:**
+
+- it sits mid-tree, so it is closer to every lineage than H37Rv (MTBC0 gave a
+  17.6% smaller truth set in REFEVAL);
+- it restores sequence H37Rv's branch lost (TbD1, RvDs);
+- polarity is native;
+- one coordinate system, with standard tools.
+
+**What it costs, all seen in MTBC0 (section 0d):**
+
+- input assembly errors averaged in invisibly (PPE38 lost);
+- collapsed copy-number regions (one truncated IS6110, a CRISPR arrangement
+  no real genome has);
+- none of the derived accessory sequence. CX333 holds 366 kb MTBC0 lacks.
+
+A CX333-built backbone avoids the input-quality problem: 333 QC'd assemblies,
+IS6110 at real copy number, provenance for every position.
+
+**Expected performance, from the existing measurements:**
+
+- **Core SNPs: no gain.** Every linear reference tested is within about 1.5
+  points (REFEVAL, corrected; sensitivity and PPV):
+
+| reference | SNP sensitivity | SNP PPV |
+|---|---|---|
+| H37Rv | 0.958 | 0.896 |
+| MTBC0 | 0.942 | 0.883 |
+| H37Rv + accessory contigs | 0.954 | 0.907 |
+
+  MTBC divergence is about 0.05%, so bwa places reads against any of them.
+  Sensitivity is limited by PE/PPE repeats and by GATK being blind at 500 bp
+  and above (T1). A backbone fixes neither.
+- **Accessory: a gain.** Ancestral regions become mappable, and accessory
+  contigs give T4's 0.885 / 0.912 in novel sequence.
+- **False-positive suppression: smaller than now.** Per-isolate matched
+  references cut apparent variant burden by 88% on real reads (T8). A
+  mid-tree reference achieves only part of that (MTBC0: 17.6%).
+
+**Why it matters for scaling.** A single reference removes every
+per-reference cost:
+
+- **SV projection:** run per reference, it was 158 of gwas1000's 348
+  billing-hours (section 0c);
+- **P1 reference selection;**
+- **the per-reference P3/P4 coordinate projection** and the per-reference
+  IS6110 projection store;
+- **one bwa index** instead of one per panel genome.
+
+The trade is per-isolate false-positive suppression and some of the
+interpretive gain, for a simpler and cheaper pipeline at 10k or more.
+
+**To decide it.** Build the backbone and accessory contigs (cheap), then run
+the REFEVAL harness: 35 genomes, assembly-derived truth, only the reference
+varied. Compare it against H37Rv, MTBC0 and the matched references, and
+measure the per-sample cost of each arm. Cost the evaluation before
+submitting; it is on the scale of the earlier REFEVAL run. Not started.
+
 ### Lab libraries reviewed for scaling (2026-10-03, read-only)
 
 Two of Peter Culviner's libraries were read, not run, to see whether they
