@@ -873,6 +873,59 @@ the length outliers, then the 30 clean PacBio isolates as controls.
 The source metadata are in the session scratch. `build_table.py` documents how
 to rebuild them.
 
+**External assembly QC, run 2026-10-04** (`analysis/external_assemblies/`:
+`QC_PLAN.md`, `QC_RESULTS.md`, `qc_summary.tsv`).
+
+- **Assemblies:** 155. Marin's 151 hybrid assemblies (Zenodo) and Behruznia's 4
+  long-read genomes outside CX333, run through the CX333 selection screens
+  unchanged.
+- **Read-free long-read checks**, against the 332 CX333 genomes as the baseline:
+  indel and private-homopolymer-indel excess (the SNP-excess rule), IS6110 full
+  and partial copies, the DR array, PGAP pseudogenes, each hybrid against
+  Marin's own short-read assembly, and PPE38 locus typing.
+- **Cost:** about 6 billing-hours.
+
+**CX333 screens:**
+
+- **153 pass, 2 review** (SNP outliers: mada_1-38, TB3237), **0 exclude.**
+- None is scrambled, reference-guided or BCG; all are single, dnaA-started
+  chromosomes.
+- 42 are the same isolate as a CX333 genome.
+- Lineage came from tb-profiler's barcode on each assembly's own calls (not
+  tb-profiler itself, about 50 billing-hours saved). It agrees with Marin's for
+  every isolate. Mixed lineage is not assessed.
+
+**Foreign-DNA screen: method fault, fixed for this run only.**
+
+- **The two docs disagree.** RUNBOOK.md's command uses the whole 1.48 Gb
+  panel as the background (1,167 false "foreign" inserts). QC_PIPELINE.md
+  section 1.4 requires a small one.
+- **Even with a 69-genome background, 952 inserts were called foreign.** The
+  script's minimap2 `-x asm10` frequency filter drops IS6110 minimizers.
+- **A re-check with the filter off** (`bin/foreign_recheck.py`): all 952 are
+  IS6110. **No foreign DNA.**
+- **Open:** fix RUNBOOK.md, and check whether the same seed filter affected
+  CX333's own foreign calls (QC_PIPELINE.md reports 0.9% of IS6110-sized
+  inserts misclassified there).
+
+**Long-read errors that CX333's screens do not catch.** All of these pass
+CX333:
+
+| assembly | evidence |
+|---|---|
+| CP010333 (M. microti), Behruznia, 2015 PacBio RS II (PRJNA270004) | 417 private homopolymer indels |
+| CP010329, same set | 241; barcode lineage 4.9, consistent with Behruznia's "H37Rv" label, though GenBank says strain F1 |
+| CP010337, same set | 117 |
+| Peker ONT (4549-04, 696-05, 8129-04, 8651-04, 702-06, QC-7 and others), and Hall's R25048 and 18_0621851 | indel excess and/or disagreement with their own short-read assemblies (QC-7: 343 SNPs; R25048: 131) |
+
+- The other PacBio sets (ChinerOms, TB Portals, Lee 2020) and the TRUST HiFi
+  assemblies show no error signal.
+- **Not errors:** truncated IS6110 in lineage 2.2.1 (CX333 has the same), and
+  PPE38 class E (3.9% here against 2.7% in CX333).
+- **For a truth set:** prefer TRUST HiFi (reads unreleased), then the clean
+  PacBio sets, then unflagged Hall. Avoid, or reassemble from reads, the three
+  PRJNA270004 genomes and the flagged ONT isolates.
+
 **Projection precompute: measured, and declined (2026-10-04).** Job 50407681
 filled GCF_000023625 with all 244,005 store positions:
 
