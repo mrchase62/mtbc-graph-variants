@@ -744,6 +744,52 @@ against all 333 assemblies:
 The alignments `gene_detail.py` and `mtbc0_missing.py` read are in the
 session's scratch directory, not in the tree.
 
+## 0e. The insertion gap: assessment, not scheduled (2026-10-04)
+
+Full notes: `analysis/insertions/INSERTION_GAP_ASSESSMENT.md`, assessing
+`insertion_gap.txt` (repo root).
+
+**Checked against the pipeline:**
+
+- **The IS6110 arm already does the IS-element trick.** Native copies are
+  excised, and the element is kept as its own contig, so junction reads clip and
+  their SA tags point at it.
+- **Unmapped reads are kept** in P2 BAMs and in the CRAM archives.
+- **The read collection is a transient netscratch copy.** That is the input
+  risk for any read-level method.
+- **Nothing calls a new copy of sequence H37Rv already has, at its new site.**
+  This appears correct and should be verified before building anything.
+- **The text's class counts are panel against H37Rv.** The gap that matters is
+  relative to each sample's matched reference; measure it first.
+
+**Suggested order, when taken up:**
+
+1. Benchmark recall by class. First the simulated framework
+   (`analysis/is6110_simbench/`, widened to all classes); then the Marin 2024
+   hybrid assemblies with real reads (139 are not in CX333).
+2. Identify the 1,442 bp (all lineage 1) and 1,458 bp (lineage 7) elements in
+   ISfinder.
+3. Prototype an SA-pair scanner for templated insertions, on scale200 BAMs
+   (the elements in step 2 are positive controls).
+4. Genotype recovered insertions in every sample, with REF and ALT junctions,
+   on the SV interval arm's pattern. Without it they fail the callability
+   floor.
+5. Decoy contigs for novel and mosaic sequence only; T3's read-stealing
+   caution applies.
+6. Pooled-carrier targeted assembly for recurrent novel sites.
+7. External tools (GRIDSS, panISa and others) on the benchmark, for comparison
+   only.
+
+**Side items:**
+
+- A classifier for IS6110-mediated deletions (18 of 29 RD mismatches sit near
+  IS6110).
+- DR-region IS6110 keying: noted only, user's decision; the flank-consensus fix
+  was reverted.
+
+Nothing reaches the chain before it is prototyped, benchmarked and approved
+under the one-rerun rule.
+
 ## 1. State before the rerun (2026-09-30)
 
 The review fixes (`deefef7`, `0a3f712`, 2026-09-29) changed P3, P4, P4b, P5
