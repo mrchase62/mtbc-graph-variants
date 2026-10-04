@@ -524,6 +524,109 @@ matrix depends on code in no commit.
    to 40k tips.
 4. **Storage.** Neither library helps.
 
+## 0d. CX333 pangenome against Behruznia et al. 2024 and MTBC0 (2026-10-03)
+
+Analysis only, in `analysis/pangenome_compare/`. Read `README.md` there for the
+whole account.
+
+**Source.** The CX333 graph's VCF against H37Rv
+(`graphs/CX333.s10k.k23.K15/all_variants.decomposed.vcf.gz`), reduced to
+structural events of 250 bp or more (`compare.py`). Three corrections were
+needed:
+
+1. **All snarl levels.** The classic RDs are nested records.
+2. **Pooling.** The file is decomposed (one record per allele sequence), so
+   records are pooled by snarl, position, kind and size.
+3. **Parent and child.** A parent and a nested record of the same event count
+   once.
+
+The supplementary tables are in the working tree as `584580_file08` to
+`file11`.
+
+**Genome overlap** (`genome_overlap.py`):
+
+- Their 339 against CX333's 333: **186 shared**, by BioSample.
+- 139 of theirs are not in RefSeq at all; mostly the Marin 2024 Zenodo
+  long-read assemblies.
+- The rest of theirs are contig-level, excluded by CX333's QC, or M. orygis,
+  which the panel's organism-name selection never listed.
+- Their table has two BioSamples each listed under two lineages.
+
+**Their RDs in CX333.** Their file 11 RDs fall in the right lineages:
+
+- RD239, RD105, RD750/RD316 and RD312 cover all of lineages 1, 2, 3 and 5
+  respectively;
+- RD702/RD303 cover all of lineages 6 and 9;
+- RD9 and RD10 cover lineages 5, 6 and 9 and the animal lineages;
+- RD711 is in 5 of 8 lineage 5;
+- ND1 is in lineage 7.
+
+RD207 is in the CRISPR region, which the graph represents as a complex snarl.
+The La3 RDs cannot be tested: CX333 has no La3.
+
+**The accessory genomes** (`gene_detail.py`; `accessory_detail.md`):
+
+- **Theirs:** 394 accessory genes (Panaroo, corrected), 298 accessory
+  Pangraph blocks, 111 and 116 sub-lineage-specific genes, and no LSPs.
+- **CX333, H37Rv genes** (absent when 50% or more is deleted): 176 accessory
+  genes, 48 sub-lineage-specific absences (the classic RDs). Mobile elements
+  (38%), ESX (24%) and PE/PPE (16%) are the most often accessory classes.
+- **CX333, by lineage:** absent genes per genome are highest in lineage 6 and
+  the animal lineages, matching their Figure 1. Their "L2 smaller than L1, L3
+  and L4" is not reproduced.
+- **CX333 insertions** (1,159 events against H37Rv):
+
+| class | events |
+|---|---|
+| IS6110 | 509 |
+| copies or expansions of H37Rv sequence | 461 |
+| ancestral (in MTBC0) | 43 |
+| novel | 124 (100 in a single genome) |
+
+**Conclusion: the paper's main claim holds.** Of 77 lineage-specific
+insertions, 53 are IS6110 and 17 are H37Rv-sequence copies. The 7 others are
+all PE/PPE loci: lineage-specific alleles at PPE50/51, PPE38 and PPE57 to 59.
+
+- No lineage gains new genes.
+- A 1,442 bp element (4 copies in H37Rv) has an extra copy in all of lineage 1.
+- About 3.1 kb near pknH, in neither H37Rv nor MTBC0, is carried by lineages
+  1, 5 and 6 and the animal lineages. It is unidentified.
+
+**Withdrawn.** An earlier pass reported the pknH insertion as specific to
+lineage 1.1.3.1, and named two "candidate genuine insertions". Both were wrong.
+The specificity test skipped genomes the barcode cannot place; it now
+disqualifies them.
+
+**MTBC0.** The imputed MRCA of Harrison, Kapur and Behr 2024 was already
+rejected as a backbone (`REFERENCE_BIAS.md` section 3b-bis, REFEVAL). Measured
+against all 333 assemblies:
+
+- **MTBC0 holds only 153 bp that no CX333 genome has.** It is a DR plus spacer
+  arrangement inside the CRISPR array.
+- **MTBC0 has one, truncated IS6110** (1,167 of 1,355 bp).
+- **CX333 holds 366,587 bp that MTBC0 lacks**, in 767 sequences:
+
+| class | bp |
+|---|---|
+| novel | 232 kb |
+| IS6110 fragments, where MTBC0's copy is truncated | 97 kb |
+| H37Rv-sequence copies | 22 kb |
+| H37Rv itself, mostly the DR region | 9 kb |
+| partly ancestral | 6 kb |
+
+  They are written out in `analysis/pangenome_compare/mtbc0_missing/`, all
+  together and also split with and without IS6110, plus a TSV index. MTBC0 is
+  essentially a subset of CX333.
+
+**Open:**
+
+- identify the pknH-region sequence and the 1,442 bp and 1,458 bp elements;
+- verify, against the source assemblies, that the lineage-specific PPE alleles
+  are not assembly artifacts.
+
+The alignments `gene_detail.py` and `mtbc0_missing.py` read are in the
+session's scratch directory, not in the tree.
+
 ## 1. State before the rerun (2026-09-30)
 
 The review fixes (`deefef7`, `0a3f712`, 2026-09-29) changed P3, P4, P4b, P5
