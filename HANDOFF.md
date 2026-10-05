@@ -1449,7 +1449,9 @@ above all the IS6110, SV and branch-null results.
   is a tip of both association trees, with phenotype 0.
   - Its branch is 25.8% (scale200) and 11.4% (gwas1000) of tree length.
   - Removing it cuts q_branch passes from 138 to 31 and from 68 to 38.
-  - **Open decision for the user:** remove it from the cohorts.
+  - **Deferred by the user (2026-10-05):** keep the isolate in for now and
+    decide after the test-graph data, once the costs are clear. No fix
+    touches it.
 - **PGB-6 (verified):** a third artifact genome. GCF_039770655, the only
   lineage 9 genome and the reference for all lineage 9 isolates, has a
   377 bp poly-T. It produces false calls in all 16 lineage 9 isolates. A
@@ -1518,7 +1520,13 @@ above all the IS6110, SV and branch-null results.
 ### Order of work (the user approved steps 1-3 on 2026-10-05)
 
 1. Bring all production code into the repository, with no change in
-   behaviour.
+   behaviour. **Done 2026-10-05:**
+   - 34 scripts copied from the working tree;
+   - `runroot/assoc/bin` linked to the repository;
+   - the repository copies, run from runroot, reproduce scale200's
+     `snps.fasta`, `sites.tsv` and `og.fasta` byte for byte;
+   - the working tree's stale copies stay as they are (read-only), and
+     production runs only from runroot.
 2. Fix section A, with a test for each finding. ASSOC-1 waits for the user's
    decision.
 3. Fix section B.
