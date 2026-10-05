@@ -756,5 +756,16 @@ class ConfigSiteFile(unittest.TestCase):
         self.assertEqual(r.stdout.strip(), "/elsewhere/data")
 
 
+def load_tests(loader, standard_tests, pattern):
+    """Also run the audit regression tests (tests/test_audit_*.py), so one
+    command covers every pinned defect."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for fn in sorted(os.listdir(here)):
+        if fn.startswith("test_audit_") and fn.endswith(".py"):
+            mod = load(fn[:-3], os.path.join("tests", fn))
+            standard_tests.addTests(loader.loadTestsFromModule(mod))
+    return standard_tests
+
+
 if __name__ == "__main__":
     unittest.main(warnings="ignore")
