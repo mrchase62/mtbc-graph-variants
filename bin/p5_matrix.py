@@ -18,6 +18,49 @@ def rd(p):
     return list(csv.DictReader(open(p, newline=""), delimiter="\t"))
 
 
+def trim(pos, ref, alt):
+    """Minimal allele: shared suffix, then shared prefix down to one base."""
+    while len(ref) > 1 and len(alt) > 1 and ref[-1] == alt[-1]:
+        ref, alt = ref[:-1], alt[:-1]
+    while len(ref) > 1 and len(alt) > 1 and ref[0] == alt[0]:
+        ref, alt, pos = ref[1:], alt[1:], pos + 1
+    return pos, ref, alt
+
+
+def load_panel_af(path):
+    """Panel allele frequency per trimmed (pos, ref, alt), from AC/AN.
+
+    Per ALLELE, not per position (audit GRAPHVCF-6): keyed by position, a key
+    took the frequency of whichever record there was most frequent -- another
+    SNP allele, or an indel anchored on the same base -- and a key whose allele
+    the panel does not carry got a value anyway. Repeated keys (an uncollapsed
+    VCF) sum their AC over the largest AN, since vcfwave splits one allele's
+    carriers across records.
+    """
+    ac, an = collections.Counter(), {}
+    op = gzip.open if path.endswith(".gz") else open
+    with op(path, "rt") as fh:
+        for line in fh:
+            if line.startswith("#"):
+                continue
+            f = line.split("\t", 8)
+            try:
+                pos = int(f[1])
+            except (ValueError, IndexError):
+                continue
+            info = dict(kv.split("=", 1) for kv in f[7].split(";") if "=" in kv)
+            try:
+                acs = [int(x) for x in info["AC"].split(",")]
+                n = int(info["AN"])
+            except (KeyError, ValueError):
+                continue
+            for alt, c in zip(f[4].upper().split(","), acs):
+                k = trim(pos, f[3].upper(), alt)
+                ac[k] += c
+                an[k] = max(an.get(k, 0), n)
+    return {k: min(1.0, ac[k] / an[k]) for k in ac if an[k] > 0}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--refmap", default="refbias/p1/refmap.tsv")
@@ -80,28 +123,14 @@ def main():
     # and 95% of the ubiquitous sites were of exactly that kind. Flagging by
     # panel frequency catches the same class at any carrier count, including
     # sites carried by two isolates that would never have drawn attention.
+    # A key whose allele is not in the panel under the same trimmed
+    # (pos, ref, alt) gets no value: unknown, not another allele's frequency.
+    # The graph VCF is not left-aligned and the keys are (mtb_norm), so an
+    # indel the two place differently in a repeat is also left blank.
     panel_af = {}
     if os.path.exists(a.graph_vcf):
-        op = gzip.open if a.graph_vcf.endswith(".gz") else open
-        with op(a.graph_vcf, "rt") as fh:
-            for line in fh:
-                if line.startswith("#"):
-                    continue
-                f = line.split("\t", 8)
-                try:
-                    pos = int(f[1])
-                except (ValueError, IndexError):
-                    continue
-                for kv in f[7].split(";"):
-                    if kv.startswith("AF="):
-                        try:
-                            v = max(float(x) for x in kv[3:].split(","))
-                        except ValueError:
-                            break
-                        if v > panel_af.get(pos, 0):
-                            panel_af[pos] = v
-                        break
-        print(f"  panel allele frequencies loaded for {len(panel_af)} positions")
+        panel_af = load_panel_af(a.graph_vcf)
+        print(f"  panel allele frequencies loaded for {len(panel_af)} alleles")
     else:
         print(f"  WARNING: no graph VCF at {a.graph_vcf}; the "
               f"reference-artefact flag will be empty", file=sys.stderr)
@@ -137,7 +166,9 @@ def main():
             af = ""
             minor = ""
             if k["frame"] == "h37rv" and k["h37rv_pos"]:
-                v = panel_af.get(int(k["h37rv_pos"]))
+                v = panel_af.get(trim(int(k["h37rv_pos"]),
+                                      k["canonical_ref"].upper(),
+                                      k["canonical_alt"].upper()))
                 if v is not None:
                     af = round(v, 4)
                     minor = 1 if v >= 0.5 else 0
