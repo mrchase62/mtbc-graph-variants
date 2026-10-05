@@ -11,6 +11,21 @@ standard pipeline already produces. The panel's profiles come from the graph's
 SNP matrix in the same coordinates. Distance is the count of sites where the two
 disagree, over sites the panel has genotyped.
 
+A site is an allele, (pos, ref, alt) trimmed to its minimal form, not a
+position (audit GRAPHVCF-4 / P0P2-5). The panel VCF is split biallelic, so a
+position with C>A and C>G is two rows; keyed by position the second overwrote the
+first, the first was scored as if no isolate ever carried it, and an isolate's
+C>G matched the C>A carriers. A padded SNP such as `CG>TG` is trimmed to `C>T`
+and kept; it used to be dropped. The isolate's profile is the alleles its GT
+calls.
+
+Two things are deliberately NOT done (audit P0P2-6 and P0P2-7, left as
+decisions):
+  - the distance is a raw count, not normalised by the number of sites each
+    genome has genotyped, and an isolate site without a call counts as REF;
+  - H37Rv is never a candidate. It is the deconstruct reference path, so it has
+    no column in the panel VCF; the matched arm is a reference other than H37Rv.
+
 No self-exclusion and no near-clone exclusion here, unlike stage 1. Those existed
 because a panel genome is its own nearest neighbour and the panel contains
 near-clones, which would have made the leave-one-out measurement meaningless. A
@@ -25,6 +40,15 @@ def open_maybe_gz(p):
     return gzip.open(p, "rt") if p.endswith(".gz") else open(p)
 
 
+def trim(pos, ref, alt):
+    """Minimal allele: shared suffix, then shared prefix down to one base."""
+    while len(ref) > 1 and len(alt) > 1 and ref[-1] == alt[-1]:
+        ref, alt = ref[:-1], alt[:-1]
+    while len(ref) > 1 and len(alt) > 1 and ref[0] == alt[0]:
+        ref, alt, pos = ref[1:], alt[1:], pos + 1
+    return pos, ref, alt
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--vcf", required=True, help="isolate calls in H37Rv coordinates")
@@ -33,37 +57,52 @@ def main():
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
-    # panel matrix: position -> (ref, alt, per-genome genotype)
+    # panel matrix: (pos, ref, alt) -> per-genome genotype
     hdr = None
     for line in open_maybe_gz(a.panel_snps):
         if line.startswith("#CHROM"):
             hdr = line.rstrip("\n").split("\t"); break
     samples = hdr[9:]
-    pos_idx, rows = {}, []
+    key_idx, rows = {}, []
     for line in open_maybe_gz(a.panel_snps):
         if line.startswith("#"):
             continue
         f = line.rstrip("\n").split("\t")
         alts = f[4].upper().split(",")
-        if len(alts) != 1 or len(f[3]) != 1 or len(alts[0]) != 1:
+        if len(alts) != 1:
             continue
-        pos_idx[int(f[1])] = len(rows)
-        rows.append([int(g) if g.isdigit() else -1 for g in f[9:]])
+        k = trim(int(f[1]), f[3].upper(), alts[0])
+        if len(k[1]) != 1 or len(k[2]) != 1:
+            continue
+        g = [int(x) if x.isdigit() else -1 for x in f[9:]]
+        if k in key_idx:
+            # a repeated key (an uncollapsed panel VCF) is one allele: union
+            # its genotypes, ALT over REF over missing, rather than overwrite
+            rows[key_idx[k]] = [max(x, y) for x, y in zip(rows[key_idx[k]], g)]
+            continue
+        key_idx[k] = len(rows)
+        rows.append(g)
     G = np.array(rows, dtype=np.int8)
 
-    # isolate profile: 1 where it calls ALT at a panel site, 0 where it does not
+    # isolate profile: 1 where it calls that ALLELE at a panel site, else 0
     called = set()
     for line in open_maybe_gz(a.vcf):
         if line.startswith("#"):
             continue
         f = line.rstrip("\n").split("\t")
-        if f[6] not in (".", "PASS"):
+        if f[6] not in (".", "PASS") or len(f) < 10:
             continue
-        if len(f[3]) == 1 and len(f[4]) == 1 and f[4] not in (".", "*"):
-            called.add(int(f[1]))
+        alts = f[4].upper().split(",")
+        gt = f[9].split(":")[0].replace("|", "/").split("/")
+        for i in {int(x) for x in gt if x.isdigit() and int(x) > 0}:
+            if i > len(alts) or alts[i - 1] in (".", "*"):
+                continue
+            k = trim(int(f[1]), f[3].upper(), alts[i - 1])
+            if len(k[1]) == 1 and len(k[2]) == 1:
+                called.add(k)
     q = np.zeros(G.shape[0], dtype=np.int8)
-    for p, i in pos_idx.items():
-        if p in called:
+    for k, i in key_idx.items():
+        if k in called:
             q[i] = 1
     ok = G >= 0
     d = ((G != q[:, None]) & ok).sum(axis=0)
