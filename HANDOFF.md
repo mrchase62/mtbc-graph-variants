@@ -1,12 +1,46 @@
 # Handoff: one rerun to bring production data up to date
 
-Updated 2026-10-02. Repository `mtbc-graph-variants`, branch `main`
-(protected: no force-push, no deletion). PR #1 was merged as `b58fc4f` and
-the `review-fixes` branch deleted. The last commit is `58a6c73`. Section 2 is
-committed. `analysis/` and the paper PDF are untracked.
+Updated 2026-10-05. Repository `mtbc-graph-variants`, branch `main`
+(protected: no force-push, no deletion). `analysis/` and the paper PDF are
+untracked; `analysis/` lives on durable storage with the repository.
 
-**Both production cohorts are current**, and so are their association results
-(section 0b).
+## Start here (2026-10-05)
+
+**Production state.**
+
+- **scale200 and gwas1000 are current with the code,** and so are their
+  association results (section 0b).
+- **Two faults found on 2026-10-04 are open and unfixed** (section 0j). Both
+  touch event polarity at about 0.4 to 1% of sites:
+  - **A:** `assoc/bin/add_outgroup.py` keeps the last duplicate decomposed
+    record, so the canettii outgroup column is wrong at about 500 sites per
+    cohort;
+  - **B:** `bin/ancestral_alleles.py`'s `AA` node includes the second
+    canettii, which changes 132 lineage 1-4 variable sites.
+- **The user's decision is pending:**
+  - (a) fix at the rebuild;
+  - (b) measure the effect first;
+  - (c) fix now with one planned rerun, scale200 first.
+
+  **Do not fix or rerun anything without that decision.**
+
+**Forward work (discussion only, nothing built):**
+
+- **the lineage 1-4 panel proposal:** `analysis/strategy/L1_4_PANEL_PROPOSAL.md`,
+  sections 0g, 0i and 0j. The outgroup topology was corrected in 0j:
+  lineages 5 and 6 are the nearest outgroups;
+- **the supporting analyses:**
+  - external assembly QC (0f);
+  - the GenBank scan (0h);
+  - the panel checks (0j, `analysis/panel_checks/`).
+
+**Before anything else after downtime:**
+
+1. **Check that netscratch survived.** The working tree and the colleague's
+   CRAM copy (below) live there.
+2. **Compare the working tree with its durable mirror** if anything looks
+   missing. The last `bin/sync_back.sh` ran on 2026-10-05, before the
+   maintenance.
 
 ## The rules
 
