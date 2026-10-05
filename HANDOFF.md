@@ -39,9 +39,9 @@ fixes, with tests) were approved on 2026-10-05.
   - the GenBank scan (0h);
   - the panel checks (0j, `analysis/panel_checks/`).
 
-**In flight (2026-10-05):** four test graphs (section 0l, jobs 50713714,
-50713715, 50713717, 50713719); results go to
-`analysis/graph_tests/*/metrics.tsv`. The plan toward a 10K cohort is in
+**In flight (2026-10-05):** the section A fixes in five worktrees, and the
+canettii-isolate before/after comparison (section 0n). The test graphs are
+done (0n). The plan toward a 10K cohort is in
 section 0l and `analysis/strategy/ROAD_TO_10K.md`.
 
 **Before anything else after downtime:**
@@ -1537,6 +1537,73 @@ above all the IS6110, SV and branch-null results.
 
 **Test graph D (sparse mapping) finished in 82 minutes.** A, B and C are still
 running.
+
+## 0n. Test graphs, step 1 done, fixes in progress (2026-10-05)
+
+### Test graphs: results
+
+`analysis/graph_tests/RESULTS.md`. Base: 50 lineage 1-4,7 genomes, built with
+CX333's pggb settings.
+
+| change from the base (A) | nodes | VCF records | records at nesting level 4+ | build time |
+|---|---:|---:|---:|---:|
+| B: + one lineage 5, one lineage 6 | +11% | +12% | +15% | +5% |
+| **C: + M. canettii ET1291** | **+60%** | **+63%** | **+101%** | **+26%** |
+| D: B with sparse mapping (`-x auto`) | +10% | +12% | +15% | −20% against B |
+
+- **Canettii in the graph is about five times the cost of two lineage 5/6
+  genomes.** It adds 175 kb of new sequence and doubles deep nesting. **Keep
+  it outside the graph** (the outgroup kit, section 0k).
+- **A lineage 5/6 in-graph outgroup is affordable.**
+- **Sparse mapping gives the same graph within 1%, 20% faster,** with the
+  saving growing as n² with panel size. **It is adopted only after a
+  record-by-record comparison of B and D's variants.**
+- **Build model:** a 150-300 genome panel costs roughly 300-1,200 CPU-hours
+  with full mapping. CX333's build was 1,478.
+- **Cost of the four arms:** about 300 billing-hours, above the 200 estimated,
+  because builds ran 82-123 minutes.
+
+### Step 1 (code into the repository): done
+
+Commit 19c039a. 34 working-tree-only scripts were copied byte for byte, and
+`runroot/assoc/bin` now links to the repository. The repository copies, run
+from runroot, reproduce scale200's `snps.fasta`, `sites.tsv` and `og.fasta`
+exactly. The test suite passes (33 tests).
+
+### Step 2 (section A fixes): in progress
+
+Five groups, each in its own git worktree, with a regression test per finding
+and before/after counts on real data copies. Brief:
+`analysis/audit/FIX_BRIEF.md`.
+
+| group | findings |
+|---|---|
+| is6110 | P3IS-1, -3 to -7 |
+| polarity | faults A and B, GRAPHVCF-2/3, TP-1 to TP-3, TP-6 to TP-11 |
+| p4p5 | P4P5-1 to -6 and -8, P3IS-2 |
+| assoc | ASSOC-2 to -6 and LOWs (not ASSOC-1) |
+| selection | GRAPHVCF-4 to -6, PGB-10/11, the P2 summary path, line endings |
+
+The branches are merged and reviewed only after every group reports.
+
+### The canettii isolate (ASSOC-1)
+
+**Deferred by the user.** The test graphs concern a canettii *genome* in the
+graph, not this cohort *sample*.
+
+**Requested (2026-10-05): a full before/after list of which associations
+change** without the isolate. The user stressed that:
+
+- downstream analysis is almost all tree based;
+- ancestral reconstructions are crucial;
+- right answers outrank speed.
+
+The comparison holds everything else equal: the same production code (main at
+19c039a, whose association scripts are byte-identical to what production
+ran), the same seeds and settings. The only change is the isolate, pruned from
+the same tree. Both arms are rerun, so Monte Carlo noise is not mistaken for
+an effect. It covers the scan, all three burdens and the ancestral
+reconstruction at internal nodes.
 
 ## 1. State before the rerun (2026-09-30)
 
