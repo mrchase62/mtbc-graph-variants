@@ -51,8 +51,11 @@ import argparse, bisect, collections, csv, os, sys
 
 def load_bed_spans(path):
     out = []
+    # A MISSING MASK OR RD FILE IS AN ERROR, not an empty one: it used to
+    # return no spans, which blanks every context flag and so moves every
+    # scattered interval from E3_scattered_in_repeat to E3_scattered.
     if not os.path.exists(path):
-        return out
+        sys.exit(f"FATAL: {path} does not exist")
     with open(path) as fh:
         for line in fh:
             f = line.rstrip("\n").split("\t")

@@ -27,19 +27,40 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sv_scatter import tree_frame
-from assoc_scan import descendant_matrix, bh
+from assoc_scan import (descendant_matrix, bh, event_key, leave_one_out,
+                        load_lineages, load_carriers)
 
 
 def load_genes(path):
+    """(start, end, strand, name), 1-based inclusive. The snpEff dump's start
+    is 0-based (rpoB is `759806 763325`, true span 759807-763325), so reading
+    it as 1-based gave every gene one extra base on its left."""
     g = []
     for r in csv.reader(open(path), delimiter="\t"):
         if len(r) > 7 and r[4] == "Gene":
             try:
-                g.append((int(r[1]), int(r[2]), int(r[3]), r[6] or r[7]))
+                g.append((int(r[1]) + 1, int(r[2]), int(r[3]), r[6] or r[7]))
             except ValueError:
                 pass
     g.sort()
     return g, [x[0] for x in g]
+
+
+def deleted_span(r):
+    """(first, last) deleted base, 1-based, for a deletion record; else None.
+
+    VCF POS is the anchor base BEFORE the deletion, so it is never deleted.
+    The span comes from the catalogue ID `svi:DEL:<first>:<len>`, else from a
+    symbolic `<DEL:-len>` ALT."""
+    f = (r.get("id") or "").split("#")[0].split(":")
+    if len(f) == 4 and f[0] == "svi" and f[1] == "DEL" \
+            and f[2].isdigit() and f[3].isdigit():
+        return int(f[2]), int(f[2]) + int(f[3]) - 1
+    alt = r.get("alt") or ""
+    if alt.startswith("<DEL:-") and alt.endswith(">") \
+            and alt[6:-1].isdigit() and r["pos"].isdigit():
+        return int(r["pos"]) + 1, int(r["pos"]) + int(alt[6:-1])
+    return None
 
 
 def main():
@@ -67,6 +88,19 @@ def main():
                          "controls where events fall, not who carries the "
                          "phenotype.")
     ap.add_argument("--min-pool", type=int, default=200)
+    ap.add_argument("--min-determinacy", type=float, default=0.80,
+                    help="the scan's callability floor, applied per record: a "
+                         "record whose reconstruction leaves more than this "
+                         "share of branches undetermined contributes no "
+                         "origins. Without it 6%% (small), 16-22%% (sv) and "
+                         "7-9%% (is6110) of burden origins came from records "
+                         "the scan treats as untestable.")
+    ap.add_argument("--sv-min-overlap", type=int, default=1,
+                    help="--cls sv: a deletion is credited to EVERY gene it "
+                         "removes at least this many bp of. 1 credits any "
+                         "partial overlap. A deletion that touches no gene "
+                         "falls back to the promoter or intergenic unit at "
+                         "its first deleted base.")
     ap.add_argument("--out", required=True)
     ap.add_argument("--seed", type=int, default=20260925)
     a = ap.parse_args()
@@ -76,18 +110,17 @@ def main():
     li = {l: j for j, l in enumerate(T["leaves"])}
     D = descendant_matrix(T)
     nd = D.sum(axis=1)
-    carriers = {l.strip() for l in open(a.phenotype) if l.strip()}
+    carriers = load_carriers(a.phenotype, li)
     dep = np.zeros(len(T["leaves"]), dtype=bool)
     for s in carriers:
-        if s in li:
-            dep[li[s]] = True
+        dep[li[s]] = True
     ov = (D & dep).sum(axis=1) / np.maximum(nd, 1)
     OVP = None
-    if a.lineages and os.path.exists(a.lineages):
-        lin = {}
-        for r in csv.DictReader(open(a.lineages), delimiter="\t"):
-            if r.get("sample") in li:
-                lin[li[r["sample"]]] = r.get("lineage") or "unknown"
+    if not a.lineages:
+        print("  WARNING: no --lineages, so no lineage null and nothing can "
+              "pass all three")
+    if a.lineages:
+        lin = load_lineages(a.lineages, T["leaves"])
         groups = collections.defaultdict(list)
         for i in range(len(T["leaves"])):
             groups[lin.get(i, "unassigned")].append(i)
@@ -110,11 +143,23 @@ def main():
     genes, gstart = load_genes(a.genes)
 
     def gene_at(p):
+        # ONE GENE PER POSITION: where genes overlap (17,874 bp of H37Rv) a
+        # point record is credited to the earlier-starting gene only. Deletion
+        # spans are credited to every gene they touch (genes_over below).
         i = bisect.bisect_right(gstart, p)
         for s, e, st, n in genes[max(0, i - 3):i]:
             if s <= p <= e:
                 return n
         return None
+
+    gmaxlen = max((e - s for s, e, st, n in genes), default=0)
+
+    def genes_over(first, last):
+        """every gene sharing at least --sv-min-overlap bp with [first, last]"""
+        lo = bisect.bisect_left(gstart, first - gmaxlen)
+        hi = bisect.bisect_right(gstart, last)
+        return [n for s, e, st, n in genes[lo:hi]
+                if min(e, last) - max(s, first) + 1 >= a.sv_min_overlap]
 
     def unit_at(p):
         """gene body, else promoter, else the intergenic gap itself."""
@@ -143,7 +188,9 @@ def main():
     reg_of = collections.defaultdict(collections.Counter)
     kind_of = {}
     n_kind = collections.Counter()
-    n_site = n_nogene = n_noframe = 0
+    n_site = n_nogene = n_noframe = n_uncall = n_multi = 0
+    missing = []
+    nbranch = T["n"] - 1
     for r in csv.DictReader(open(os.path.join(a.events, "variants.tsv")),
                             delimiter="\t"):
         if r["class"] != a.cls or int(r["n_gain"]) < 1:
@@ -158,21 +205,48 @@ def main():
         if r["frame"] not in ("h37rv", "") or not r["pos"].isdigit():
             n_noframe += 1
             continue
-        g, kind = unit_at(int(r["pos"]))
-        n_kind[kind] += 1
-        k = r["row_key"].split("|")
-        key = (int(k[0]) if k[0].isdigit() else k[0], k[1], k[2])
-        try:
-            v = ev.calls.loc[key]
-        except Exception:
+        # THE SCAN'S CALLABILITY FLOOR. A record mostly undetermined on the
+        # tree has not been reconstructed, and its few resolved gains are not
+        # origins the burden can count. Burden records are H37Rv-frame and
+        # unconditional, so the floor is over the whole tree, as in the scan.
+        if 1.0 - int(r["n_undet"]) / max(1, nbranch) < a.min_determinacy:
+            n_uncall += 1
             continue
-        by_gene[g] |= {lab_i[cols[j]] for j in np.where(v == 1)[0]}
-        kind_of[g] = kind
-        reg_of[g][r.get("region") or "other"] += 1
+        # A DELETION REMOVES A SPAN, NOT ITS ANCHOR BASE. Crediting it to the
+        # unit at POS put a deletion of several genes on one of them, and could
+        # put it on the gene ENDING at the anchor base, which it does not touch
+        # at all (svi:DEL:3348474:59 and Rv2991). 21% of gwas1000's deletions
+        # with an origin removed a gene other than the one credited.
+        span = deleted_span(r) if a.cls == "sv" else None
+        if span:
+            units = [(g, "gene") for g in genes_over(*span)]
+            if not units:
+                units = [unit_at(span[0])]
+            n_multi += len(units) > 1
+        else:
+            units = [unit_at(int(r["pos"]))]
+        for kind in {kd for _, kd in units}:
+            n_kind[kind] += 1
+        try:
+            v = ev.calls.loc[event_key(r["row_key"])]
+        except Exception:
+            missing.append(r["row_key"])
+            continue
+        b = {lab_i[cols[j]] for j in np.where(v == 1)[0]}
+        for g, kind in units:
+            by_gene[g] |= b
+            kind_of[g] = kind
+            reg_of[g][r.get("region") or "other"] += 1
     ev.close()
+    if missing:
+        sys.exit(f"FATAL: {len(missing):,} variants.tsv rows have no event-"
+                 f"matrix row, e.g. {missing[:3]}")
     print(f"  {n_site:,} {a.cls} records with at least one origin; "
-          f"{n_noframe:,} have no H37Rv coordinate. The rest enter the burden "
-          f"over {len(by_gene):,} units:")
+          f"{n_noframe:,} have no H37Rv coordinate; {n_uncall:,} are below "
+          f"the {a.min_determinacy:.0%} callability floor. The rest enter the "
+          f"burden over {len(by_gene):,} units"
+          + (f" ({n_multi:,} deletions span two or more genes)"
+             if a.cls == "sv" else "") + ":")
     for k in ("gene", "promoter", "intergenic"):
         if n_kind[k]:
             nu = sum(1 for u, kk in kind_of.items() if kk == k)
@@ -206,9 +280,7 @@ def main():
         k = len(br)
         d = rng.choice(T["n"], size=(P, k), p=w)
         p_branch = max(1, int((ov[d].mean(axis=1) >= obs).sum())) / P
-        own = collections.Counter(br.tolist())
-        pl = [x for x in pool[strat[g]]
-              if not (own[x] and own.__setitem__(x, own[x] - 1))]
+        pl = leave_one_out(pool[strat[g]], br.tolist())
         if len(pl) >= a.min_pool:
             pa = np.asarray(pl)
             d2 = pa[rng.integers(0, len(pa), size=(P, k))]
