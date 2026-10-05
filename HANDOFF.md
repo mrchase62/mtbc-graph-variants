@@ -6,6 +6,10 @@ untracked; `analysis/` lives on durable storage with the repository.
 
 ## Start here (2026-10-05)
 
+**Audit (section 0m): 97 findings, and the current association results are
+provisional.** Steps 1-3 (code into the repository, then the section A and B
+fixes, with tests) were approved on 2026-10-05.
+
 **Production state.**
 
 - **scale200 and gwas1000 are current with the code,** and so are their
@@ -1423,6 +1427,108 @@ That cost grows with the square of the panel size.
 1. the 10K selection criteria, and lineage 1-4 only or not;
 2. the cheaper P1 selector, adopt or not;
 3. approval of the step 2 code work (repository only, no fairshare).
+
+## 0m. Full pipeline audit: 97 findings (2026-10-05)
+
+Seven read-only audits, one per area. The consolidated list is in
+`analysis/audit/CONSOLIDATED.md`, with the per-area reports beside it.
+**Totals: 10 HIGH, 39 MEDIUM, 48 LOW.** The main findings were re-checked in
+code and, where marked, on production data.
+
+**The current scale200 and gwas1000 association results are provisional,**
+above all the IS6110, SV and branch-null results.
+
+### A. Findings that change current results
+
+- **P3IS-1 (HIGH, verified on data):** IS6110 carriers whose matched
+  reference already holds a copy are written GT=0 on H37Rv-frame records.
+  - gwas1000: 5,103 wrong cells against 2,424 correct ALT; scale200: 1,098
+    against 469.
+  - Polarity is inverted where H37Rv itself has a copy.
+- **ASSOC-1 (HIGH, verified):** a read-based M. canettii isolate (`canettii`)
+  is a tip of both association trees, with phenotype 0.
+  - Its branch is 25.8% (scale200) and 11.4% (gwas1000) of tree length.
+  - Removing it cuts q_branch passes from 138 to 31 and from 68 to 38.
+  - **Open decision for the user:** remove it from the cohorts.
+- **PGB-6 (verified):** a third artifact genome. GCF_039770655, the only
+  lineage 9 genome and the reference for all lineage 9 isolates, has a
+  377 bp poly-T. It produces false calls in all 16 lineage 9 isolates. A
+  single-base-run rule at 100 bp flags exactly the three artifact genomes.
+- **SV genotyping:**
+  - **P4P5-4:** delly records genotyped 0/0 with FILTER PASS become ALT
+    (6,604 rows in gwas1000);
+  - **P4P5-3:** one clip cluster "confirms" an inherited deletion despite
+    full depth (7,321 cells);
+  - **P4P5-1:** any inexact odgi projection is written ABSENT (about
+    109,000 gwas1000 SNP cells; the total ABSENT on scale200 SNP records is
+    134,308, the real-deletion share to be settled);
+  - **P4P5-2:** REF stated at reference-carried core indels;
+  - **P4P5-5, P4P5-6, P4P5-8:** widened intervals, duplicate insertion
+    records, overlapping inherited records.
+- **Accessory and IS6110:**
+  - **P3IS-2:** 674 of 802 presence loci cannot be seen by the read route
+    but are written absent;
+  - **P3IS-3:** node-frame IS6110 keys on repeated nodes merge unrelated
+    insertions;
+  - **P3IS-4:** DR-rescue offset error.
+- **Event direction:**
+  - faults A and B (section 0j);
+  - **TP-1:** further REF-for-N and REF-for-ALT cases in `add_outgroup.py`;
+  - **TP-2:** `X,*` SNP records (19% of scale200 SNPs) dropped from the tree
+    alignment and the outgroup;
+  - **TP-3:** the H37Rv tip is set to REF at node-frame records;
+  - **GRAPHVCF-3:** `panel_polarity.py` (hand-run) has the last-duplicate
+    fault;
+  - **GRAPHVCF-5:** decompose leaves REF padded, so 376 SNPs lose their
+    ancestral allele.
+- **Other:**
+  - **GRAPHVCF-4:** P1 selection ignores the ALT base (10 isolates
+    affected);
+  - **ASSOC-2 to ASSOC-5:** null and burden details;
+  - **PGB-8:** 79 panel genomes never had the SNP-outlier screen.
+
+### B. Hazards for the rebuild and rerun
+
+- **Skip guards test file existence only:** P1, P2, P0 ancestral, the
+  association chain and the accessory tables. **The rerun goes into new
+  output folders.**
+- **Paths hard-coded to CX333:** panel SNPs, node tables and panel allele
+  frequencies, the build ID stamp, the IS6110 tie-break files.
+- **The repeat mask changed** under the build's recorded checksum.
+- **`pggb_build.sh` cannot start a clean build** (provenance is written
+  before the emptiness check), and its defaults differ from CX333's.
+  vcfwave settings also differ.
+- **Parts of CX333's panel construction were never coded:**
+  - the 484 → 333 step;
+  - the production provenance rule;
+  - the foreign screen as run.
+- **Duplicate graph-VCF records come from vcfwave.** The collapse step
+  removes them almost losslessly, so new-graph readers should use the
+  collapsed VCF.
+
+### C. Code location
+
+- **The association chain, the tree builders, `panel_polarity.py` and all
+  graph and panel build code run from the working tree only,** and were never
+  reviewed.
+- **The working tree also holds stale copies** of `cohort_assoc_tail.sh` and
+  `audit_chain.py`. Run from there, they bring back the omissions fixed in
+  0b.
+
+### Order of work (the user approved steps 1-3 on 2026-10-05)
+
+1. Bring all production code into the repository, with no change in
+   behaviour.
+2. Fix section A, with a test for each finding. ASSOC-1 waits for the user's
+   decision.
+3. Fix section B.
+4. A second review of the fixes.
+5. Build the new panel and graph.
+6. Rerun into new folders: scale200 first, checked against these findings,
+   then gwas1000. Cost estimate before each.
+
+**Test graph D (sparse mapping) finished in 82 minutes.** A, B and C are still
+running.
 
 ## 1. State before the rerun (2026-09-30)
 
