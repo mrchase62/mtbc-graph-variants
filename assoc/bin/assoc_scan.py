@@ -56,6 +56,87 @@ def descendant_matrix(T):
     return D
 
 
+def event_key(row_key):
+    """The bytestream key for a variants.tsv row_key, EVERY field of it.
+
+    write_event_matrix.py --dedupe suffix renames the second record at a
+    repeated (pos, ref, alt) to (pos, ref, alt, '#2'). Rebuilding the key from
+    the first three fields only looked the `#2` record up as the FIRST record
+    and tested it on that record's branches -- svi:DEL:836371:1010 in gwas1000
+    was scored on the 80 gains of svi:DEL:836371:135 instead of its own 32.
+    """
+    k = row_key.split("|")
+    return (int(k[0]) if k[0].isdigit() else k[0],) + tuple(k[1:])
+
+
+def leave_one_out(pool, own):
+    """`pool` with ONE occurrence of each of `own` removed, as a multiset.
+
+    The previous one-liner, `not (own[x] and own.__setitem__(...))`, kept every
+    element -- `__setitem__` returns None, so the test was always true -- and
+    the region null drew from a pool still holding the variant's own branches.
+    """
+    own = collections.Counter(own)
+    cand = []
+    for x in pool:
+        if own[x]:
+            own[x] -= 1
+        else:
+            cand.append(x)
+    return cand
+
+
+def load_lineages(path, leaves):
+    """{leaf index: lineage} from a cohort table, refusing a table that cannot
+    stratify this tree.
+
+    A missing path, a table without `sample` and `lineage` columns, or one
+    whose samples are not the tree's tips all used to leave every tip in one
+    `unassigned` stratum, which quietly turns the lineage null into a plain
+    permutation. H37Rv and the outgroup are tips with no cohort row, so a few
+    unassigned tips are expected; more than MIN_LINEAGE_COVERAGE is refused.
+    """
+    if not os.path.exists(path):
+        sys.exit(f"FATAL: --lineages {path} does not exist; the lineage null "
+                 f"would be skipped and written blank")
+    li = {l: j for j, l in enumerate(leaves)}
+    with open(path, newline="") as fh:
+        rd = csv.DictReader(fh, delimiter="\t")
+        if not {"sample", "lineage"} <= set(rd.fieldnames or []):
+            sys.exit(f"FATAL: --lineages {path} has no `sample` and `lineage` "
+                     f"columns (has {rd.fieldnames})")
+        lin = {}
+        for r in rd:
+            if r.get("sample") in li:
+                lin[li[r["sample"]]] = r.get("lineage") or "unknown"
+    cov = len(lin) / max(1, len(leaves))
+    print(f"  lineage table: {len(lin):,} of {len(leaves):,} tips assigned "
+          f"({cov:.1%})")
+    if cov < MIN_LINEAGE_COVERAGE:
+        sys.exit(f"FATAL: --lineages {path} assigns only {len(lin):,} of "
+                 f"{len(leaves):,} tips; below {MIN_LINEAGE_COVERAGE:.0%} the "
+                 f"lineage null is mostly one `unassigned` stratum")
+    return lin
+
+
+# share of tips a lineage table must assign (the rest are H37Rv, the outgroup)
+MIN_LINEAGE_COVERAGE = 0.95
+
+
+def load_carriers(path, li):
+    """The phenotype carriers, refusing names that are not tips of the tree.
+
+    A carrier missing from the tree used to be dropped without a word, which
+    reads exactly like a non-carrier."""
+    carriers = {l.strip() for l in open(path) if l.strip()}
+    miss = sorted(s for s in carriers if s not in li)
+    if miss:
+        sys.exit(f"FATAL: {len(miss):,} of {len(carriers):,} phenotype "
+                 f"carriers in {path} are not tips of the tree, e.g. "
+                 f"{miss[:5]}")
+    return carriers
+
+
 def bh(p):
     p = np.asarray(p, dtype=float)
     n = len(p)
@@ -85,7 +166,9 @@ def main():
                          "gwas1000 share one pool, of which 77% are scattered "
                          "repeat-context intervals, so a lineage-coherent "
                          "deletion is measured against a background of "
-                         "unreliable ones.")
+                         "unreliable ones. REQUIRED when svi: records are "
+                         "scanned, and it must tier every one of them; "
+                         "`none` pools them untiered on purpose.")
     ap.add_argument("--accessory-presence", default="",
                     help="directory of <sample>.presence.tsv. Enables the "
                          "LEVEL 2 null: for a variant inside an accessory "
@@ -152,11 +235,10 @@ def main():
     D = descendant_matrix(T)
     nd = D.sum(axis=1)
 
-    carriers = {l.strip() for l in open(a.phenotype) if l.strip()}
+    carriers = load_carriers(a.phenotype, li)
     dep = np.zeros(len(T["leaves"]), dtype=bool)
     for s in carriers:
-        if s in li:
-            dep[li[s]] = True
+        dep[li[s]] = True
     print(f"  tree {T['n']} nodes, {len(T['leaves'])} leaves; "
           f"{int(dep.sum())} carriers of the phenotype")
 
@@ -170,11 +252,11 @@ def main():
     # OVP[:, p] is the per-branch statistic under permutation p, computed as
     # one matrix product rather than P passes over the tree.
     OVP = None
-    if a.lineages and os.path.exists(a.lineages):
-        lin = {}
-        for r in csv.DictReader(open(a.lineages), delimiter="\t"):
-            if r.get("sample") in li:
-                lin[li[r["sample"]]] = r.get("lineage") or "unknown"
+    if not a.lineages:
+        print("  WARNING: no --lineages, so no lineage null; under the "
+              "survivor rule nothing can survive without it")
+    if a.lineages:
+        lin = load_lineages(a.lineages, T["leaves"])
         groups = collections.defaultdict(list)
         for i in range(len(T["leaves"])):
             groups[lin.get(i, "unassigned")].append(i)
@@ -359,13 +441,12 @@ def main():
     ev = CallBytestream(os.path.join(a.events, "event"))
     cols = np.asarray(ev.calls.col)
     col_i = {c: i for i, c in enumerate(cols)}
-    keep = []
+    keep, missing = [], []
     for r in rows:
-        k = r["row_key"].split("|")
-        key = (int(k[0]) if k[0].isdigit() else k[0], k[1], k[2])
         try:
-            v = ev.calls.loc[key]
+            v = ev.calls.loc[event_key(r["row_key"])]
         except Exception:
+            missing.append(r["row_key"])
             continue
         br = np.where(v == 1)[0]
         if len(br) < a.min_gains:
@@ -373,16 +454,27 @@ def main():
         ev_of[r["row_key"]] = np.asarray([col_i[cols[j]] for j in br])
         keep.append(r)
     ev.close()
+    # A ROW THE EVENT MATRIX DOES NOT HOLD is a mismatch between the two files,
+    # not an untestable variant; it used to be skipped without a count.
+    if missing:
+        sys.exit(f"FATAL: {len(missing):,} variants.tsv rows have no event-"
+                 f"matrix row, e.g. {missing[:3]}")
     rows = keep
     print(f"  {len(rows):,} of them resolved to event branches")
 
     import bisect as _bi
     _g = []
-    if a.genes and os.path.exists(a.genes):
+    if a.genes and not os.path.exists(a.genes):
+        sys.exit(f"FATAL: --genes {a.genes} does not exist; without it the "
+                 f"genic/intergenic split is silently dropped. Pass --genes '' "
+                 f"to run without it on purpose")
+    if a.genes:
         for row in csv.reader(open(a.genes), delimiter="\t"):
             if len(row) > 7 and row[4] == "Gene":
                 try:
-                    _g.append((int(row[1]), int(row[2])))
+                    # the snpEff dump's start is 0-based, its end 1-based;
+                    # positions here are 1-based VCF positions
+                    _g.append((int(row[1]) + 1, int(row[2])))
                 except ValueError:
                     pass
         _g.sort()
@@ -394,7 +486,21 @@ def main():
 
     # evidence tier per catalogued interval, for the SV region key
     ev_tier = {}
-    if a.sv_intervals and os.path.exists(a.sv_intervals):
+    # A CATALOGUED DELETION WITHOUT A TIER is nulled against every other one,
+    # and the chain ran that way from 2026-10-02 without a word: it stopped
+    # passing this option, and the only table on disk was from the previous
+    # catalogue and held 292 of scale200's 467 current IDs. So a scan holding
+    # svi: records now needs the table, built from the same catalogue, or an
+    # explicit `--sv-intervals none` to run untiered on purpose.
+    n_svi = sum(1 for r in rows if r["id"].startswith("svi:"))
+    if a.sv_intervals != "none":
+        if n_svi and not a.sv_intervals:
+            sys.exit(f"FATAL: {n_svi:,} svi: records to scan and no "
+                     f"--sv-intervals; pass the retiered catalogue (or "
+                     f"`--sv-intervals none` to pool them untiered)")
+        if a.sv_intervals and not os.path.exists(a.sv_intervals):
+            sys.exit(f"FATAL: --sv-intervals {a.sv_intervals} does not exist")
+    if a.sv_intervals and a.sv_intervals != "none":
         with open(a.sv_intervals, newline="") as fh:
             for q in csv.DictReader(fh, delimiter="\t"):
                 if q.get("evidence_tier"):
@@ -402,6 +508,13 @@ def main():
         print(f"  sv evidence tiers: {len(ev_tier):,} intervals, "
               + "  ".join(f"{k} {v:,}" for k, v in
                           sorted(collections.Counter(ev_tier.values()).items())))
+        untiered = sorted({r["id"].split("#")[0] for r in rows
+                           if r["id"].startswith("svi:")
+                           and r["id"].split("#")[0] not in ev_tier})
+        if untiered:
+            sys.exit(f"FATAL: {len(untiered):,} scanned svi: IDs have no "
+                     f"evidence_tier in {a.sv_intervals}, e.g. {untiered[:3]}; "
+                     f"the table is not from this cohort's catalogue")
 
     def regkey(r):
         # LEVEL 1 is its own region. An accessory presence character is one
@@ -524,9 +637,7 @@ def main():
         rungs = ladder(r)
         rk, pl, rlevel = rungs[0], [], ""
         for i, rung in enumerate(rungs):
-            own = collections.Counter(br.tolist())
-            cand = [x for x in pool[rung]
-                    if not (own[x] and own.__setitem__(x, own[x] - 1))]
+            cand = leave_one_out(pool[rung], br.tolist())
             rk, pl = rung, cand
             if len(cand) >= a.min_pool:
                 rlevel = ("fine", "coarse", "family")[min(i, 2)]
@@ -639,17 +750,24 @@ def main():
     # requirement with it, which let three scale200 variants through on
     # q_lineage 0.0798 -- and they were the same two-origin haplotype at
     # ACC_3846790 that gwas1000 rejects at q_branch 0.31.
+    #
+    # SURVIVING MEANS q < 0.05 UNDER ALL THREE NULLS -- branch, region (or
+    # level 2 for a conditional variant) and lineage -- as HANDOFF 0b defines
+    # it and as the `all three` column above counts it. The rule used to omit
+    # q_branch for unconditional variants and to count a lineage null that was
+    # never run (q_lineage blank) as a pass, so it matched `all three` only
+    # while every row had a lineage null and every region pass was also a
+    # branch pass. A null that did not run is now `not tested`, never a pass.
     def survives(o):
-        lineage_ok = (o["q_lineage"] != o["q_lineage"]
-                      or o["q_lineage"] < 0.05)
+        lineage_ok = o["q_lineage"] == o["q_lineage"] and o["q_lineage"] < 0.05
         if o["q_cond"] == o["q_cond"]:
             return (o["q_cond"] < 0.05 and o["q_branch"] < 0.05
                     and lineage_ok)
         return (o["q_region"] == o["q_region"] and o["q_region"] < 0.05
-                and lineage_ok)
+                and o["q_branch"] < 0.05 and lineage_ok)
     surv = [o for o in out if survives(o)]
     if surv:
-        print(f"\n  the {len(surv)} that survive every null available:")
+        print(f"\n  the {len(surv)} that survive all three nulls:")
         print(f"  {'pos':>9} {'region':<16}{'gains':>6}{'carr':>6}{'obs':>7}"
               f"{'p_branch':>10}{'p_region':>10}{'p_lineage':>11}")
         for o in surv[:20]:
@@ -661,6 +779,8 @@ def main():
     print(f"  -> {a.out}")
 
     # ---- self-check against phyoverlap2 itself
+    if not (a.check and a.phyoverlap2 and os.path.isdir(a.phyoverlap2)):
+        print("  self-check against phyoverlap2 NOT run (no --phyoverlap2)")
     if a.check and a.phyoverlap2 and os.path.isdir(a.phyoverlap2):
         sys.path.insert(0, a.phyoverlap2)
         import phyoverlap2 as po
