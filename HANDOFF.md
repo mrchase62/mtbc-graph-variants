@@ -1078,6 +1078,86 @@ better long-run design for L1-4 genotyping.
 12. Run documented settings, and reconcile the run documentation
     (RUNBOOK.md against QC_PIPELINE.md).
 
+## 0h. GenBank scan for the sparse lineages (2026-10-04)
+
+Analysis only: `analysis/genbank_scan/README.md`; one row per genome in
+`genbank_typed.tsv`. Cost under 1 billing-hour (job 50558650).
+
+**What was scanned:** complete MTBC genomes in GenBank that are not in CX333,
+**173 in all** (68 released in 2026, after CX333). Each was typed by barcode
+lineage, checked for indel and homopolymer-indel excess, and given its mash
+distance to the nearest CX333 genome.
+
+**Sparse lineages: barely helped.**
+
+| lineage | CX333 | GenBank, not in CX333 |
+|---|---:|---:|
+| 5 | 8 | 3 |
+| 6 | 5 | 5 (one error-rich) |
+| 7 | 2 | 1 |
+| 8, 9 | 1 each | 0 |
+| La3 (M. orygis) | 0 | 2, clean |
+
+- **Seven of the new lineage 5, 6 and 7 genomes are one 2026 set**
+  (CT2018-00095 to -00101). Each is 31 to 94 differences from a CX333
+  genome.
+- **The one real gap filled is M. orygis.**
+- **Conclusion:** public genomes cannot fix lineages 5 to 9; that would need
+  sequencing.
+
+**Lineages 1 to 4:**
+
+- **82 of 173 genomes are flagged for indel or homopolymer-indel excess.**
+  - **PRJNA994284 (Oman, 58 genomes):** treat the whole project as
+    error-rich.
+  - **PRJNA270004:** the 2015 PacBio project.
+  - **PRJNA1254888:** Masan XDR.
+- **43 clean genomes add new diversity** (300 or more differences from any
+  CX333 genome), mostly lineage 2.2, 4.1, 4.3, 1, 2.1 and 3.
+
+## 0i. Proposal: a new lineage 1-4 panel and an outgroup outside the graph (2026-10-04)
+
+**A proposal, nothing built:** `analysis/strategy/L1_4_PANEL_PROPOSAL.md`.
+
+1. **Timing: rebuild before scaling to 10,000+ samples.** A panel change
+   forces a full rerun, which is cheapest now.
+2. **The gap, measured on gwas1000's 768 lineage 1-4 isolates:**
+   - median 251 SNPs to the matched reference; 328 isolates over 300;
+   - worst: lineage 1.1.3 (613), 1.1.2 (528), 1.2.2 (416) and 3 (348);
+   - lineage 2.2.1 has 87 panel genomes and a median of 129.
+3. **Panel:** about 300 lineage 1-4 genomes, chosen from a QC'd pool of about
+   450 (CX333 286, Marin 88, GenBank 72, plus new genomes):
+   1. full QC, including the long-read checks;
+   2. a single distance matrix;
+   3. collapse clones within about 50 SNPs;
+   4. a sublineage floor;
+   5. greedy selection that minimises the number of isolates over 150 SNPs
+      from their nearest panel genome;
+   6. long-read sequencing for the gaps the pool cannot fill (1.1.3, 1.2.2,
+      3, 3.1.2).
+4. **Outgroup:**
+   - **lineage 8 (RW-TB008, GCF_012923765) as the nearest outgroup, then
+     M. canettii ET1291 (and optionally CIPT 140010059);**
+   - **lineages 5, 6, 7, 9 and the animal lineages are not valid outgroups:**
+     lineage 1 branches first, so they sit inside the lineage 1-4 clade;
+   - the kit is outside the graph:
+     - SNP states by direct whole-genome alignment to H37Rv, replacing
+       add_outgroup.py's "no record = REF" rule;
+     - event states by running the outgroups through P1 to P5 as simulated
+       pseudo-isolates;
+     - ancestral polarity takes the nearest called outgroup first.
+5. **Cost:**
+   - graph build up to about 1,500 CPU-hours (CX333's build log: 1,478);
+   - QC and selection about 20 billing-hours;
+   - then reruns: scale200, then gwas1000 (about 350+).
+6. **Three cheap checks can run now in `analysis/`:**
+   - the kit against the graph VCF for canettii;
+   - lineage 8 rooting on scale200;
+   - read sketches of gwas1000 isolates against the new candidates.
+7. **Open decisions:** strictly lineages 1-4 or including lineage 7;
+   exclude or flag non-lineage 1-4 isolates (228 of gwas1000's 996); panel
+   size; sequencing; whether to run the checks.
+
 ## 1. State before the rerun (2026-09-30)
 
 The review fixes (`deefef7`, `0a3f712`, 2026-09-29) changed P3, P4, P4b, P5
