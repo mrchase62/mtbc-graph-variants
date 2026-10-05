@@ -72,6 +72,10 @@ MTB_CRAM_ROOT="$CRAMROOT" mtb_require_cram_root || exit 1
 [[ -n "$CRAMREF" ]] || { echo "FATAL: MTB_CRAM_REF is unset; set it to the reference the CRAMs were encoded against" >&2; exit 1; }
 OUTDIR="${OUTDIR:-refbias/p2}"
 WORK="${WORK:-refbias/work/p2}"
+# P1's own H37Rv VCFs, for the summary's burden comparison. refbias_run.sh
+# exports P1WORK per cohort; without it the summary read the pilot's P1 folder
+# and left h37rv_small blank for every isolate not in the pilot (audit P0P2-8).
+P1WORK="${P1WORK:-refbias/work/p1}"
 DELLY_ENV="${DELLY_ENV:-${MTB_DELLY_ENV:?MTB_DELLY_ENV is unset; see config/project_env.sh}}"
 DYSGU="${DYSGU:-refbias/work/svvenv/bin/dysgu}"
 THREADS="${SLURM_CPUS_PER_TASK:-8}"
@@ -84,7 +88,7 @@ mkdir -p "$OUTDIR" "$WORK" slurm
 # accepted as an equivalent. $1 wins if both are given.
 if [[ "${1:-${P2STEP:-}}" == "--summary" ]]; then
     exec "$MTB_PY" bin/p2_summary.py --refmap "$REFMAP" --dir "$OUTDIR" \
-        --work "$WORK" --out "${OUTDIR}/p2_summary.tsv"
+        --work "$WORK" --p1-work "$P1WORK" --out "${OUTDIR}/p2_summary.tsv"
 fi
 
 if [[ $# -ge 1 ]]; then

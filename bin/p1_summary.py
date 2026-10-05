@@ -192,7 +192,8 @@ def main():
     if not rows:
         print("no candidates found", file=sys.stderr); return 1
     with open(a.out, "w") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t")
+        w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t",
+                           lineterminator="\n")
         w.writeheader(); w.writerows(rows)
 
     print(f"  {len(rows)} isolates with a reference"
