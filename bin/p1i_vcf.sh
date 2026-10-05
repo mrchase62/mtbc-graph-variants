@@ -98,8 +98,14 @@ echo "=== 2/5 reconcile"
 # --check-against is deliberately empty. Its default points at the PILOT's
 # isclean_summary.tsv, which has 23 rows, so any other cohort is refused -- a
 # real refusal that cost a run before it was understood.
+# --crossmap-dir: each isolate's own matched reference's crossmap. Without it
+# reconcile used H37Rv's for everyone, so chrom_side_only rows had orig_pos in
+# the wrong frame, the missing-crossmap guard never ran, and the ISMapper join
+# compared matched-frame positions with H37Rv ones (audit P3IS-7). The join
+# is off in this mode; --ismapper-dir "" says so explicitly.
 "$MTB_PY" is6110/bin/is6110_reconcile.py \
     --elside-dir "$P1IDIR" --junc-dir "$P1IDIR" --refmap "$REFMAP" \
+    --crossmap-dir "${CLEANDIR:-is6110/assets/isclean_matched}" --ismapper-dir "" \
     --check-against "" --out "$RECON" \
     --summary-out "${RECON%.tsv}_summary.tsv"
 

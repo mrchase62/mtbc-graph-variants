@@ -549,16 +549,45 @@ def main():
                   f"emitting no insertion-site records")
     is6110 = collections.defaultdict(dict)
     is_meta = {}
+    is_ev = collections.defaultdict(set)
+    is_sc = collections.defaultdict(set)
+    n_is_skip = collections.Counter()
     if a.is6110_keys and os.path.exists(a.is6110_keys):
         for r in csv.DictReader(open(a.is6110_keys), delimiter="\t"):
             k = r["key"]
             if r["sample"] not in cohort:
                 n_foreign["IS6110 key table"] += 1
                 continue
+            # a site on a graph node its path visits more than once has no
+            # key (is6110_write_vcf.py, audit P3IS-3); counted, not emitted
+            if r.get("frame") == "repeat_node":
+                n_is_skip["on a repeated graph node, not keyed"] += 1
+                continue
+            # Two rows of one sample on one key were settled by row order
+            # (audit P3IS-5). The writer now refuses them; here the same
+            # state is one cell and a disagreement stops the run.
+            prev = is6110[k].get(r["sample"])
+            if prev is not None:
+                if prev != r["state"]:
+                    sys.exit(f"FATAL: {r['sample']} has rows {prev} and "
+                             f"{r['state']} on IS6110 key {k}; regenerate "
+                             f"{a.is6110_keys}")
+                n_is_skip["duplicate (sample, key) row, same state"] += 1
             # only the state is ever read back, so only the state is kept: a
             # copied row per cell is ~15 fields x keys x samples of dicts
             is6110[k][r["sample"]] = r["state"]
             is_meta.setdefault(k, r)
+            is_ev[k].add(r.get("evidence", ""))
+            is_sc[k].add(r.get("site_class", ""))
+        # EVIDENCE and SITECLASS describe the key, not its first carrier
+        # (audit P3IS-6): one value where every carrier agrees, else "mixed"
+        for k, m in is_meta.items():
+            is_meta[k] = dict(
+                m, evidence=next(iter(is_ev[k])) if len(is_ev[k]) == 1 else "mixed",
+                site_class=next(iter(is_sc[k])) if len(is_sc[k]) == 1 else "mixed")
+        if n_is_skip:
+            print("  IS6110 key table: " + ", ".join(
+                f"{k} {v:,}" for k, v in sorted(n_is_skip.items())))
 
     # ---- stage-2 states, if they exist.
     # The arm's key table and P5's key space spell the same site differently:
@@ -933,7 +962,7 @@ def main():
             n_unplaced += 1
             continue
         info = ["CLASS=is6110", "SVTYPE=INS", "SVLEN=1355",
-                f"MEINFO=IS6110,1,1355,+",
+                f"MEINFO=IS6110,1,1355,.",     # strand not determined (P3IS-6)
                 f"EVIDENCE={m.get('evidence','')}",
                 f"SITECLASS={m.get('site_class','')}",
                 f"FRAME={m.get('frame','')}"]

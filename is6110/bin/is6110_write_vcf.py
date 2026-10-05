@@ -200,6 +200,18 @@ def main():
                  f"H37Rv FASTA's contig {hcontig.split()[0]!r}")
     # Each site's H37Rv position or graph node, exactly as placed, then one
     # canonical position per insertion across the cohort (cluster_keys).
+    # A node is an identity only where the carrier's own path visits it once
+    # (audit P3IS-3): node 46966, a 1 bp node every path walks 85-453 times,
+    # gathered insertions over 1 Mb apart into one key. node_occ is that visit
+    # count, from is6110_project_sites.py; a table without it predates the
+    # check and cannot say which node keys are safe.
+    if flank and "node_occ" not in next(iter(flank.values())):
+        sys.exit(f"FATAL: {a.flank} has no node_occ column; rerun "
+                 f"is6110_project_sites.py and is6110_place_by_flank.py")
+
+    def node_ok(fr):
+        return bool(fr.get("node")) and fr.get("node_occ") == "1"
+
     def placement(sample, p):
         fr = flank.get((sample, p), {})
         v = fr.get("verdict", "")
@@ -214,7 +226,7 @@ def main():
             fr, _, hpos = placement(sample, p)
             if hpos:
                 obs_h.append(("h37rv", int(hpos), sample, p))
-            elif fr.get("node"):
+            elif node_ok(fr):
                 obs_n.append((fr["node"], int(fr.get("node_offset") or 0), sample, p))
     canon_h = cluster_keys(obs_h, a.key_window)
     canon_n = cluster_keys(obs_n, a.key_window)
@@ -223,7 +235,7 @@ def main():
 
     keys_rows = []
     today = datetime.date.today().strftime("%Y%m%d")
-    n_alt = n_ref = n_filt = 0
+    n_alt = n_ref = n_filt = n_repeat = 0
 
     # EVERY isolate in the refmap gets a file, including one with no surviving
     # site. Iterating `sites` alone silently omitted 3 isolates from scale200
@@ -256,10 +268,13 @@ def main():
             hpos, node = hpos_raw, node_raw
             if hpos_raw:
                 hpos = str(canon_h[(sample, p)])
-            elif node_raw:
+            elif node_ok(fr):
                 node = f"{fr['node']}:{canon_n[(sample, p)]}"
+            # MEINFO's polarity is the element's strand, which no step of the
+            # arm determines (review 4.10), so it is written unknown rather
+            # than the '+' it used to claim for every site.
             info = [f"SVTYPE=INS", f"SVLEN={medlen[ref]}",
-                    f"MEINFO=IS6110,1,{medlen[ref]},+",
+                    f"MEINFO=IS6110,1,{medlen[ref]},.",
                     f"IS6110_EVIDENCE={s['evidence']}",
                     f"IS6110_CLASS={'ref_shared' if shared else 'ref_lacking'}",
                     f"IS6110_CHROM_SIDE={s.get('chrom_side','') or 'none'}",
@@ -277,17 +292,55 @@ def main():
                 info.append(f"IS6110_NODE={node}")
             filt = "PASS" if s["evidence"] == "two_sided" else "LowSupport"
 
+            # THE COHORT KEY IS IN THE H37Rv OR NODE FRAME, NOT THE MATCHED ONE
+            # (audit P3IS-1). site_class says whether the isolate's matched
+            # reference also holds this copy, which makes it REF in the matched
+            # frame; carried into the cohort as REF it became GT 0 on an
+            # H37Rv-frame <INS> record, indistinguishable from a non-carrier.
+            # The state is now what the isolate carries against what the key's
+            # frame holds:
+            #   H37Rv empty     carrier ALT, whatever its matched reference holds
+            #   H37Rv occupied  carrier REF: it has the copy H37Rv has. A
+            #                   stage-2 non-carrier here lacks H37Rv's copy, which
+            #                   an <INS> allele cannot express, so stage 2 leaves
+            #                   it NOCALL (is6110_p5_stage2.py)
+            #   graph node      carrier ALT: the node is flank sequence and holds
+            #                   no element; a stage-2 REF means no junction there
+            # site_class stays in the table as information about the matched
+            # frame only.
+            # A node the carrier's path visits more than once is no identity
+            # (P3IS-3), nor one whose count is unknown: the site gets frame
+            # repeat_node and no key, and P5 and the merged VCF leave it out,
+            # counted.
+            if hpos:
+                frame, key = "h37rv", f"h37rv:{hpos}"
+                state = "REF" if hstate == "occupied" else "ALT"
+            elif node_ok(fr):
+                frame, key, state = "node", f"node:{node}", "ALT"
+            elif node_raw:
+                frame, key, state = "repeat_node", "", "ALT"
+                n_repeat += 1
+            else:
+                frame, key, state = "node", "node:", "ALT"   # refused below
             keys_rows.append(dict(
                 sample=sample, reference=ref, build_id=a.build_id,
                 evidence=s["evidence"],
                 site_class="ref_shared" if shared else "ref_lacking", r_pos=p,
-                state="REF" if shared else "ALT",
-                frame="h37rv" if hpos else "node",
-                key=f"h37rv:{hpos}" if hpos else f"node:{node}",
-                h37rv_pos=hpos, h37rv_state=hstate, node=node,
+                state=state, frame=frame, key=key,
+                h37rv_pos=hpos, h37rv_state=hstate,
+                node=node if frame == "node" else "",
                 reads=s["reads_q"], ismapper=fr.get("ismapper", ""),
-                h37rv_pos_placed=hpos_raw, node_placed=node_raw))
+                h37rv_pos_placed=hpos_raw, node_placed=node_raw,
+                node_occ=fr.get("node_occ", "")))
 
+            # The derived H37Rv-frame file follows the same rule: a record for
+            # every carrier at an H37Rv-empty locus, shared or not; none at an
+            # occupied one, where the carrier matches H37Rv (GT 0, omitted).
+            if hpos and hstate != "occupied":
+                hb = h37seq[int(hpos) - 1] if 0 < int(hpos) <= len(h37seq) else "N"
+                recs_h.append((int(hpos),
+                    f"{a.h37rv_contig}\t{hpos}\t.\t{hb}\t<INS:ME:IS6110>\t.\t{filt}\t"
+                    f"{';'.join(info)};END={hpos}\tGT\t1"))
             if shared:
                 n_ref += 1
                 continue                   # REF in this frame; no record, by decision
@@ -296,11 +349,6 @@ def main():
             base = gseq[p - 1] if 0 < p <= len(gseq) else "N"
             recs_r.append((p, f"{contig}\t{p}\t.\t{base}\t<INS:ME:IS6110>\t.\t{filt}\t"
                               f"{';'.join(info)};END={p}\tGT\t1"))
-            if hpos:
-                hb = h37seq[int(hpos) - 1] if 0 < int(hpos) <= len(h37seq) else "N"
-                recs_h.append((int(hpos),
-                    f"{a.h37rv_contig}\t{hpos}\t.\t{hb}\t<INS:ME:IS6110>\t.\t{filt}\t"
-                    f"{';'.join(info)};END={hpos}\tGT\t1"))
 
         def write(path, ctg, clen, rows):
             with open(path, "w") as fh:
@@ -326,16 +374,28 @@ def main():
     # of them ALT, because p1i_vcf.sh ran the projection without --all-stacks.
     # Every stack gets a flank row under --all-stacks, so an empty key now
     # means an upstream step was skipped -- stop rather than drop sites.
-    unkeyed = [k for k in keys_rows if not k["h37rv_pos"] and not k["node"]]
+    unkeyed = [k for k in keys_rows if not k["h37rv_pos"] and not k["node"]
+               and k["frame"] != "repeat_node"]
     if unkeyed:
         ex = ", ".join(f'{k["sample"]}@{k["r_pos"]}' for k in unkeyed[:5])
         sys.exit(f"FATAL: {len(unkeyed)} sites have no H37Rv position and no "
                  f"graph node (e.g. {ex}); was is6110_project_sites.py run with "
                  f"--all-stacks?")
+    # Two sites of one isolate on one key are two insertions merged into one
+    # record, and the readers kept whichever row came last (audit P3IS-5).
+    # cluster_keys never puts two sites of an isolate in one cluster, and a
+    # node visited once cannot hold two, so this is a defect upstream: stop.
+    seen = collections.Counter((k["sample"], k["key"]) for k in keys_rows if k["key"])
+    dup = [sk for sk, n in seen.items() if n > 1]
+    if dup:
+        ex = ", ".join(f"{s}@{k}" for s, k in dup[:5])
+        sys.exit(f"FATAL: {len(dup)} (sample, key) pairs hold more than one "
+                 f"site (e.g. {ex})")
 
     KEY_FIELDS = ["sample", "reference", "build_id", "evidence", "site_class",
                   "r_pos", "state", "frame", "key", "h37rv_pos", "h37rv_state",
-                  "node", "reads", "ismapper", "h37rv_pos_placed", "node_placed"]
+                  "node", "reads", "ismapper", "h37rv_pos_placed", "node_placed",
+                  "node_occ"]
     with open(a.keys_out, "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=KEY_FIELDS, delimiter="\t")
         w.writeheader(); w.writerows(keys_rows)
@@ -346,6 +406,7 @@ def main():
           f"   of which LowSupport {n_filt}")
     print(f"    REF in that frame, no record written          : {n_ref}")
     print(f"    carried on a graph node key, no H37Rv position: {unplaced}")
+    print(f"    on a node not visited once by its path, NOT keyed: {n_repeat}")
     print(f"    moved to their insertion's canonical key       : {n_moved}"
           f"   (--key-window {a.key_window})")
     print(f"\n  per sample: {a.outdir}/<sample>.is6110.vcf        (authoritative)")

@@ -217,7 +217,8 @@ def main():
         out = dict(sample=s["sample"], reference=s["reference"], tier=s["tier"],
                    geometry=s["geometry"], r_pos=s["r_pos"],
                    graph_placement=s["placement"], graph_h37rv=s["h37rv_pos"],
-                   node=s["node"], node_offset=s["node_offset"])
+                   node=s["node"], node_offset=s["node_offset"],
+                   node_occ=s.get("node_occ", ""))
         L, R = placed.get((i, "L")), placed.get((i, "R"))
         if s.get("_skip"):
             verdict = "window_at_contig_edge"
@@ -284,7 +285,7 @@ def main():
 
     cols = ["sample", "reference", "tier", "geometry", "r_pos", "verdict",
             "h37rv_pos", "h37rv_gap", "ismapper", "graph_placement",
-            "graph_h37rv", "node", "node_offset"]
+            "graph_h37rv", "node", "node_offset", "node_occ"]
     with open(a.out, "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=cols, delimiter="\t", extrasaction="ignore")
         w.writeheader(); w.writerows(rows)
