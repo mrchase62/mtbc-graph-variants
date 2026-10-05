@@ -820,11 +820,131 @@ def main():
     if ivs:
         print(f"  {n_iv:,} deletion records written from the catalogue")
 
+    # ---- LEVEL 1: does the sample carry the insert at all? ----------------
+    # Michael's two-level framing. An accessory locus carries two different
+    # characters and the pipeline had been emitting only the second: variation
+    # INSIDE the insert, which for a sample that does not have the insert is
+    # neither reference nor unknown but INAPPLICABLE. The first character --
+    # whether the insert is there -- is stated for every sample the read route
+    # can measure.
+    #
+    # Polarity follows the coordinate frame. Carrying the insert is the
+    # DERIVED state and gets the ALT allele; a convergence test then looks for
+    # repeated independent gains of the insert, which is the event of
+    # interest. That reading holds for loci whose sequence H37Rv lacks. 674 of
+    # the 802 catalogue loci are not that: novelty=copy_number, sequence H37Rv
+    # already carries (481 are IS6110 copies), which the read route cannot see
+    # (audit P3IS-2). Their cells are unmeasured, so they are written missing
+    # whatever an older presence table says, and a record with no measured
+    # cell is not written.
+    #
+    # Emitted BEFORE the caller SV rows so those rows can tell which insertion
+    # events this block already states (audit P4P5-6).
+    n_l1 = n_l1_blind = n_l1_empty = 0
+    acc_emitted = []                 # (pos, length) of every level-1 record
+    if a.accessory_presence:
+        import importlib.util
+        _spec = importlib.util.spec_from_file_location(
+            "locus_presence", os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "..", "accessory",
+                "bin", "locus_presence.py"))
+        _lp = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_lp)
+        cat = {r["locus_id"]: r for r in csv.DictReader(
+            open(a.accessory_catalogue, newline=""), delimiter="\t")
+            if (r.get("pos") or "").isdigit()
+            and in_shard(a.h37rv_contig, int(r["pos"]))}
+        pres = collections.defaultdict(dict)
+        pf = sorted(glob.glob(os.path.join(a.accessory_presence,
+                                           "*.presence.tsv")))
+        for f in pf:
+            with open(f, newline="") as fh:
+                for r in csv.DictReader(fh, delimiter="\t"):
+                    if r["locus"] in cat:     # this shard's loci only
+                        pres[r["locus"]][r["sample"]] = r["state"]
+        got = {s2 for d in pres.values() for s2 in d}
+        print(f"  level 1: {len(pf):,} presence tables, {len(pres):,} loci, "
+              f"{len(got):,} samples ({len(got & set(order)):,} in this cohort)")
+        # UNMEASURABLE (and anything unrecognised) is NOCALL
+        L1 = {"PRESENT": "ALT", "ABSENT": "REF", "UNCERTAIN": "NOCALL"}
+        n_st = collections.Counter()
+        for lid, per in sorted(pres.items()):
+            m = cat.get(lid)
+            if not m or not (m.get("pos") or "").isdigit():
+                continue
+            if _lp.read_route_blind(m):
+                n_l1_blind += 1
+                continue                  # every cell unmeasured
+            st = {s2: L1.get(per.get(s2, ""), "NOCALL") for s2 in order}
+            if all(v == "NOCALL" for v in st.values()):
+                n_l1_empty += 1
+                continue
+            n_st.update(st.values())
+            acc_len = int(m.get("graph_len") or m.get("rep_len") or 0)
+            info = ["CLASS=accessory_presence", "COMPONENT=level1",
+                    f"ACCLOCUS={lid}",
+                    f"ACCLEN={acc_len}",
+                    f"ACCKLASS={m.get('klass','')}",
+                    f"PANELCARRIERS={m.get('graph_carriers') or m.get('carriers_any') or 0}"]
+            if str(m.get("route", "")):
+                info.append(f"ACCROUTE={m['route']}")
+            cell = "\t".join(f'{STATE_GT[st[s2]]}:{st[s2]}' for s2 in order)
+            add((a.h37rv_contig, int(m["pos"]), f"acc:{lid}",
+                 h37_base(int(m["pos"])), ["<INS>"], info, cell))
+            acc_emitted.append((int(m["pos"]), acc_len))
+            n_l1 += 1
+        t = sum(n_st.values()) or 1
+        print(f"  {n_l1:,} level-1 records: "
+              + "  ".join(f"{k} {v:,} ({v/t:.1%})"
+                          for k, v in sorted(n_st.items())))
+        print(f"    not written: {n_l1_blind:,} loci whose sequence H37Rv "
+              f"carries (the read route cannot measure them), {n_l1_empty:,} "
+              f"with no measured cell")
+    acc_emitted.sort()
+    acc_starts = [x[0] for x in acc_emitted]
+
+    # ONE INSERTION, ONE RECORD (audit P4P5-6). A caller insertion that the
+    # IS6110 arm or the level-1 block above already states is the same event
+    # written a second time, and association and parsimony would count it
+    # twice: scale200 had 143 IS6110-length caller INS records, 100 within
+    # 20 bp of an IS6110 record, and 328 caller INS records at the very
+    # position of an accessory locus. The dedicated arm's record is kept --
+    # it states every sample, where the caller row is presence-only -- and
+    # the caller row is dropped and counted. Positions are this shard's.
+    IS_LEN, IS_WIN, ACC_WIN = (1340, 1370), 20, 10
+    is_starts = sorted(int(m["h37rv_pos"]) for m in is_meta.values()
+                       if m.get("frame") != "node"
+                       and (m.get("h37rv_pos") or "").isdigit())
+
+    def near(starts, p0, w):
+        i = bisect.bisect_left(starts, p0 - w)
+        return i < len(starts) and starts[i] <= p0 + w
+
+    def dup_of(p0, L):
+        if IS_LEN[0] <= L <= IS_LEN[1] and near(is_starts, p0, IS_WIN):
+            return "an IS6110 record"
+        i = bisect.bisect_left(acc_starts, p0 - ACC_WIN)
+        while i < len(acc_emitted) and acc_emitted[i][0] <= p0 + ACC_WIN:
+            al = acc_emitted[i][1]
+            if al and L and max(al, L) / min(al, L) <= 1.5:
+                return "an accessory-presence record"
+            i += 1
+        return ""
+    n_dup = collections.Counter()
+
     for r in sv_rows:
         p = r.get("h37rv_pos") or ""
         if not p or p in (".", "NA"):
             continue
         svtype = r.get("svtype", "SV")
+        if svtype == "INS":
+            try:
+                why = dup_of(int(p), abs(int(r.get("svlen") or 0)))
+            except ValueError:
+                why = ""
+            if why:
+                n_dup[why] += 1
+                continue
         # With the catalogue in play the caller's deletions it covers are
         # superseded by it; insertions, and deletions it does not cover, are
         # still written from the caller matrix.
@@ -855,59 +975,10 @@ def main():
     if ivs:
         print(f"  {n_uncat:,} caller deletions no catalogue interval covers, "
               f"kept presence-only (UNCATALOGUED)")
+    for why, n in sorted(n_dup.items()):
+        print(f"  {n:,} caller insertions dropped as the same event as {why}")
 
-    # ---- LEVEL 1: does the sample carry the insert at all? ----------------
-    # Michael's two-level framing. An accessory locus carries two different
-    # characters and the pipeline had been emitting only the second: variation
-    # INSIDE the insert, which for a sample that does not have the insert is
-    # neither reference nor unknown but INAPPLICABLE. The first character --
-    # whether the insert is there -- is stated for every sample and was not
-    # being emitted at all.
-    #
-    # Polarity follows the coordinate frame. These loci are sequence present in
-    # panel genomes and absent from H37Rv, so carrying the insert is the DERIVED
-    # state and gets the ALT allele. A convergence test then looks for repeated
-    # independent gains of the insert, which is the event of interest.
-    n_l1 = 0
-    if a.accessory_presence:
-        cat = {r["locus_id"]: r for r in csv.DictReader(
-            open(a.accessory_catalogue, newline=""), delimiter="\t")
-            if (r.get("pos") or "").isdigit()
-            and in_shard(a.h37rv_contig, int(r["pos"]))}
-        pres = collections.defaultdict(dict)
-        pf = sorted(glob.glob(os.path.join(a.accessory_presence,
-                                           "*.presence.tsv")))
-        for f in pf:
-            with open(f, newline="") as fh:
-                for r in csv.DictReader(fh, delimiter="\t"):
-                    if r["locus"] in cat:     # this shard's loci only
-                        pres[r["locus"]][r["sample"]] = r["state"]
-        got = {s2 for d in pres.values() for s2 in d}
-        print(f"  level 1: {len(pf):,} presence tables, {len(pres):,} loci, "
-              f"{len(got):,} samples ({len(got & set(order)):,} in this cohort)")
-        L1 = {"PRESENT": "ALT", "ABSENT": "REF", "UNCERTAIN": "NOCALL"}
-        n_st = collections.Counter()
-        for lid, per in sorted(pres.items()):
-            m = cat.get(lid)
-            if not m or not (m.get("pos") or "").isdigit():
-                continue
-            st = {s2: L1.get(per.get(s2, ""), "NOCALL") for s2 in order}
-            n_st.update(st.values())
-            info = ["CLASS=accessory_presence", "COMPONENT=level1",
-                    f"ACCLOCUS={lid}",
-                    f"ACCLEN={m.get('graph_len') or m.get('rep_len') or 0}",
-                    f"ACCKLASS={m.get('klass','')}",
-                    f"PANELCARRIERS={m.get('graph_carriers') or m.get('carriers_any') or 0}"]
-            if str(m.get("route", "")):
-                info.append(f"ACCROUTE={m['route']}")
-            cell = "\t".join(f'{STATE_GT[st[s2]]}:{st[s2]}' for s2 in order)
-            add((a.h37rv_contig, int(m["pos"]), f"acc:{lid}",
-                 h37_base(int(m["pos"])), ["<INS>"], info, cell))
-            n_l1 += 1
-        t = sum(n_st.values()) or 1
-        print(f"  {n_l1:,} level-1 records: "
-              + "  ".join(f"{k} {v:,} ({v/t:.1%})"
-                          for k, v in sorted(n_st.items())))
+
 
     n_unplaced = 0
     for k, per in is6110.items():
