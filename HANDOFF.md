@@ -35,6 +35,11 @@ untracked; `analysis/` lives on durable storage with the repository.
   - the GenBank scan (0h);
   - the panel checks (0j, `analysis/panel_checks/`).
 
+**In flight (2026-10-05):** four test graphs (section 0l, jobs 50713714,
+50713715, 50713717, 50713719); results go to
+`analysis/graph_tests/*/metrics.tsv`. The plan toward a 10K cohort is in
+section 0l and `analysis/strategy/ROAD_TO_10K.md`.
+
 **Before anything else after downtime:**
 
 1. **Check that netscratch survived.** The working tree and the colleague's
@@ -1338,6 +1343,86 @@ SNPs outside the repeat mask).
 **Not measured:** graph complexity itself (snarl nesting). That would need test
 builds: lineages 1-4 alone, plus lineage 5/6, plus canettii. They cost real
 compute and should get a cost estimate before submission.
+
+## 0l. Toward a 10K cohort on a new graph; test graphs running (2026-10-05)
+
+**Plan:** `analysis/strategy/ROAD_TO_10K.md`. The test graphs are in
+`analysis/graph_tests/`.
+
+**State after the cluster maintenance:**
+
+- netscratch survived;
+- the working tree is intact (882 GB);
+- the colleague's CRAM collection is still present, with **54,461 CRAMs**.
+
+### Test graphs (submitted 2026-10-05, about 200 billing-hours approved)
+
+**Design:**
+
+- **Base:** 50 lineage 1-4,7 CX333 genomes, the first 50 of a greedy
+  demand-based selection over the 992 lineage 1-4,7 isolates of gwas1000 and
+  scale200 (`base50.txt`).
+  - Composition: 11 lineage 1, 11 lineage 2, 6 lineage 3, 21 lineage 4,
+    1 lineage 7.
+  - Median distance to the nearest genome is 174, against 155 with all 289
+    CX333 lineage 1-4,7 genomes.
+- **Settings:** CX333's pggb settings (`-s 10000 -l 30000 -p 95 -k 23 -K 15`),
+  pggb container v0.7.4.
+- **Measurement:** `vg deconstruct -a` against H37Rv, plus `odgi stats`.
+- **Inputs and outputs:** sequences come from the CX333 panel FASTA. Output
+  goes only to `analysis/graph_tests/<arm>/metrics.tsv`.
+
+| arm | genomes | job |
+|---|---|---|
+| A | lineages 1-4,7 | 50713714 |
+| B | A + GCF_022870225 (lineage 5.1) + GCF_022870205 (lineage 6.3.1) | 50713715 |
+| C | A + M. canettii ET1291 | 50713717 |
+| D | B with `-x auto` (sparse mapping) | 50713719 |
+
+**The first submission (50712874 to 50712881) failed in seconds.** The
+script's relative list path was read after changing directory. Fixed and
+resubmitted.
+
+**Why sparse mapping is tested:** CX333's build was 97% wfmash all-against-all
+alignment (1,438 of 1,478 CPU-hours, about 94 CPU-seconds per genome pair).
+That cost grows with the square of the panel size.
+
+### Route to 10K (proposed order)
+
+1. **Test graphs:** composition and build cost.
+2. **Settle the code before any 10K spend:**
+   - faults A and B (section 0j);
+   - the panel QC lessons (0f, 0g);
+   - scheduler changes A, B and E (0c). E is needed at 10K anyway: one pass
+     would hit the 10,100-job limit;
+   - keep P1's per-isolate H37Rv VCFs (gwas1000's were not kept);
+   - **decide on a cheaper P1 selector (D) first,** or the 10K P1 would be
+     redone.
+3. **Choose the 10K isolates** from the 54,461 CRAMs (criteria pending from
+   the user).
+4. **Run P1 on the 10K set first.** Its H37Rv alignment and calls do not
+   depend on the panel. They give:
+   - the demand data for panel selection;
+   - the lineage 1-4 screen;
+   - the direct-calling arm.
+
+   Cost: about 2,800 billing-hours right-sized, about 6,000 as currently
+   requested.
+5. **Build the new panel by demand:**
+   - 150 to 300 genomes;
+   - one or two lineage 5/6 genomes in the graph if arm B is cheap;
+   - lineage 8 and canettii in the outgroup kit;
+   - gap sequencing as soon as P1 shows the gaps;
+   - then the graph, the assets and P0.
+6. **Validate and scale:** scale200, then gwas1000, then the 10K in batches of
+   about 1,000. After P1: about 5,000 to 10,000 billing-hours. The cohort-level
+   steps (0c, item I) need design before about 2,000 samples.
+
+**Open decisions for the user:**
+
+1. the 10K selection criteria, and lineage 1-4 only or not;
+2. the cheaper P1 selector, adopt or not;
+3. approval of the step 2 code work (repository only, no fairshare).
 
 ## 1. State before the rerun (2026-09-30)
 
