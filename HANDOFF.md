@@ -27,8 +27,9 @@ untracked; `analysis/` lives on durable storage with the repository.
 **Forward work (discussion only, nothing built):**
 
 - **the lineage 1-4 panel proposal:** `analysis/strategy/L1_4_PANEL_PROPOSAL.md`,
-  sections 0g, 0i and 0j. The outgroup topology was corrected in 0j:
-  lineages 5 and 6 are the nearest outgroups;
+  sections 0g, 0i, 0j and 0k. The outgroup topology was corrected in 0j:
+  lineages 5 and 6 are the nearest outgroups. Section 0k recommends lineage
+  5/6 inside the graph and lineage 8 and canettii outside it;
 - **the supporting analyses:**
   - external assembly QC (0f);
   - the GenBank scan (0h);
@@ -1273,6 +1274,70 @@ polarity. Options:
   costs before any submission.
 
 Your decision.
+
+## 0k. Outgroup in or out of a lineage 1-4 graph (2026-10-05)
+
+Discussion and a measurement, nothing built. The measurement uses the
+direct-alignment states from section 0j (`analysis/panel_checks/states/`;
+SNPs outside the repeat mask).
+
+### Recovering the root when the outgroup is not in the graph
+
+- **The outgroup's SNP-tree row comes from direct alignment.** The cohort
+  alignment is in H37Rv coordinates, so the row is read from the outgroup
+  assembly aligned to H37Rv ("the outgroup kit"):
+  - align once per panel version (`genome_states.py`, seconds per genome);
+  - store the base at every H37Rv position, N where the genome is
+    unaligned, aligned more than once, deleted, or next to an insertion;
+  - at each cohort column, write REF, ALT or N.
+- **Only the input of `add_outgroup.py` changes;** its output and the chain
+  stay the same.
+- **Validated in check 1:** lineage 8 agrees with the graph at all but 24 of
+  63,650 sites. The kit also avoids fault A and the "no record = REF" rule.
+- **Limits:**
+  - accessory (node_*) columns are N for the outgroup unless the insert
+    sequences are mapped to it;
+  - canettii gives more N.
+- **Event states** (IS6110, SV, accessory) for polarity: simulate reads from
+  the outgroup and run them through P1 to P5 as a pseudo-isolate.
+- **Cross-check:** lineage 1 must be the first split inside the lineage 1-4,7
+  clade.
+
+### What an outgroup costs inside the graph
+
+| added to the 289 lineage 1-4,7 panel genomes | new SNP sites (on top of their 31,427) | runs of 50 bp or more not uniquely aligned to H37Rv |
+|---|---:|---:|
+| **M. canettii ET1291** | **+10,770 (+34%)** | 134 kb |
+| M. canettii CIPT 140010059 | +20,167 (+64%) | 164 kb |
+| lineage 8 (RW-TB008) | +918 (+3%) | 90 kb (about the baseline for any MTBC genome) |
+| lineage 6 (GCF_000253355) | +1,059 (+3%) | — |
+
+**Assessment:**
+
+- **One canettii in the graph would undo about a third of the lineage 1-4
+  simplification at the SNP level, and more structurally.**
+  - Its recombined, divergent regions form the nested snarls that defeated
+    vg giraffe.
+  - It would serve only rooting and polarity, since no lineage 1-4 isolate is
+    ever matched to it.
+- **A lineage 5 or 6 genome is the cheap in-graph outgroup:**
+  - it is the nearest one (the sister clade);
+  - it adds about 3%;
+  - it is genotyped by the same code;
+  - and it gives stray lineage 5/6 isolates a closer reference.
+
+**Recommendation:**
+
+1. Build the graph from lineages 1-4 and 7, plus one or two clean lineage 5/6
+   genomes.
+2. Keep lineage 8 and canettii outside the graph, in the kit, for questions
+   about the root of the whole complex.
+3. **Whatever is in the graph, take the ancestral node as the MRCA of the
+   ingroup lineages,** not "the root's other child" (fault B, section 0j).
+
+**Not measured:** graph complexity itself (snarl nesting). That would need test
+builds: lineages 1-4 alone, plus lineage 5/6, plus canettii. They cost real
+compute and should get a cost estimate before submission.
 
 ## 1. State before the rerun (2026-09-30)
 
