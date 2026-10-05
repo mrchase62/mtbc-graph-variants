@@ -1135,15 +1135,15 @@ distance to the nearest CX333 genome.
       from their nearest panel genome;
    6. long-read sequencing for the gaps the pool cannot fill (1.1.3, 1.2.2,
       3, 3.1.2).
-4. **Outgroup:**
-   - **lineage 8 (RW-TB008, GCF_012923765) as the nearest outgroup, then
-     M. canettii ET1291 (and optionally CIPT 140010059);**
-   - **lineages 5, 6, 7, 9 and the animal lineages are not valid outgroups:**
-     lineage 1 branches first, so they sit inside the lineage 1-4 clade;
+4. **Outgroup (corrected after check 2, section 0j):**
+   - **lineages 5 and 6 as the nearest outgroups**, then lineage 8
+     (RW-TB008), then M. canettii ET1291;
+   - lineages 1-4 plus 7 are one clade, and lineages 5, 6, 9 and the animal
+     lineages are its sister clade (an earlier version of this section said
+     the opposite);
    - the kit is outside the graph:
-     - SNP states by direct whole-genome alignment to H37Rv, replacing
-       add_outgroup.py's "no record = REF" rule;
-     - event states by running the outgroups through P1 to P5 as simulated
+     - SNP states by direct whole-genome alignment to H37Rv;
+     - event states by running the kit genomes through P1 to P5 as simulated
        pseudo-isolates;
      - ancestral polarity takes the nearest called outgroup first.
 5. **Cost:**
@@ -1157,6 +1157,88 @@ distance to the nearest CX333 genome.
 7. **Open decisions:** strictly lineages 1-4 or including lineage 7;
    exclude or flag non-lineage 1-4 isolates (228 of gwas1000's 996); panel
    size; sequencing; whether to run the checks.
+
+## 0j. Three pre-rebuild checks: outgroup, rooting, panel coverage (2026-10-04)
+
+Analysis only: `analysis/panel_checks/README.md`. Cost about 1 billing-hour
+(jobs 50572387 and 50574023). Every genome's states in H37Rv coordinates come
+from direct alignment (`states/`; 596 genomes).
+
+**Correction to section 0i: the outgroup topology.**
+
+- **What the trees show** (the panel tree and both cohort+CX333 trees agree):
+  - lineages 1-4 plus 7 are one clade, with lineage 1 the first split inside;
+  - its sister clade is lineages 5, 6, 9 and the animal lineages;
+  - then lineage 8, then canettii.
+- **So the nearest outgroups for a lineage 1-4 tree are lineage 5 and 6
+  genomes.** The proposal and section 0i are corrected.
+
+**Check 1: outgroup states from the graph VCF against direct alignment.**
+
+- **The panel alignment is sound:** `cx333.snps.fasta`, the ancestral-allele
+  input, agrees at 99.97% of sites; the median genome differs at 19.
+- **Fault A (production): `assoc/bin/add_outgroup.py` lets the last duplicate
+  record win.**
+  - **The mechanism:** the decomposed VCF has one record per allele path,
+    and the outgroup's ALT is in only one of them. At H37Rv 1845, ET1291's
+    genotype is 1, 0, 0 across three `G>C` records, and the script writes
+    REF.
+  - **The scale:** the ET1291 column is wrong at 527 sites in scale200
+    (1.3%) and 461 in gwas1000 (0.5%).
+  - **Where it lands:** `data/trees/<cohort>.og.fasta`, used for tree
+    rooting, and `write_event_matrix.py`'s outgroup fallback, used only where
+    `AA` does not resolve. The cohort roots still look right.
+- **The same fault, analysis only:** `analysis/combined_tree/build_alignment.py`
+  has the same line, about 200 wrong cells per panel genome in the combined
+  trees.
+- **The kit works:** direct alignment reproduces the graph's genotypes (lineage
+  8: 24 disagreements in 63,650 sites).
+
+**Check 2: ancestral alleles.**
+
+- **Sanity check:** recomputing the production rule reproduces
+  `assets/ancestral.tsv` at all 72,615 resolved sites.
+- **Fault B (production): the `AA` node also contains the second canettii.**
+  `bin/ancestral_alleles.py` takes "the root's child that is not ET1291", and
+  in the panel tree that node includes CIPT 140010059.
+  - **Against the true MTBC ancestor:** 132 of 35,530 sites variable within
+    lineages 1-4 differ. At 108 of them, H37Rv's allele is called derived
+    where it is ancestral.
+  - **Against the lineage 1-4,7 ancestor:** 169 differ (0.48%).
+  - **Where it lands:** the build asset, the `AA` tag in every cohort's merged
+    VCF, and the direction of events in `write_event_matrix.py`.
+- **The REFEVAL backbone already excluded both canettii.** Production was
+  never changed.
+
+**Check 3: isolate-to-panel distance.** 992 lineage 1-4,7 isolates; the method
+matches P1's choice for 88% of isolates (r = 0.94 with `snps_vs_matched`;
+absolute values run lower, so read them as relative).
+
+- **All 161 clean public candidates added to CX333:**
+  - median 155 → 148; isolates over 300: 97 → 85;
+  - only lineage 1.1.2 gains much;
+  - lineage 1.1.3 does not move (12 of 16 still over 300).
+- **Greedy demand-based selection, cross-validated:**
+  - about 150 genomes match CX333's 288 on held-out isolates;
+  - about 300 do slightly better;
+  - selecting on 802 isolates works far better than on 190.
+- **Implications:**
+  - choose the panel after a large cohort's P1;
+  - 150 to 300 genomes are enough;
+  - the remaining gaps need sequencing.
+
+**Status of faults A and B: open, not fixed.** Both affect the current
+scale200 and gwas1000 outputs at about 0.4 to 1% of sites, through event
+polarity. Options:
+
+- (a) record them and fix them at the rebuild;
+- (b) measure their effect on events and association results first
+  (analysis only);
+- (c) fix them now and do one planned rerun of the affected passes (P0
+  ancestral, P5 finish, the outgroup step, the chain), scale200 first, with
+  costs before any submission.
+
+Your decision.
 
 ## 1. State before the rerun (2026-09-30)
 
