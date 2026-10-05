@@ -24,9 +24,21 @@ resolve. `panel_af` is carried alongside, because an outgroup allele that is
 also common in the panel is a much safer ancestral call than one that is rare
 in it, and the reader should be able to see which they have.
 
+ONE ROW PER (chrom, pos, ref, alt), NOT PER RECORD. The decomposed VCF repeats
+a key once per allele path through a bubble, and a genome carrying the ALT has
+GT 1 in only one of the copies. So the copies are pooled: the outgroup is ALT
+if it is 1 in any copy, REF if it is 0 in some copy and 1 in none; and
+`panel_af` counts each genome once, as a carrier if it is 1 in any copy, over
+the genomes with a call in any copy. Taking one record's genotype and its own
+AC/AN, as this did, let the last copy decide the outgroup's allele (audit
+GRAPHVCF-3) and understated the panel frequency of a split allele.
+
     $MTB_PY bin/panel_polarity.py --out refbias/assets/panel_polarity.tsv
 """
-import argparse, os, subprocess, sys
+import argparse, collections, itertools, os, subprocess, sys
+
+
+MISSING = {".", "./.", ".|."}
 
 
 def main():
@@ -43,33 +55,55 @@ def main():
                           capture_output=True, text=True).stdout.split()
     if a.outgroup not in have:
         sys.exit(f"FATAL: {a.outgroup} is not a sample of {a.panel_vcf}")
-    q = subprocess.run(
-        [a.bcftools, "query", "-s", a.outgroup,
-         "-f", "%POS\t%REF\t%ALT\t%INFO/AC\t%INFO/AN[\t%GT]\n", a.panel_vcf],
-        capture_output=True, text=True, check=True).stdout
+    og = have.index(a.outgroup)
+    proc = subprocess.Popen(
+        [a.bcftools, "query",
+         "-f", "%CHROM\t%POS\t%REF\t%ALT[\t%GT]\n", a.panel_vcf],
+        stdout=subprocess.PIPE, text=True)
 
-    n = kept = anc_alt = 0
-    with open(a.out, "w") as fh:
-        fh.write("pos\tref\talt\toutgroup_gt\tancestral\tpanel_af\n")
-        for line in q.splitlines():
-            f = line.split("\t")
-            if len(f) < 6:
+    def records():
+        for line in proc.stdout:
+            f = line.rstrip("\n").split("\t")
+            if len(f) < 5:
                 continue
-            n += 1
-            pos, ref, alt, ac, an, gt = f[0], f[1].upper(), f[2].upper(), \
-                f[3], f[4], f[5]
-            if "," in alt or gt not in ("0", "1"):
-                continue          # multiallelic or the outgroup has no call
-            try:
-                af = int(ac) / int(an)
-            except (ValueError, ZeroDivisionError):
-                af = float("nan")
-            anc = "ALT" if gt == "1" else "REF"
-            anc_alt += gt == "1"
-            kept += 1
-            fh.write(f"{pos}\t{ref}\t{alt}\t{gt}\t{anc}\t{af:.4f}\n")
-    print(f"  {n:,} panel records read, {kept:,} usable "
-          f"(biallelic with an outgroup call)")
+            yield f[0], f[1], f[2].upper(), f[3].upper(), f[4:]
+
+    n = kept = anc_alt = n_dup = 0
+    with open(a.out, "w") as fh:
+        fh.write("chrom\tpos\tref\talt\toutgroup_gt\tancestral\tpanel_af"
+                 "\tn_records\n")
+        # duplicates share a position, and the VCF is sorted, so pooling one
+        # position at a time sees every copy of a key
+        for _, grp in itertools.groupby(records(), key=lambda r: r[:2]):
+            by_key = collections.OrderedDict()
+            for chrom, pos, ref, alt, gts in grp:
+                n += 1
+                if "," in alt:
+                    continue          # multiallelic
+                by_key.setdefault((chrom, pos, ref, alt), []).append(gts)
+            for (chrom, pos, ref, alt), copies in by_key.items():
+                n_dup += len(copies) > 1
+                og_gts = {c[og] for c in copies}
+                gt = "1" if "1" in og_gts else "0" if "0" in og_gts else None
+                if gt is None:
+                    continue          # the outgroup has no call in any copy
+                # per genome: a carrier if 1 in any copy, called if any call
+                col = ["1" if "1" in c else "0" if c - MISSING else "."
+                       for c in map(set, zip(*copies))] \
+                    if len(copies) > 1 else copies[0]
+                carrier = sum(g == "1" for g in col)
+                called = sum(g not in MISSING for g in col)
+                af = carrier / called if called else float("nan")
+                anc = "ALT" if gt == "1" else "REF"
+                anc_alt += gt == "1"
+                kept += 1
+                fh.write(f"{chrom}\t{pos}\t{ref}\t{alt}\t{gt}\t{anc}\t"
+                         f"{af:.4f}\t{len(copies)}\n")
+    if proc.wait() != 0:
+        sys.exit(f"FATAL: bcftools query failed on {a.panel_vcf}")
+    print(f"  {n:,} panel records read, {kept:,} usable keys "
+          f"(biallelic with an outgroup call); {n_dup:,} keys pooled over "
+          f"duplicate records")
     print(f"  the outgroup carries the ALT at {anc_alt:,} of them "
           f"({anc_alt / max(1, kept):.1%}), so ALT is the ancestral allele there")
     print(f"  -> {a.out}")
