@@ -13,16 +13,36 @@ The outgroup's only job is to place the root. Prune it before the writer runs
 (`--prune-tips` there), or its tip will be asked for a genotype it does not
 have in the cohort VCF.
 
-THE ALLELE RULE, and where it says N rather than guessing:
+THE ALLELE RULE, and where it says N rather than guessing. Every panel record
+whose REF span covers the site is consulted, not only those starting at it: an
+outgroup MNP, deletion or complex record that starts upstream says what the
+outgroup has at the site too.
 
-  exact (pos, ref, alt) record in the panel VCF   -> its genotype, 0 -> REF,
-                                                     1 -> ALT, missing -> N
-  a record at that position, but a different ALT  -> REF if the outgroup is
-                                                     reference there, else N,
-                                                     since a third allele is
+  an exact (pos, ref, alt) record with GT 1       -> ALT. The decomposed VCF
+                                                     repeats a key once per
+                                                     allele path, and the
+                                                     outgroup's ALT may be in
+                                                     any one of the copies
+  exact records present, every one missing        -> N
+  a covering record the outgroup carries (GT>=1)  -> the base that allele puts
+                                                     at the site: an SNP or MNP
+                                                     gives its own base, an
+                                                     indel's unchanged anchor
+                                                     base gives REF, and any
+                                                     other position inside an
+                                                     indel or complex allele
+                                                     (a deletion included) is
+                                                     N. A base that is neither
+                                                     REF nor ALT, or two
+                                                     records that disagree, is
+                                                     N, since a third allele is
                                                      not representable in a
                                                      biallelic column
-  no record at that position at all               -> REF. The panel VCF holds
+  an exact record with GT 0 and nothing above     -> REF
+  covering records, all missing or GT 0, at least
+  one missing and no exact GT 0                   -> N: the outgroup has no
+                                                     call over that stretch
+  no covering record at all                       -> REF. The panel VCF holds
                                                      every site that varies
                                                      across the panel, and the
                                                      outgroup is in the panel,
@@ -35,7 +55,7 @@ THE ALLELE RULE, and where it says N rather than guessing:
         --sites data/trees/<cohort>.sites.tsv \
         --out data/trees/<cohort>.outgroup.fasta
 """
-import argparse, collections, csv, os, subprocess, sys, tempfile
+import argparse, bisect, collections, csv, os, subprocess, sys
 
 PANEL_VCF = "graphs/CX333.s10k.k23.K15/all_variants.decomposed.vcf.gz"
 PANEL_CONTIG = "GCF_000195955#1#NC_000962.3"
@@ -53,6 +73,62 @@ def read_fasta(path):
     if name:
         seqs[name] = "".join(buf)
     return seqs
+
+
+def base_at(rpos, rref, allele, site):
+    """The base an allele of a record starting at rpos puts at `site`, or None
+    where it cannot be said: inside a deletion, or past the anchor of an indel
+    or complex allele whose bases do not line up with REF's."""
+    off = site - rpos
+    if len(allele) == len(rref):             # SNP or MNP: base for base
+        return allele[off]
+    if off == 0 and allele[:1] == rref[:1]:  # an indel's unchanged anchor
+        return rref[0]
+    return None
+
+
+def outgroup_allele(pos, ref, alt, recs):
+    """REF, ALT or N for the outgroup at one biallelic site; see THE ALLELE
+    RULE above. recs: (POS, REF, [ALTs], GT or None) for every panel record
+    whose REF span covers pos. Returns (call, tally key)."""
+    def is_exact(rpos, rref, ralts, g):
+        return (rpos == pos and rref == ref and alt in ralts
+                and (g is None or g == 0 or ralts[g - 1] == alt))
+    exact = [r[3] for r in recs if is_exact(*r)]
+    if any(g is not None and g > 0 for g in exact):
+        return "ALT", "alt"
+    if exact and all(g is None for g in exact):
+        return "N", "missing_exact"
+    bases, unknown, missing = set(), False, False
+    if exact:                                 # at least one GT 0 here
+        bases.add(ref)
+    for rpos, rref, ralts, g in recs:
+        if is_exact(rpos, rref, ralts, g):
+            continue                          # the exact records, above
+        if g is None:
+            missing = True
+            continue
+        if g == 0:
+            continue
+        b = base_at(rpos, rref, ralts[g - 1], pos)
+        if b is None:
+            unknown = True
+        else:
+            bases.add(b)
+    if unknown:
+        return "N", "in_outgroup_indel"
+    if len(bases) > 1:
+        return "N", "third_allele"
+    if bases:
+        b = next(iter(bases))
+        if b == alt:
+            return "ALT", "alt_covering_record"
+        if b == ref:
+            return "REF", "ref_exact" if exact else "ref_covering_record"
+        return "N", "third_allele"
+    if missing:
+        return "N", "missing_covering"
+    return "REF", "ref_covering_record" if recs else "ref_no_record"
 
 
 def main():
@@ -84,27 +160,33 @@ def main():
     if a.outgroup not in have:
         sys.exit(f"FATAL: {a.outgroup} is not a sample of {a.panel_vcf}")
 
-    # ONE INDEXED SWEEP, NOT 46,099 FETCHES. Asking pysam for each site in turn
+    # ONE SWEEP, NOT 46,099 FETCHES. Asking pysam for each site in turn
     # decodes all 332 genotype columns of every record it touches; restricting
-    # bcftools to one sample and a regions file does the same work once. The
-    # first version of this script was still running after three minutes and
-    # this one finishes in seconds.
+    # bcftools to one sample and streaming the contig once does the work in
+    # seconds. (A regions file of every site, which this used before, makes
+    # bcftools seek once per site and took over six minutes on scale200.)
+    #
+    # Each record is filed under EVERY site its REF span covers, not only under
+    # its own POS: keyed on POS alone, an outgroup MNP or deletion starting
+    # before the site was never consulted and the site fell through to "no
+    # record -> REF" (audit TP-1).
+    site_pos = sorted({int(s["pos"]) for s in sites
+                       if s["chrom"] == a.cohort_contig})
     want = collections.defaultdict(list)
-    with tempfile.NamedTemporaryFile("w", suffix=".tsv", delete=False) as rf:
-        for s in sites:
-            if s["chrom"] == a.cohort_contig:
-                rf.write(f"{a.panel_contig}\t{s['pos']}\n")
-        regions = rf.name
-    try:
-        q = subprocess.run(
-            [bcftools, "query", "-s", a.outgroup, "-R", regions,
-             "-f", "%POS\t%REF\t%ALT\t[%GT]\n", a.panel_vcf],
-            capture_output=True, text=True, check=True)
-    finally:
-        os.unlink(regions)
+    q = subprocess.run(
+        [bcftools, "query", "-s", a.outgroup, "-r", a.panel_contig,
+         "-f", "%POS\t%REF\t%ALT\t[%GT]\n", a.panel_vcf],
+        capture_output=True, text=True, check=True)
     for line in q.stdout.splitlines():
         pos, ref, alt, gt = line.split("\t")
-        want[int(pos)].append((ref.upper(), alt.upper(), gt))
+        pos, ref = int(pos), ref.upper()
+        g = None if gt in (".", "./.", ".|.") else int(gt.split("/")[0]
+                                                       .split("|")[0])
+        rec = (pos, ref, alt.upper().split(","), g)
+        i = bisect.bisect_left(site_pos, pos)
+        while i < len(site_pos) and site_pos[i] <= pos + len(ref) - 1:
+            want[site_pos[i]].append(rec)
+            i += 1
 
     out, tally = [], collections.Counter()
     for s in sites:
@@ -112,25 +194,9 @@ def main():
             out.append("N"); tally["off_panel_contig"] += 1
             continue
         pos, ref, alt = int(s["pos"]), s["ref"].upper(), s["alt"].upper()
-        exact, other_nonref, any_rec = None, False, False
-        for rref, ralt, gt in want.get(pos, ()):
-            any_rec = True
-            g = None if gt in (".", "./.", ".|.") else int(gt.split("/")[0]
-                                                           .split("|")[0])
-            if rref == ref and "," not in ralt and ralt == alt:
-                exact = g
-            elif g not in (0, None):
-                other_nonref = True
-        if exact is not None:
-            out.append(alt if exact == 1 else ref)
-            tally["alt" if exact == 1 else "ref_exact"] += 1
-        elif exact is None and any_rec:
-            if other_nonref:
-                out.append("N"); tally["third_allele"] += 1
-            else:
-                out.append(ref); tally["ref_other_record"] += 1
-        else:
-            out.append(ref); tally["ref_no_record"] += 1
+        call, why = outgroup_allele(pos, ref, alt, want.get(pos, ()))
+        out.append({"REF": ref, "ALT": alt}.get(call, "N"))
+        tally[why] += 1
 
     with open(a.out, "w") as fh:
         for name, seq in seqs.items():
@@ -140,11 +206,14 @@ def main():
     n = len(out)
     print(f"  alignment    {len(seqs)} sequences x {width} sites")
     print(f"  outgroup     {a.outgroup}")
-    for k in ("ref_exact", "alt", "ref_other_record", "ref_no_record",
-              "third_allele", "off_panel_contig"):
+    for k in ("ref_exact", "alt", "ref_covering_record", "alt_covering_record",
+              "ref_no_record", "missing_exact", "missing_covering",
+              "in_outgroup_indel", "third_allele", "off_panel_contig"):
         if tally[k]:
             print(f"    {k:<20s}{tally[k]:>8,}  {tally[k] / n:6.2%}")
-    amb = tally["third_allele"] + tally["off_panel_contig"]
+    amb = sum(tally[k] for k in ("missing_exact", "missing_covering",
+                                 "in_outgroup_indel", "third_allele",
+                                 "off_panel_contig"))
     print(f"  N in the outgroup: {amb:,} of {n:,} ({amb / n:.2%})")
     print(f"  -> {a.out}  ({len(seqs) + 1} sequences)")
 

@@ -25,8 +25,8 @@ something else in the EVENT stream -- hence 3 for a loss, which keeps losses
 recorded rather than silently merged into "no event".
 
 POLARITY IS READ, NOT ASSUMED. A gain means a gain of the DERIVED allele, and
-which allele that is comes from the VCF: `AA_INVERTED` marks the 8.9% of panel
-sites where the reference carries the derived allele, so there GT=0 is the
+which allele that is comes from the VCF: `AA_INVERTED` marks the panel sites
+where the reference carries the derived allele, so there GT=0 is the
 derived state and GT=1 the ancestral one. Getting this backwards would invert
 the direction of every event at those sites. Records with no `AA` -- every
 is6110 and sv record, since those are not panel SNP sites -- are polarised
@@ -219,6 +219,27 @@ def read_vcf(path, want_class=None, want_frame=None):
     return samples, variants, gt_rows, n_skipped
 
 
+def primary_alt(alt):
+    """The ALT a lookup should key on: `C,*` is the SNP C, the `*` only marking
+    samples whose region is absent (audit TP-2)."""
+    alts = [x for x in alt.split(",") if x != "*"]
+    return alts[0] if len(alts) == 1 else alt
+
+
+# Classes whose REF is true of the reference by construction, even at a
+# node-frame record: an IS6110 or SV site the reference does not carry, and an
+# accessory locus absent from it. Any other node-frame record sits on sequence
+# the reference path does not traverse, so the reference tip is unknown there.
+REF_BY_CONSTRUCTION = ("is6110", "sv", "accessory_presence")
+
+
+def ref_tip_gt(v):
+    """The GT character the reference tip (--ref-sample) takes at variant v."""
+    if v["frame"] not in ("h37rv", "") and v["cls"] not in REF_BY_CONSTRUCTION:
+        return ord(".")
+    return ord("0")
+
+
 def leaf_bits(gt_chars, derived_is_ref, absent):
     """Raw GT characters -> two-bit state masks, in the derived-allele frame."""
     b = np.zeros(gt_chars.shape, dtype=np.uint8)
@@ -318,7 +339,8 @@ def main():
                          "table comes from a SNP alignment, so every indel is "
                          "unpolarised without it and defaults to ALT-as-derived "
                          "-- backwards wherever the reference is the odd genome "
-                         "out.")
+                         "out. A missing table is FATAL; pass "
+                         "--panel-polarity '' to run without one on purpose")
     ap.add_argument("--min-panel-af", type=float, default=0.05,
                     help="the outgroup's allele is only taken as ANCESTRAL "
                          "against the reference when the panel also carries it "
@@ -464,16 +486,35 @@ def main():
         a.vcf, want_class or None, want_frame or None)
 
     # ---- polarity from the outgroup, where AA left the record unpolarised
-    if a.panel_polarity and os.path.exists(a.panel_polarity):
+    # A table that was asked for (or defaulted) and is not there is an error,
+    # not a skip: run from another directory, the relative default silently
+    # left every indel unpolarised (audit TP-9).
+    if a.panel_polarity and not os.path.exists(a.panel_polarity):
+        sys.exit(f"FATAL: --panel-polarity {a.panel_polarity} does not exist. "
+                 f"Build it with bin/panel_polarity.py, or pass "
+                 f"--panel-polarity '' to run without outgroup polarity")
+    if a.panel_polarity:
         pol_tab = {}
-        for r in csv.DictReader(open(a.panel_polarity), delimiter="\t"):
-            pol_tab[(int(r["pos"]), r["ref"].upper(), r["alt"].upper())] = (
-                r["ancestral"], r["panel_af"])
+        with open(a.panel_polarity, newline="") as fh:
+            rd = csv.DictReader(fh, delimiter="\t")
+            if "chrom" not in (rd.fieldnames or []):
+                sys.exit(f"FATAL: {a.panel_polarity} has no chrom column; it "
+                         f"predates the one-row-per-key table. Rebuild it with "
+                         f"bin/panel_polarity.py")
+            for r in rd:
+                # the panel names the contig PanSN-style, the cohort VCF bare
+                k = (r["chrom"].split("#")[-1], int(r["pos"]),
+                     r["ref"].upper(), r["alt"].upper())
+                if k in pol_tab:
+                    sys.exit(f"FATAL: {a.panel_polarity} repeats the key {k}; "
+                             f"rebuild it with bin/panel_polarity.py")
+                pol_tab[k] = (r["ancestral"], r["panel_af"])
         n_fix = collections.Counter()
         for v in variants:
             if v["polarity"] != "unpolarised":
                 continue
-            hit = pol_tab.get((v["pos"], v["ref"].upper(), v["alt"].upper()))
+            hit = pol_tab.get((v["chrom"], v["pos"], v["ref"].upper(),
+                               primary_alt(v["alt"]).upper()))
             if hit is None:
                 continue
             anc, af = hit
@@ -491,7 +532,8 @@ def main():
             else:
                 v["polarity"], v["derived"] = "ref_ancestral_outgroup", "ALT"
                 n_fix["REF is ancestral -- the polarity is confirmed"] += 1
-            n_fix["  of which indels" if len(v["ref"]) != len(v["alt"])
+            n_fix["  of which indels"
+                  if len(v["ref"]) != len(primary_alt(v["alt"]))
                   else "  of which SNPs"] += 1
         if n_fix:
             eprint("  polarity from the outgroup, for records AA left "
@@ -591,7 +633,8 @@ def main():
     if extra:
         eprint(f"  note: ignoring {len(extra)} VCF samples absent from the tree")
     # -1 marks the reference tip, which has no genotype column and is read as
-    # the reference allele at every record; -2 marks the outgroup, whose
+    # the reference allele at every record except a node-frame one, where the
+    # reference has no sequence and is unknown (ref_tip_gt); -2 the outgroup, whose
     # alleles come from the alignment rather than the VCF.
     take = np.asarray([-2 if (a.outgroup_name and l == a.outgroup_name)
                        else -1 if l == a.ref_sample else col[l]
@@ -601,7 +644,8 @@ def main():
     is_og_tip = take == -2
     if a.ref_sample:
         eprint(f"  note: tree leaf {a.ref_sample} is the VCF reference; "
-               f"reading it as REF at every record")
+               f"reading it as REF at every record, unknown at node-frame "
+               f"records")
     leaf_index = [None] * len(nodes)
     for j, i in enumerate([i for i in range(len(nodes)) if is_leaf[i]]):
         leaf_index[i] = j
@@ -622,15 +666,15 @@ def main():
         og_gt = np.full(len(variants), ord("."), dtype=np.uint8)
         hit = collections.Counter()
         for j, v in enumerate(variants):
-            i = at.get((v["chrom"], v["pos"], v["ref"].upper(),
-                        v["alt"].upper()))
+            alt = primary_alt(v["alt"]).upper()
+            i = at.get((v["chrom"], v["pos"], v["ref"].upper(), alt))
             if i is None:
                 hit["site not in the alignment"] += 1
                 continue
             b = og_seq[i].upper()
             if b == v["ref"].upper():
                 og_gt[j] = ord("0"); hit["reference allele"] += 1
-            elif b == v["alt"].upper():
+            elif b == alt:
                 og_gt[j] = ord("1"); hit["alternate allele"] += 1
             else:
                 hit["N or a third base"] += 1
@@ -690,6 +734,9 @@ def main():
                f"removed")
         variants = [variants[i] for i in keep]
         gt_rows = [gt_rows[i] for i in keep]
+        if og_gt is not None:
+            og_gt = og_gt[keep]      # or every later record reads its
+                                     # neighbour's outgroup allele (TP-6)
         keys = [v["key"] for v in variants]
 
     # ---- LEVEL 2: which samples is an inside-the-insert variant even about? -
@@ -766,7 +813,7 @@ def main():
             v = variants[j]
             g = gt_rows[j][take_safe]
             if is_ref_tip.any():
-                g = np.where(is_ref_tip, ord("0"), g)
+                g = np.where(is_ref_tip, ref_tip_gt(v), g)
             if is_og_tip.any():
                 g = np.where(is_og_tip, og_gt[j], g)
             b = leaf_bits(g, v["derived"] == "REF", a.absent)
@@ -870,7 +917,7 @@ def main():
                 v = variants[j]
                 g = gt_rows[j][take_safe]
                 if is_ref_tip.any():
-                    g = np.where(is_ref_tip, ord("0"), g)
+                    g = np.where(is_ref_tip, ref_tip_gt(v), g)
                 if is_og_tip.any():
                     g = np.where(is_og_tip, og_gt[j], g)
                 # the flip: derived becomes REF instead of ALT
@@ -992,6 +1039,8 @@ def main():
     if a.outgroup_name:
         lines.append(f"outgroup          {a.outgroup_name}, alleles from "
                      f"{a.outgroup_fasta}")
+    lines.append("panel polarity    " + (a.panel_polarity or
+                                       "none (--panel-polarity '')"))
     lines.append(f"nodes             {n_n}  ({len(leaves)} leaves, "
                  f"{n_n - len(leaves)} internal)")
     lines.append(f"variants          {n_v}")
