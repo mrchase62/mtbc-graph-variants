@@ -12,6 +12,8 @@ non-carrier's own element-free alignment whether it looked and found nothing.
     read depth there, and ask whether a junction candidate sits within --window
 
     depth >= --min-dp and no candidate   REF      it looked and found nothing
+      ... at a locus H37Rv holds         NOCALL   it lacks H37Rv's copy, which
+                                                  the <INS> record cannot say
     a junction candidate is present      reported, NOT silently called ALT
     otherwise                            NOCALL
 
@@ -94,14 +96,35 @@ def carriers(a):
     for x in csv.DictReader(open(a.cohort_keys, newline=""), delimiter="\t"):
         if x["frame"] == "h37rv":
             k = f'h37rv:{x["h37rv_pos"]}:'
-        else:
+        elif x["frame"] == "node":
             k = f'node:{x["node"]}:'
+        else:
+            continue          # repeat_node: no key (is6110_write_vcf.py, P3IS-3)
         src.setdefault((x["sample"], x["reference"], int(x["r_pos"])), []).append(k)
     carrier_of = {}
     for (cs, cref, cpos), ks in src.items():
         for k in ks:
             carrier_of.setdefault(k, (cref, cpos))
     return carrier_of
+
+
+_OCCUPIED = {}
+
+
+def occupied(a):
+    """Short keys of the H37Rv loci where H37Rv itself holds an element.
+
+    There the <INS> record's REF is H37Rv's state, element present, and the
+    carriers are REF (is6110_write_vcf.py, audit P3IS-1). A non-carrier with
+    depth and no junction LACKS the element, which is neither REF nor the
+    <INS> allele, so it is left NOCALL rather than written as matching H37Rv.
+    """
+    if a.cohort_keys not in _OCCUPIED:
+        _OCCUPIED[a.cohort_keys] = {
+            f'h37rv:{x["h37rv_pos"]}:'
+            for x in csv.DictReader(open(a.cohort_keys, newline=""), delimiter="\t")
+            if x["frame"] == "h37rv" and x.get("h37rv_state") == "occupied"}
+    return _OCCUPIED[a.cohort_keys]
 
 
 def proj_path(a, tref):
@@ -354,6 +377,7 @@ def decide(a, s, R):
     cand.sort()
 
     # pass three: decide
+    occ = occupied(a)
     out = []
     for i, r in enumerate(rows):
         if r["state"] != "NOCALL":
@@ -368,6 +392,9 @@ def decide(a, s, R):
             dp = depth.get(cpos, 0)
             if near:
                 st, ev = "NOCALL", f"a junction candidate sits within {a.window} bp"
+            elif dp >= a.min_dp and short(r["key"]) in occ:
+                st, ev = "NOCALL", (f"depth {dp}, no junction candidate: lacks "
+                                    f"the element H37Rv holds here")
             elif dp >= a.min_dp:
                 st, ev = "REF", f"depth {dp}, no junction candidate"
             else:

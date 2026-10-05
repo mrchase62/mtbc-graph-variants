@@ -123,6 +123,35 @@ def parse_position(text, want_node):
     return out
 
 
+def node_occurrences(odgi, og, want, nt):
+    """{(path name, node id): times that path visits the node} for `want`.
+
+    A node key is an identity only where the node occurs once in the path:
+    node 46966 is a 1 bp node every path walks 85 to 453 times, and keying on
+    it merged insertions more than 1 Mb apart into one record (audit P3IS-3).
+    `odgi paths -H` is the path-by-node visit count matrix; only the columns
+    and rows asked for are kept."""
+    p = subprocess.Popen([odgi, "paths", "-i", og, "-H", "-t", str(nt)],
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    by_path = collections.defaultdict(set)
+    for pth, nid in want:
+        by_path[pth].add(nid)
+    cols, out = None, {}
+    for line in p.stdout:
+        f = line.rstrip("\n").split("\t")
+        if cols is None:
+            idx = {h[5:]: i for i, h in enumerate(f) if h.startswith("node.")}
+            cols = {nid: idx[str(nid)] for _, nid in want if str(nid) in idx}
+            continue
+        for nid in by_path.get(f[0], ()):
+            if nid in cols:
+                out[(f[0], nid)] = int(f[cols[nid]])
+    err = p.stderr.read()
+    if p.wait() != 0:
+        sys.exit(f"odgi paths -H failed:\n{err[-2000:]}")
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--reconcile", default="is6110/results/p1i_reconcile.tsv")
@@ -192,6 +221,10 @@ def main():
                           want_node=True)
     print(f"  odgi returned {len(href)} H37Rv projections and {len(node)} node "
           f"positions for {len(keys)} queries")
+    # how often the carrier's own path visits each node it landed on; the
+    # writer keys on a node only where this is 1 (audit P3IS-3)
+    occ = node_occurrences(a.odgi, og, {(k[0], v[0]) for k, v in node.items()},
+                           a.threads)
 
     ism = collections.defaultdict(list)
     for s in {x["sample"] for x in sites}:
@@ -211,8 +244,8 @@ def main():
         if hp is None or np_ is None:
             tally["unprojected"] += 1
             s.update(placement="unprojected", h37rv_pos="", dist_to_ref="",
-                     node="", node_offset="", frame_strand="", key="",
-                     ismapper="", ism_call="")
+                     node="", node_offset="", node_occ="", frame_strand="",
+                     key="", ismapper="", ism_call="")
             rows.append(s); continue
         h, dist, strand = hp
         nid, noff = np_
@@ -231,7 +264,9 @@ def main():
             if hit == "":
                 hit = 0
         s.update(placement=place, h37rv_pos=h, dist_to_ref=dist,
-                 node=nid, node_offset=noff, frame_strand=strand, key=key,
+                 node=nid, node_offset=noff,
+                 node_occ=occ.get((s["path"], nid), ""),
+                 frame_strand=strand, key=key,
                  ismapper=hit, ism_call=call)
         rows.append(s)
 

@@ -50,6 +50,9 @@ column is regenerated from its raw.
 """
 import argparse, collections, csv, os, sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from is6110_reconcile import clean_to_orig, load_crossmap
+
 DR = "GTCGTCAGACCCAAAACCCCGAGAGGGGACGGAAAC"          # M. tuberculosis CRISPR DR
 COMP = str.maketrans("ACGTN", "TGCAN")
 
@@ -169,7 +172,17 @@ def main():
                 counts["weak evidence in more than one DR cluster; unchanged"] += 1
             else:
                 near = min(inside, key=lambda r: abs(int(r["clean_pos"]) - L[0]))
-                off = int(near["orig_pos"]) - int(near["clean_pos"])
+                # The array start converts through the reference's own
+                # crossmap. Borrowing the nearest stack's clean-to-original
+                # offset was wrong by an element's length wherever the
+                # reference's own copy is excised between that stack and the
+                # array start (audit P3IS-4: one gwas1000 row, placed inside
+                # its reference's own excised element). Every reference in
+                # every cohort has a crossmap; one without is counted, and
+                # read as having no excision.
+                cm = os.path.join(a.clean_dir, f"{R}.crossmap.tsv")
+                if not os.path.exists(cm):
+                    counts["no crossmap: array start taken as unshifted"] += 1
                 agg = dict(near)
                 es = sum(int(r["el_start"]) for r in inside)
                 ee = sum(int(r["el_end"]) for r in inside)
@@ -177,7 +190,8 @@ def main():
                 ce = sum(int(r["chr_end"]) for r in inside)
                 mq = sum(float(r["sa_mapq_mean"]) * int(r["reads"]) for r in inside)
                 agg.update(
-                    clean_pos=L[0], orig_pos=L[0] + off, reads=tot, reads_q=tot,
+                    clean_pos=L[0], orig_pos=clean_to_orig(L[0], load_crossmap(cm)),
+                    reads=tot, reads_q=tot,
                     positions=sum(int(r["positions"]) for r in inside),
                     span=L[1] - L[0] + 1,
                     sa_mapq_max=max(int(r["sa_mapq_max"]) for r in inside),
