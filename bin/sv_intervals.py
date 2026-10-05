@@ -57,6 +57,14 @@ def same_event(p1, l1, p2, l2):
     return hi / lo <= 1.5
 
 
+def overlap_frac(a, b):
+    """Reciprocal overlap of two deletions {start, end}: shared bases over the
+    longer one's length."""
+    shared = min(a["end"], b["end"]) - max(a["start"], b["start"]) + 1
+    longer = max(a["end"] - a["start"] + 1, b["end"] - b["start"] + 1)
+    return max(0, shared) / max(1, longer)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--graph-vcf",
@@ -122,20 +130,28 @@ def main():
     for r in rows:
         hit = None
         for c in reversed(merged[-50:]):
-            if same_event(c["start"], c["svlen"], r["start"], r["svlen"]):
+            if (same_event(c["start"], c["svlen"], r["start"], r["svlen"])
+                    and overlap_frac(c, r) >= 0.5):
                 hit = c
                 break
         if hit is None:
             r["_car"] = set(r.pop("ref_carriers").split(",")) - {""}
             merged.append(r)
         else:
+            # THE CLUSTER KEEPS ITS FIRST MEMBER'S COORDINATES (audit P4P5-5).
+            # It used to widen to the union of its members and compare the next
+            # deletion with that widened span, so a chain of overlapping losses
+            # in a tandem repeat grew an interval longer than most of its
+            # members -- 125 of 278 multi-member intervals beyond the 1.5x
+            # length tolerance -- and a reference carrying a 116 bp loss was
+            # listed as a carrier of a 174 bp interval it only half covers.
+            # Every member is matched against the fixed representative and must
+            # overlap it by half of each one's length, so a carrier's own
+            # deletion covers at least half of the interval it is listed on.
+            # The position tolerance alone lets two 58 bp deletions 150 bp
+            # apart merge without sharing a base. start, end and svlen stay
+            # consistent (review 5.7).
             hit["_car"] |= set(r["ref_carriers"].split(",")) - {""}
-            hit["start"] = min(hit["start"], r["start"])
-            hit["end"] = max(hit["end"], r["end"])
-            # SVLEN IS THE MERGED SPAN (review 5.7). It was the largest member's
-            # length, so `svi:DEL:<start>:<svlen>` could name a length that
-            # disagrees with start..end, and the genotyper probes start..end.
-            hit["svlen"] = hit["end"] - hit["start"] + 1
     for r in merged:
         r["ref_carriers"] = ",".join(sorted(r["_car"]))
         r["n_ref_carriers"] = len(r.pop("_car"))
