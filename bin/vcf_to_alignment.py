@@ -2,11 +2,19 @@
 """Turn a biallelic SNP VCF into a FASTA alignment for tree building.
 
 Each sample gets the REF base where GT=0, the ALT base where GT=1, and N where
-the call is missing. Sites that end up constant after filtering are dropped:
+the call is missing. A record whose ALT is `X,*` -- the merged cohort VCF adds
+`*` whenever a sample is ABSENT there -- is the SNP REF>X, with the `*`
+genotype written N: absence of the region is no observation of the base.
+
+N also where a sample is GT=0 in one record but carries a different allele that
+changes the same base in another record at that position. A multi-allelic panel
+site split into biallelic records leaves the other allele's carriers at GT=0,
+not `.`, and reading that 0 as REF would be wrong. Sites that end up constant after filtering are dropped:
 an alignment of only variable sites needs an ascertainment-bias correction
 (`+ASC`) and IQ-TREE refuses to run it if constant sites are present.
 """
 import argparse
+import itertools
 import pysam
 
 
@@ -38,22 +46,69 @@ def main():
 
     ACGT = set("ACGT")
     dropped_ambig = 0
-    for rec in v:
-        if len(rec.alts) != 1 or len(rec.ref) != 1 or len(rec.alts[0]) != 1:
+
+    def carried_change(rec):
+        """Samples carrying an allele of rec that changes the base at POS.
+        A symbolic allele (<DEL>, <INS>) keeps its anchor base, as does `*`."""
+        change = {i + 1 for i, x in enumerate(rec.alts or ())
+                  if x != "*" and not x.startswith("<")
+                  and x[:1].upper() != rec.ref[:1].upper()}
+        out = set()
+        if change:
+            for s in samples:
+                a = rec.samples[s].allele_indices
+                if a and a[0] in change:
+                    out.add(s)
+        return out
+
+    def locus(rec):
+        # a merged cohort VCF puts every node-frame record at POS=1 of its
+        # node_<id> contig, with the real offset in the ID node:<id>:<offset>
+        vid = rec.id or ""
+        if vid.startswith("node:"):
+            return ":".join(vid.split(":")[:3])
+        return (rec.chrom, rec.pos)
+
+    def with_siblings(it):
+        """Each record with the other records at its position."""
+        for _, grp in itertools.groupby(it, key=locus):
+            grp = list(grp)
+            for rec in grp:
+                yield rec, [o for o in grp if o is not rec]
+
+    for rec, sibs in with_siblings(v):
+        # `X,*` is the SNP REF>X: `*` only marks samples whose region is
+        # absent. Dropping the record, as this did, lost 11,163 of scale200's
+        # SNPs from the tree, the outgroup and every lookup keyed on its sites.
+        alts = [x for x in (rec.alts or ()) if x != "*"]
+        if len(alts) != 1 or len(rec.ref) != 1 or len(alts[0]) != 1:
             continue
+        alt_i = rec.alts.index(alts[0]) + 1
         # Reject ambiguous alleles. This VCF contains records whose ALT is
         # literally "N" (an ambiguous base in the assembly). They pass an
         # allele-count filter -- two distinct allele indices are present -- but
         # produce an alignment column with one real state plus N, which IQ-TREE
         # then counts as invariant and refuses to run +ASC on.
-        if rec.ref.upper() not in ACGT or rec.alts[0].upper() not in ACGT:
+        if rec.ref.upper() not in ACGT or alts[0].upper() not in ACGT:
             dropped_ambig += 1
             continue
+        # A sample carrying another allele that changes this base, in a
+        # sibling record at the same position, is not REF here (audit TP-7).
+        other_change = set()
+        for o in sibs:
+            other_change |= carried_change(o)
         gts = {}
         miss = 0
         for s in samples:
             a = rec.samples[s].allele_indices
             g = a[0] if a and a[0] is not None else None
+            # `*` (absent) or any other allele is no observation of this one
+            if g is not None and g not in (0, alt_i):
+                g = None
+            elif g == 0 and s in other_change:
+                g = None
+            elif g == alt_i:
+                g = 1
             if g is None:
                 miss += 1
             gts[s] = g
@@ -66,7 +121,7 @@ def main():
         if min(n0, n1) < args.min_minor:
             dropped_const += 1
             continue
-        ref, alt = rec.ref.upper(), rec.alts[0].upper()
+        ref, alt = rec.ref.upper(), alts[0].upper()
         for s in samples:
             g = gts[s]
             cols[s].append("N" if g is None else (ref if g == 0 else alt))
