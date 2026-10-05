@@ -184,20 +184,20 @@ def _header_body(w):
       'node-frame record sits on sequence the H37Rv path does not carry and is '
       'emitted on its own node_<id> contig rather than dropped">\n')
     w('##INFO=<ID=AA,Number=1,Type=String,Description="Ancestral allele, '
-      'reconstructed by Fitch parsimony over the 333-genome CX333 tree '
-      'rooted on the canettii outgroup GCF_035581225: the state of the MTBC '
-      'ancestor, the root\'s ingroup child, with the outgroup resolving a tie '
-      'there. A property of the panel rather than of this cohort. `.` where '
-      'the MTBC ancestor is still tied; see AA_FLAG">\n')
+      'reconstructed by Fitch parsimony over the panel tree rooted on the '
+      'canettii outgroup: the state of the MTBC ancestor, the most recent '
+      'common ancestor of every non-canettii genome, with the canettii '
+      'resolving a tie there, nearest first. A property of the panel rather '
+      'than of this cohort. `.` where the MTBC ancestor is still tied; see '
+      'AA_FLAG">\n')
     w('##INFO=<ID=AA_FLAG,Number=1,Type=String,Description="TIED:<bases> '
       'where parsimony does not resolve the MTBC ancestor\'s state, NODATA '
-      'where the site had none. 371 of 72,986 panel sites are tied and are '
-      'NOT resolved by a coin toss">\n')
+      'where the site had none. Tied sites are NOT resolved by a coin '
+      'toss">\n')
     w('##INFO=<ID=AA_INVERTED,Number=0,Type=Flag,Description="The REFERENCE '
       'carries the DERIVED allele at this site, so GT=0 is derived and GT=1 '
-      'is ancestral. True of 6,567 of 72,986 panel SNP sites, 9.0%, which is '
-      'why AA is annotated rather than REF being re-polarised -- VCF requires '
-      'REF to match the reference base">\n')
+      'is ancestral, which is why AA is annotated rather than REF being '
+      're-polarised -- VCF requires REF to match the reference base">\n')
     w('##INFO=<ID=IS6110PROX,Number=0,Type=Flag,Description="The interval '
       'lies within 500 bp of an IS6110 landmark, where depth counts '
       'mismapped copies of the element unless it is filtered">\n')

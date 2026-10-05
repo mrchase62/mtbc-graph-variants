@@ -15,21 +15,28 @@ lookup -- no per-cohort reconstruction, and no cohort needs re-running to gain
 the annotation.
 
 THE METHOD, and its limits. Fitch's algorithm on the rooted tree: one upward
-pass computing state sets, then a downward step from the root to the INGROUP
-node -- the MTBC ancestor, the root's child that is not the outgroup -- whose
-state is reported. AA is the state of the common ancestor of the genomes a
-cohort is drawn from, which is what "ancestral" means for them.
+pass computing state sets, then a downward step to the INGROUP node -- the
+MTBC ancestor, the most recent common ancestor of every leaf that is not an
+outgroup -- whose state is reported. AA is the state of the common ancestor of
+the genomes a cohort is drawn from, which is what "ancestral" means for them.
+
+WHY THE MRCA AND NOT THE ROOT'S OTHER CHILD (audit Fault B). The panel tree
+has TWO canettii genomes. It is rooted on GCF_035581225, and the root's other
+child is GCF_000253375 plus the MTBC, so taking "the root's child that is not
+the outgroup" reported the canettii-plus-MTBC node: 132 of the sites variable
+within lineages 1-4 came out differently from the MTBC ancestor's state. The
+outgroups are therefore a list, the ingroup is the MRCA of everything else,
+and the script stops if that MRCA has an outgroup beneath it.
 
 WHY THE INGROUP AND NOT THE ROOT (review 3.7). The root is the canettii/MTBC
 split and has one outgroup genome on one side, so its set ties whenever that
 genome differs from the MTBC ancestor: 5,130 sites were reported `.`, and 4,759
-of them have one unambiguous state at the ingroup node. Where the root set was
-a single state, the ingroup's downward state is that same state, so no site
-that had an AA changes. The downward step is Fitch's own: the ingroup takes
-its upward set if that is one state; otherwise the outgroup polarises it, the
-ingroup taking the one state it shares with the outgroup's set. What is left
-is genuinely tied inside the MTBC and is reported `.` with TIED, not resolved
-by a coin toss.
+of them have one unambiguous state at the ingroup node. The downward step is
+Fitch's own: the ingroup takes its upward set if that is one state; otherwise
+the outgroups polarise it, NEAREST FIRST -- the first outgroup with a call
+whose state leaves exactly one of the ingroup's tied states decides. What is
+left is genuinely tied inside the MTBC and is reported `.` with TIED, not
+resolved by a coin toss.
 
 This is point-estimate parsimony, deliberately. samarray's `AncestorArray`
 computes the fraction of tied optimal reconstructions in which each node takes
@@ -100,18 +107,55 @@ def main():
     ap.add_argument("--alignment", required=True)
     ap.add_argument("--sites", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--outgroup", default="GCF_035581225",
-                    help="the outgroup leaf the tree is rooted on (canettii); "
-                         "the root's other child is the ingroup whose state is "
-                         "reported")
+    ap.add_argument("--outgroups", "--outgroup", dest="outgroups",
+                    default="GCF_035581225,GCF_000253375",
+                    help="comma-separated outgroup leaves (default the two "
+                         "canettii). The ingroup whose state is reported is "
+                         "the MRCA of every other leaf; the outgroups break a "
+                         "tie there, nearest to it first")
     a = ap.parse_args()
 
     children, root, leaves = parse_newick(open(a.tree).read())
-    rk = children.get(root, [])
-    if len(rk) != 2 or a.outgroup not in rk:
-        sys.exit(f"FATAL: the root must have two children, one of them the "
-                 f"outgroup {a.outgroup}; it has {rk}")
-    ingroup = rk[0] if rk[1] == a.outgroup else rk[1]
+    outgroups = [x for x in a.outgroups.split(",") if x]
+    absent = [x for x in outgroups if x not in leaves]
+    if not outgroups or absent:
+        sys.exit(f"FATAL: outgroups must be tree leaves; not found: {absent}")
+    parent = {c: p for p, kids in children.items() for c in kids}
+
+    def path_up(n):
+        out = [n]
+        while n in parent:
+            n = parent[n]; out.append(n)
+        return out
+
+    def under(n):
+        if n not in children:
+            return {n}
+        return set().union(*(under(c) for c in children[n]))
+
+    # the ingroup: the deepest node on every non-outgroup leaf's path to root
+    ing_leaves = sorted(leaves - set(outgroups))
+    common = None
+    for l in ing_leaves:
+        p = set(path_up(l))
+        common = path_up(l) if common is None else [n for n in common if n in p]
+    if not common:
+        sys.exit("FATAL: every leaf is an outgroup")
+    ingroup = common[0]
+    inside = under(ingroup) & set(outgroups)
+    if inside:
+        sys.exit(f"FATAL: the MRCA of the ingroup ({len(ing_leaves)} leaves) "
+                 f"also contains the outgroup(s) {sorted(inside)}, so its state "
+                 f"would not be the ingroup ancestor's. Is the tree rooted on "
+                 f"an outgroup?")
+    # nearest first: the outgroup that joins the ingroup's lineage lowest
+    anc = path_up(ingroup)
+
+    def join_depth(o):
+        return next(i for i, n in enumerate(anc) if o in under(n))
+    outgroups.sort(key=join_depth)          # stable: ties keep the list order
+    print(f"  ingroup: MRCA of {len(ing_leaves)} leaves; outgroups, nearest "
+          f"first: {', '.join(outgroups)}")
     seqs = read_fasta(a.alignment)
     missing = leaves - set(seqs)
     extra = set(seqs) - leaves
@@ -158,11 +202,13 @@ def main():
                 state[node] = set(); continue
             inter = set.intersection(*sets)
             state[node] = inter if inter else set.union(*sets)
-        ing, og = state.get(ingroup, set()), state.get(a.outgroup, set())
-        if len(ing) > 1 and og:
-            pol_ = ing & og               # the outgroup polarises a tie
-            if len(pol_) == 1:
-                ing = pol_
+        ing = state.get(ingroup, set())
+        if len(ing) > 1:
+            for o in outgroups:           # the outgroups polarise a tie
+                pol_ = ing & state.get(o, set())
+                if len(pol_) == 1:
+                    ing = pol_
+                    break
         if len(ing) == 1:
             aa = next(iter(ing)); flag = ""; unamb += 1
         elif len(ing) > 1:
