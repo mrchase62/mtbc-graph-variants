@@ -361,8 +361,28 @@ def main():
     # This is the half T16 showed carries 89.2% of composition's false positives.
     # It is kept because dropping it loses the recall that makes composition worth
     # using in PE/PPE at all, and it is labelled so downstream can weigh it.
-    called_at = {r["h37rv_pos"] for r in rows if r["frame"] == "h37rv"}
-    n_inh = 0
+    # SUPPRESSED WHERE A CALLED RECORD OVERLAPS IT, not only where one sits at
+    # the same position (audit P4P5-8). The sample's own call replaced R's
+    # bases over its REF span; an inherited allele inside that span is R's
+    # sequence the sample no longer has. Equality of positions kept 782 such
+    # records in scale200, e.g. a called TGGG>T at 976,895 beside an
+    # inherited TTG>GGG at 976,896.
+    called_spans = sorted(
+        (int(r["h37rv_pos"]), int(r["h37rv_pos"]) + max(len(r["ref"]), 1) - 1)
+        for r in rows if r["frame"] == "h37rv")
+    c_starts = [s for s, _ in called_spans]
+    c_reach, m = [], 0
+    for _, e in called_spans:
+        m = max(m, e); c_reach.append(m)
+
+    def overlaps_called(s, e):
+        j = bisect.bisect_right(c_starts, e) - 1
+        while j >= 0 and c_reach[j] >= s:
+            if called_spans[j][1] >= s:
+                return True
+            j -= 1
+        return False
+    n_inh = n_inh_over = 0
     if not os.path.exists(a.graph_vcf):
         sys.exit(f"FATAL: --graph-vcf {a.graph_vcf} does not exist; the "
                  f"inherited half would be silently empty")
@@ -389,7 +409,10 @@ def main():
             alt = alts[ai - 1]
             if set(ref + alt) - set("ACGTN"):
                 continue
-            if region(pos) == "core" or pos in called_at:
+            if region(pos) == "core":
+                continue
+            if overlaps_called(pos, pos + max(len(ref), 1) - 1):
+                n_inh_over += 1
                 continue
             n_inh += 1
             rows.append(dict(
@@ -410,9 +433,12 @@ def main():
         print("  no records placed -- refusing to emit an empty table",
               file=sys.stderr)
         return 1
-    with open(a.out, "w", newline="") as fh:
+    # to a temporary name and renamed: p4_place.sh skips any sample whose
+    # table is non-empty, so a task killed mid-write must not leave one
+    with open(a.out + ".tmp", "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t")
         w.writeheader(); w.writerows(rows)
+    os.replace(a.out + ".tmp", a.out)
 
     c = collections.Counter((r["arm"], r["component"], r["region"]) for r in rows)
     print(f"  {len(rows)} records placed")
@@ -439,7 +465,8 @@ def main():
         for k in sorted(n_anchor):
             if k != "same_strand":
                 print(f"    {k}: {n_anchor[k]}")
-    print(f"  inherited: {n_inh} records from {a.reference}'s own differences")
+    print(f"  inherited: {n_inh} records from {a.reference}'s own differences; "
+          f"{n_inh_over} dropped where a called record overlaps them")
     print(f"  written: {a.out}")
     return 0
 
