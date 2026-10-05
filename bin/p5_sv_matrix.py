@@ -262,7 +262,8 @@ def main():
                                    svlen=int(x["svlen"]), src=x["src"],
                                    n_callers=int(x["n_callers"]),
                                    qual=x["qual"], sr=x["sr"], pe=x["pe"],
-                                   component=x.get("component", "called")))
+                                   component=x.get("component", "called"),
+                                   qual_caller=x.get("qual_caller") or ""))
             except ValueError:
                 continue
     n_big = sum(1 for e in events if e["svlen"] > a.max_svlen)
@@ -339,8 +340,13 @@ def main():
         best = max(scored, key=lambda m: float(m["qual"])) if scored else None
         best_q = float(best["qual"]) if best else 0.0
         qual_src = best["src"] if best else ""
-        # band against the caller that produced this QUAL, not against delly
-        primary = "delly" if "delly" in qual_src else (
+        # band against the caller that produced this QUAL, not against delly.
+        # `src` lists every caller that agreed on the event, so a two-caller
+        # row whose kept QUAL was dysgu's was banded on delly's scale (audit
+        # P4P5-11); P4b now says whose QUAL it wrote. Tables written before
+        # that column existed fall back to the old guess.
+        primary = (best.get("qual_caller") if best else "") or (
+            "delly" if "delly" in qual_src else
             "dysgu" if "dysgu" in qual_src else qual_src.split(",")[0])
         comps = {m.get("component", "called") for m in c["members"]}
         component = ("mixed" if len(comps) > 1 else
