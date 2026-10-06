@@ -1955,9 +1955,19 @@ There are also about 20 LOW items in the reports.
   - **scale200** (P4 rerun locally, 199 samples):
     - reverse-complement twin keys 3 to 0;
     - SNP keys whose REF is the node's own base: 10,932 to 22,008 of 22,008.
-  - **Open edge:** 244 records (1.1%) are reverse-read indels or MNPs whose
-    forward start falls on the neighbouring node (64% of CX333 nodes are
-    1 bp). They are left in R's orientation and counted (`off_node`).
+  - **Edge, mostly closed (746e57d):** 244 records (1.1%) are reverse-read
+    indels or MNPs whose forward start falls on the neighbouring node (64%
+    of CX333 nodes are 1 bp).
+    - 96 are now keyed on that node, found from the build's node table.
+    - 148 stay as R reads them, counted `off_node`:
+      - 138 are anchored on a node on H37Rv's path. A forward reader keys
+        those in H37Rv coordinates, or the direct arm owns them in core;
+        this is a frame-assignment question, awaiting the user's decision;
+      - 5 are at inversion junctions;
+      - 5 are on nodes visited twice.
+    - Homopolymer indels read in opposite directions can still sit at
+      different anchors: node-frame keys are not left-aligned on the
+      forward strand.
   - The explanation is in `analysis/audit/D41_EXPLAINED.md`. 293 tests pass.
 - **New item (the user's request, 2026-10-06): an ancestral allele (`AA`)
   for node-frame variants.**
