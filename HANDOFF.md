@@ -1909,7 +1909,16 @@ There are also about 20 LOW items in the reports.
     production's on CX333). P3 requires it and never writes into the build.
   - The contract declares p1g's `isclean.bam` and p1iv's cohort key table as
     outputs.
-- **277 tests pass.** Next: item 10 (`p3acc` has no dependency on P1).
+- **Item 10, done (ca121eb).** `p3acc` waits for P1's summary job (it reads
+  `refmap.tsv`). The I/O contract lists the refmap as an input of p3.
+- **278 tests pass.** Items 1-10 are done.
+- **User's decisions (2026-10-06), both option (b):**
+  - **Item 11 (D8), IS6110 repeat-node rows:** exclude only the ambiguous
+    ones. Keep a row when every carrier's flank placement agrees on one
+    locus (about half of the 456 / 1,945 excluded rows).
+  - **Item 12, the permutation floor:** adaptive. Rerun only the rows at the
+    1/20,000 floor with more permutations (for example 1,000,000), so a lone
+    true hit can be significant.
 - **A running chat log** for the user is at `analysis/CHAT_LOG.md`
   (untracked), updated each turn.
 
