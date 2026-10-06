@@ -1899,8 +1899,12 @@ There are also about 20 LOW items in the reports.
   - `MTB_CHAIN_PRINT_PROV=<product>` prints the expected record.
   - **After any code change,** move the chain products aside (or use a new
     cohort name).
-- **271 tests pass.** Next: item 8 (the manifest must require `ancestral`
-  and hash `build_info.tsv`).
+- **Item 8, done (b730b24). The P0 manifest is strict.**
+  - It requires `ancestral`.
+  - `manifest.done` is cleared at the start of each manifest run, and
+    whenever any other step is marked done after it.
+  - `p0_check verify` checks `build_info.tsv` against its manifest row.
+- **275 tests pass.** Next: item 9 (the I/O contract refuses a fresh build).
 - **A running chat log** for the user is at `analysis/CHAT_LOG.md`
   (untracked), updated each turn.
 
