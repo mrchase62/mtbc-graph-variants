@@ -228,5 +228,61 @@ class DeletedInRefPresenceGuard(unittest.TestCase):
                                                 dist=50))
 
 
+class AccessoryBlindByIdentity(unittest.TestCase):
+    """R2-IS-1: a locus is read-route blind only if H37Rv carries 0.9 of its
+    sequence at 95% identity or more (h37rv_cov95), not at any identity."""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, os.path.join(ROOT, "accessory", "bin"))
+        import locus_presence
+        cls.blind = staticmethod(locus_presence.read_route_blind)
+
+    def test_rule(self):
+        old = dict(novelty="copy_number", h37rv_cov="1.0")
+        self.assertTrue(self.blind(old))                   # no column: old rule
+        self.assertFalse(self.blind(dict(old, h37rv_cov95="0.0")))
+        self.assertFalse(self.blind(dict(old, h37rv_cov95="0.706")))
+        self.assertTrue(self.blind(dict(old, h37rv_cov95="0.95")))
+        self.assertFalse(self.blind(dict(novelty="novel", h37rv_cov="0.0",
+                                         h37rv_cov95="")))
+
+    def test_merge_catalogues_measures_identity(self):
+        blastn = os.path.join(os.environ.get("MTB_QC_BIN", ""), "blastn")
+        if not os.access(blastn, os.X_OK):
+            self.skipTest("no blastn at $MTB_QC_BIN; source config/project_env.sh")
+        import random
+        rnd = random.Random(11)
+        h37 = "".join(rnd.choice("ACGT") for _ in range(5000))
+        same = h37[3000:3400]
+        div = "".join(c if rnd.random() > 0.15 else
+                      rnd.choice([x for x in "ACGT" if x != c]) for c in same)
+        with tempfile.TemporaryDirectory() as d:
+            write(f"{d}/h.fa", f">NC_000962.3\n{h37}\n")
+            hdr = ("locus_id\tpos\tklass\trep_len\tn_alleles\tcarriers_any"
+                   "\tcarrier_frac\th37rv_cov\tnovelty\n")
+            with open(f"{d}/loci.tsv", "w") as fh:
+                fh.write(hdr)
+                fh.write("ACC_0000500\t500\tpolymorphic\t400\t1\t1\t0.5\t1.0\tcopy_number\n")
+                fh.write("ACC_0001500\t1500\tpolymorphic\t400\t1\t1\t0.5\t1.0\tcopy_number\n")
+            with open(f"{d}/g.vcf", "w") as fh:
+                fh.write("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL"
+                         "\tFILTER\tINFO\tFORMAT\tA\tB\n")
+                fh.write(f"{PANSN}\t500\t.\t{h37[499]}\t{h37[499]}{same}\t.\t.\t.\tGT\t1\t0\n")
+                fh.write(f"{PANSN}\t1500\t.\t{h37[1499]}\t{h37[1499]}{div}\t.\t.\t.\tGT\t1\t0\n")
+            r = run([sys.executable, "accessory/bin/merge_catalogues.py",
+                     "--loci", f"{d}/loci.tsv", "--graph-vcf", f"{d}/g.vcf",
+                     "--out", f"{d}/c.tsv", "--out-fasta", f"{d}/c.fa",
+                     "--h37rv", f"{d}/h.fa", "--blastn", blastn])
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            import csv
+            rows = {x["locus_id"]: x for x in
+                    csv.DictReader(open(f"{d}/c.tsv"), delimiter="\t")}
+        self.assertGreaterEqual(float(rows["ACC_0000500"]["h37rv_cov95"]), 0.9)
+        self.assertLess(float(rows["ACC_0001500"]["h37rv_cov95"]), 0.9)
+        self.assertTrue(self.blind(rows["ACC_0000500"]))
+        self.assertFalse(self.blind(rows["ACC_0001500"]))
+
+
 if __name__ == "__main__":
     unittest.main(warnings="ignore")

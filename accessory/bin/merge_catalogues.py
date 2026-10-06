@@ -22,7 +22,7 @@ source `insertion_contigs.py` already reads. Taken per locus rather than per clu
 provides the representative allele at that position directly, which is what the
 census needs and what the 674 loci without sequence were missing.
 """
-import argparse, bisect, collections, csv, gzip, os, sys
+import argparse, subprocess, bisect, collections, csv, gzip, os, sys
 
 
 def main():
@@ -53,6 +53,9 @@ def main():
     ap.add_argument("--min-len", type=int, default=50)
     ap.add_argument("--out", required=True)
     ap.add_argument("--out-fasta", required=True)
+    ap.add_argument("--h37rv", default="",
+                    help="H37Rv FASTA; with --blastn, writes h37rv_cov95")
+    ap.add_argument("--blastn", default="")
     a = ap.parse_args()
 
     loci = list(csv.DictReader(open(a.loci, newline=""), delimiter="\t"))
@@ -167,6 +170,51 @@ def main():
                 variant_records=c.get("variant_records", ""),
                 cells_alt=c.get("cells_alt", ""),
                 cells_ref=c.get("cells_ref", "")))
+    # H37RV_COV95 (review 2, R2-IS-1): the share of the catalogue sequence --
+    # the sequence reads are aligned to -- that H37Rv carries at 95% identity
+    # or more. h37rv_cov counts BLAST matches at any identity, so a locus 85%
+    # identical to an H37Rv region read as "already in H37Rv" and was made
+    # unmeasurable, though its reads are too divergent to place on H37Rv and
+    # do reach the read route's pool (ACC_2867346, ACC_0334653: 1.0 by
+    # h37rv_cov, 0.0 at 95%). accessory/bin/locus_presence.py judges
+    # blindness on this column. BLAST, not minimap2: 30 CX333 catalogue sequences
+    # are shorter than 200 bp, and minimap2's assembly presets do not align
+    # them. Blank where the locus has no sequence.
+    if a.h37rv and a.blastn:
+        res = subprocess.run(
+            [a.blastn, "-query", a.out_fasta, "-subject", a.h37rv, "-outfmt",
+             "6 qseqid qstart qend qlen pident", "-evalue", "1e-10",
+             "-dust", "no"], capture_output=True, text=True)
+        if res.returncode != 0:
+            sys.exit(f"FATAL: blastn failed: {res.stderr.strip()}")
+        spans, qlen = collections.defaultdict(list), {}
+        for line in res.stdout.splitlines():
+            q, qs, qe, ql, pid = line.split("\t")
+            qlen[q] = int(ql)
+            if float(pid) >= 95.0:
+                spans[q].append(tuple(sorted((int(qs), int(qe)))))
+        for r in rows:
+            q = r["locus_id"]
+            if not r["has_sequence"]:
+                r["h37rv_cov95"] = ""
+                continue
+            tot, cs, ce = 0, None, None
+            for lo, hi in sorted(spans.get(q, ())):
+                if cs is None or lo > ce + 1:
+                    if cs is not None:
+                        tot += ce - cs + 1
+                    cs, ce = lo, hi
+                else:
+                    ce = max(ce, hi)
+            if cs is not None:
+                tot += ce - cs + 1
+            r["h37rv_cov95"] = round(tot / qlen[q], 4) if q in qlen else 0.0
+        n95 = sum(1 for r in rows if r["h37rv_cov95"] != ""
+                  and r["h37rv_cov95"] >= 0.9)
+        print(f"  h37rv_cov95: {n95:,} loci at 0.9 or more (read route blind)")
+    else:
+        print("  note: no --h37rv/--blastn, so no h37rv_cov95 column; the "
+              "presence step then judges blindness on h37rv_cov (any identity)")
     with open(a.out, "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t")
         w.writeheader(); w.writerows(rows)

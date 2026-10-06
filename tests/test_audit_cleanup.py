@@ -468,15 +468,21 @@ class P0AncestralAndCatalogue(unittest.TestCase):
                      "FILTER\tINFO\tFORMAT\tA1\tA2\n"
                      f"c\t5000\t.\tG\t{ins}\t60\t.\t.\tGT\t1\t0\n")
         write(f"{self.b}/logs/assets.done", "2026-10-06\n")
+        # review 2, R2-IS-1: the step measures h37rv_cov95 against the build's
+        # H37Rv with blastn, so it needs refs (a stub blastn finding nothing)
+        write(f"{self.b}/refs/GCF_000195955.fasta", ">NC_000962.3\n" + "ACGT" * 2000 + "\n")
+        write(f"{self.b}/logs/refs.done", "2026-10-06\n")
+        blastn = write(f"{self.d}/fakeblastn", "#!/bin/bash\nexit 0\n", mode=0o755)
         # a hand-made catalogue where the old step copied it from: not used
         write(f"{self.d}/accessory_assets/accessory_catalogue.tsv", "locus_id\nACC_9\n")
         fake = write(f"{self.d}/fakebwa", "#!/bin/bash\ntouch \"$2.bwt\"\n", mode=0o755)
-        r = self.p0("--step", "catalogue", MTB_BWA=fake,
+        r = self.p0("--step", "catalogue", MTB_BWA=fake, MTB_BLASTN=blastn,
                     ACC_CATALOGUE_DIR=f"{self.d}/accessory_assets")
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
         c = rows(f"{a}/accessory_catalogue.tsv")
         self.assertEqual([(x["locus_id"], x["graph_len"], x["panel_carriers"]) for x in c],
                          [("ACC_5000", "400", "A1")])
+        self.assertEqual(c[0]["h37rv_cov95"], "0.0")
         self.assertTrue(open(f"{a}/accessory_catalogue.fasta").read().startswith(">ACC_5000"))
         self.assertTrue(os.path.exists(f"{a}/accessory_catalogue.fasta.bwt"))
         self.assertTrue(os.path.exists(f"{self.b}/logs/catalogue.done"))

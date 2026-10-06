@@ -50,10 +50,26 @@ BLIND_H37RV_COV = 0.9
 
 
 def read_route_blind(locus):
-    """True for a catalogue locus whose sequence H37Rv already carries
-    (novelty copy_number, or h37rv_cov at or above 0.9): its reads align to
-    H37Rv, so the unmapped and clipped pool cannot measure it. Shared with
-    bin/merge_cohort_vcf.py, which applies it to tables written before."""
+    """True for a catalogue locus whose sequence H37Rv already carries: its
+    reads align to H37Rv, so the unmapped and clipped pool cannot measure it,
+    and what the pool does give is reads from some homologous copy elsewhere,
+    not this locus. Shared with bin/merge_cohort_vcf.py, which applies it to
+    tables written before.
+
+    "Carries" means at 95% identity or more over 0.9 of the sequence
+    (h37rv_cov95, written by merge_catalogues.py; review 2, R2-IS-1). The
+    any-identity h37rv_cov and novelty=copy_number made loci 85% identical to
+    H37Rv unmeasurable, though their reads are too divergent to place on H37Rv:
+    on the CX333 catalogue 70 of the 674 loci so judged are measurable, among
+    them ACC_2867346, ACC_2165937 and ACC_0334653, which vary in gwas1000. A
+    catalogue without the column (made before) falls back to the old rule,
+    which can only call more loci blind."""
+    v = locus.get("h37rv_cov95")
+    if v not in (None, ""):
+        try:
+            return float(v) >= BLIND_H37RV_COV
+        except ValueError:
+            return True
     if (locus.get("novelty") or "") == "copy_number":
         return True
     try:
@@ -191,8 +207,9 @@ def main():
         c20 = cov20.get(lid, 0.0)
         if read_route_blind(r):
             # THE READ ROUTE CANNOT SEE THIS LOCUS (audit P3IS-2). Its sequence
-            # is already in H37Rv -- novelty=copy_number, h37rv_cov >= 0.9;
-            # 674 of the 802 loci, 481 of them IS6110 copies -- so its reads
+            # is already in H37Rv -- 0.9 of it at 95% identity or more
+            # (read_route_blind); 604 of the 802 CX333 loci, 481 of them
+            # IS6110 copies -- so its reads
             # place on H37Rv and never reach the unmapped and clipped pool.
             # Zero coverage here is not absence, and was written ABSENT in
             # every sample (0 PRESENT of 96,200 cells on the IS6110 loci in

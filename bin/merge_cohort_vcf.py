@@ -867,10 +867,11 @@ def main():
     # Polarity follows the coordinate frame. Carrying the insert is the
     # DERIVED state and gets the ALT allele; a convergence test then looks for
     # repeated independent gains of the insert, which is the event of
-    # interest. That reading holds for loci whose sequence H37Rv lacks. 674 of
-    # the 802 catalogue loci are not that: novelty=copy_number, sequence H37Rv
-    # already carries (481 are IS6110 copies), which the read route cannot see
-    # (audit P3IS-2). Their cells are unmeasured, so they are written missing
+    # interest. That reading holds for loci whose sequence H37Rv lacks. 604 of
+    # the 802 CX333 catalogue loci are not that: H37Rv carries 0.9 of the
+    # sequence at 95% identity or more (481 are IS6110 copies), which the read
+    # route cannot see (audit P3IS-2; review 2, R2-IS-1: the rule is
+    # locus_presence.read_route_blind, on h37rv_cov95). Their cells are unmeasured, so they are written missing
     # whatever an older presence table says, and a record with no measured
     # cell is not written.
     #

@@ -507,12 +507,18 @@ step_assets() {
 # INSGT_ROUTING name this graph's; otherwise the route columns are empty and
 # the merge writes no ACCROUTE.
 step_catalogue() {
+    # h37rv_cov95 (review 2, R2-IS-1) is measured against the build's H37Rv
+    local h37fa="${BUILD}/refs/${H37RV_ACC}.fasta"
+    local blastn="${MTB_BLASTN:-${MTB_QC_BIN}/blastn}"
     _inputs loci_sha256 "${BUILD}/assets/accessory_loci.tsv" \
             graph_vcf_sha256 "${BUILD}/assets/graph_collapsed.vcf.gz" \
             clusters_sha256 "${INSGT_CLUSTERS:-}" routing_sha256 "${INSGT_ROUTING:-}" \
+            h37rv_sha256 "$h37fa" \
             code_sha256 accessory/bin/merge_catalogues.py
     _done catalogue && { _say "catalogue: already done"; return 0; }
     _have assets || { echo "FATAL: step 'catalogue' needs step 'assets' done first" >&2; return 1; }
+    _have refs || { echo "FATAL: step 'catalogue' needs step 'refs' done first (it measures h37rv_cov95 against ${h37fa})" >&2; return 1; }
+    [[ -x "$blastn" ]] || { echo "FATAL: no blastn at ${blastn} (set MTB_BLASTN)" >&2; return 1; }
     mtb_require_file "${BUILD}/assets/accessory_loci.tsv" \
         "${BUILD}/assets/graph_collapsed.vcf.gz" || return 1
     local out="${BUILD}/assets/accessory_catalogue"
@@ -522,6 +528,7 @@ step_catalogue() {
         --graph-vcf "${BUILD}/assets/graph_collapsed.vcf.gz" \
         --clusters "${INSGT_CLUSTERS:-}" --routing "${INSGT_ROUTING:-}" \
         --census "" --out "${out}.tsv.tmp" --out-fasta "${out}.fasta.tmp" \
+        --h37rv "$h37fa" --blastn "$blastn" \
         || { rm -f "${out}".*.tmp; return 1; }
     "$MTB_PY" bin/p0_check.py catalogue --tsv "${out}.tsv.tmp" \
         --accessions "${BUILD}/assets/accessions.txt" || { rm -f "${out}".*.tmp; return 1; }
