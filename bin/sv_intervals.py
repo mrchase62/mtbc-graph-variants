@@ -68,7 +68,7 @@ def overlap_frac(a, b):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--graph-vcf",
-                    default="graphs/CX333.s10k.k23.K15/all_variants.decomposed.vcf.gz")
+                    default="graphs/CX333.s10k.k23.K15/all_variants.collapsed.vcf.gz")
     ap.add_argument("--sv-matrix", default="",
                     help="a cohort's sv_matrix.tsv, for caller-derived "
                          "intervals the panel does not contain")

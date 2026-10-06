@@ -52,7 +52,10 @@ def revcomp(s):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--graph-vcf",
-                    default="graphs/CX333.s10k.k23.K15/all_variants.decomposed.vcf.gz")
+                    default="graphs/CX333.s10k.k23.K15/all_variants.collapsed.vcf.gz",
+                    help="the collapsed graph VCF: one record per trimmed "
+                         "allele, carriers unioned, so an insertion's "
+                         "sequence is ALT minus its single anchor base")
     ap.add_argument("--min-len", type=int, default=300,
                     help="shorter contigs cannot be mapped uniquely by a short "
                          "read, so they are counted and dropped")

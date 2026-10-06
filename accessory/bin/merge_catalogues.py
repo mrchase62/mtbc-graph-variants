@@ -17,8 +17,8 @@ authoritative locus definition; a sequence cluster can absorb records from
 several positions and then no longer keys on any of them. So this walks the
 loci and attaches, for each, what the graph and the other passes know.
 
-SEQUENCE FOR AS MANY AS THE GRAPH SUPPLIES. The deconstruct VCF is the source
-`insertion_contigs.py` already reads. Taken per locus rather than per cluster it
+SEQUENCE FOR AS MANY AS THE GRAPH SUPPLIES. The collapsed graph VCF is the
+source `insertion_contigs.py` already reads. Taken per locus rather than per cluster it
 provides the representative allele at that position directly, which is what the
 census needs and what the 674 loci without sequence were missing.
 """
@@ -30,7 +30,12 @@ def main():
     ap.add_argument("--loci",
                     default="refbias/build/7713a8d71d8e/assets/accessory_loci.tsv")
     ap.add_argument("--graph-vcf",
-                    default="graphs/CX333.s10k.k23.K15/all_variants.decomposed.vcf.gz")
+                    default="graphs/CX333.s10k.k23.K15/all_variants.collapsed.vcf.gz",
+                    help="the COLLAPSED graph VCF (audit PGB-9). The most-"
+                         "carried allele is chosen per record, so on the "
+                         "decomposed file, where one allele's carriers are "
+                         "split over several records, a split allele lost to "
+                         "a less common one (26 of 802 CX333 loci)")
     ap.add_argument("--clusters", default="insgt/assets/insertions.tsv")
     ap.add_argument("--routing", default="insgt/assets/insertion_routing.tsv")
     ap.add_argument("--census", default="accessory/gwas1000_accessory_census.tsv")
