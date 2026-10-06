@@ -601,6 +601,20 @@ class RunnerGuard(unittest.TestCase):
         r = self.runner()
         self.assertEqual(r.returncode, 0, r.stderr)
 
+    def test_p3acc_waits_for_p1(self):
+        """Review 2, R2-INT-5: p3acc reads P1's refmap.tsv (its sample list and
+        each sample's matched reference), so it is submitted after P1's
+        summary, not with no dependency."""
+        write(os.path.join(self.d, "cohorts.tsv"),
+              "cohort\ttable\tcrams\toutroot\tpasses\tnote\tworkprefix\n"
+              f"{self.name}\t{self.d}/cohort.tsv\t{self.d}/crams.tsv\t"
+              f"{self.outroot}\tp1,p3\t-\t{self.d}/w_\n")
+        r = self.runner()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        line = [l for l in r.stderr.splitlines() if "locus_presence_array.sh" in l]
+        self.assertTrue(line, r.stderr)
+        self.assertIn("--dependency=afterok:DRYRUN_p1sum", line[0])
+
     def test_outroot_of_other_build_refused(self):
         write(os.path.join(self.outroot, ".mtb_build"), "build_id\toldbuild\n")
         r = self.runner()

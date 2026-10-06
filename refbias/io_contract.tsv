@@ -42,6 +42,7 @@ p3	pre	build	yes	${BUILD}/assets/accessory_panel.fasta	128 novel and mosaic cont
 p3	post	sample	yes	${OUTROOT}/p3/${S}.accessory.tsv	arm A, presence by breadth
 p3	post	sample	yes	${OUTROOT}/p3/${S}.copynumber.tsv	arm B, copy number by depth
 p3	post	sample	yes	${OUTROOT}/p3/${S}.elementdepth.tsv	per-interval depth; computed and currently unused
+p3	pre	cohort	yes	${REFMAP}	p3acc's sample list and each sample's matched reference
 p3	post	sample	yes	accessory/${NAME}/${S}.presence.tsv	level-1 accessory presence (p3acc)
 p4	pre	sample	yes	${OUTROOT}/p2/${S}.vcf.gz	from p2
 p4	pre	sample	yes	${WORKPFX}p1/${S}.h37rv.vcf.gz	from p1 -- the dependency that broke the pinned-reference arm

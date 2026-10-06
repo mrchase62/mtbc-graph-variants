@@ -446,12 +446,15 @@ for p in "${RUN[@]}"; do
         JOB[p3a]=$(submit p3 bin/p3_accessory.sh "$EX" "1-${N}" "${JOB[p2]:-}" "-c 4 --mem=2G")
         JOB[p3]=$(submit p3sum bin/p3_accessory.sh \
                 "${EX},P3STEP=--summary" "" "${JOB[p3a]}")
-        # Level-1 accessory presence, which p5vcf merges. It reads only the
-        # sample's reads, so it needs nothing from P1 or P2. It used to be run
-        # by hand, and three of the five cohorts never had it.
+        # Level-1 accessory presence, which p5vcf merges. It used to be run
+        # by hand, and three of the five cohorts never had it. It WAITS FOR
+        # P1 (review 2, R2-INT-5): each task takes its sample from P1's
+        # refmap.tsv and the sample's matched reference from it too. It was
+        # submitted with no dependency, so on a fresh cohort its tasks ran
+        # before the refmap existed, failed, and p5vcf never ran.
         JOB[p3acc]=$(submit p3acc accessory/bin/locus_presence_array.sh \
                 "OUTDIR=accessory/${COHORT_NAME},COHORT_TAG=${COHORT_NAME},CRAMTAB=${CRAMS}" \
-                "1-${N}" "" "-c 1 --mem=4G") ;;
+                "1-${N}" "${JOB[p1]:-}" "-c 1 --mem=4G") ;;
       p4)
         EX="OUTDIR=${OUTROOT}/p4,WORK=${WORKPFX}p4"
         # 53% CPU efficiency on 4 cores, so 2
