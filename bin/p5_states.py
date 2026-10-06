@@ -251,14 +251,37 @@ def homologous(h37, rseq, p, t, strand, flank=15, max_mis=2):
 def _anchor(h37, kmer, p, lo, hi, side):
     """0-based start of `kmer` in H37Rv nearest p and wholly on one side of
     it ("before": ends at or before p-1; "after": starts at or after p+1), or
-    -1."""
+    -1.
+
+    The nearest occurrence can sit in another copy of a repeat (review 2,
+    R2-GENO-1). Requiring the k-mer to be unique in the window was tried and
+    rejected: it lost about 100 real deletions per sample. The guard against a
+    wrong anchor is _present_in, in deleted_in_ref."""
     if side == "before":
         return h37.rfind(kmer, lo, p - 1)
     return h37.find(kmer, p, hi)
 
 
+def _present_in(window, h37, p, flank=12):
+    """Does H37Rv's sequence around p -- `flank` bases each side, with any
+    base at p -- occur in `window` (either strand)? Then p is in R, not
+    deleted."""
+    if p - 1 - flank < 0 or p + flank > len(h37):
+        return False
+    left, right = h37[p - 1 - flank:p - 1], h37[p:p + flank]
+    comp = str.maketrans("ACGT", "TGCA")
+    for w in (window, window.translate(comp)[::-1]):
+        i = w.find(left)
+        while i >= 0:
+            j = i + flank + 1
+            if w[j:j + flank] == right:
+                return True
+            i = w.find(left, i + 1)
+    return False
+
+
 def deleted_in_ref(h37, rseq, p, t, strand, dist=0, k=12, max_del=50000,
-                   reach=200, junction=120):
+                   reach=200, junction=120, presence=2000):
     """Is R's sequence near t H37Rv with a gap that contains position p?
 
     odgi lands every base of a deletion on the first R node its walk meets,
@@ -281,10 +304,27 @@ def deleted_in_ref(h37, rseq, p, t, strand, dist=0, k=12, max_del=50000,
     junction (a 3 kb deletion landed 1.1 kb short of it).
 
     A divergent or rearranged target, or one with no local homolog, fails,
-    and the caller states NOCALL rather than ABSENT."""
+    and the caller states NOCALL rather than ABSENT.
+
+    THE PRESENCE GUARD (review 2, R2-GENO-1). p's own H37Rv context -- 12
+    bases each side, any base at p -- must not occur in R within `presence`
+    bases (plus odgi's distance) of t: if it does, p is in R and is not
+    deleted, and the caller states NOCALL. Without it, an anchor in another
+    copy of a repeat made ABSENT of bases R carries, the sample's reads showing
+    the H37Rv base: 7 of 654, 59 of 667 and 7 of 668 ABSENT positions on three
+    scale200 references (GCF_014900175, GCF_000193185, GCF_001870145). With it
+    those are 0, and every ABSENT call it removes (30, 103 and 13 positions)
+    has p's context in R; no real deletion is lost."""
     W = reach + min(max(dist, 0), 20000)
     ow = r_read(rseq, t, strand, 2 * W + 1, back=W)
     if len(ow) != 2 * W + 1:
+        return False
+    # p's context is sought in a wider window than the anchors: odgi can land
+    # the target a few kilobases from the base it stands for
+    # (both strands are searched, so the window is taken from R as stored,
+    # clipped at its ends rather than refused as r_read would)
+    P = presence + min(max(dist, 0), 20000)
+    if _present_in(rseq[max(0, t - 1 - P):t + P], h37, p):
         return False
     lo, hi = max(0, p - 1 - max_del), min(len(h37), p + max_del)
     # 1. an anchor near t

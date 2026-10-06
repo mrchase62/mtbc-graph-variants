@@ -184,5 +184,49 @@ class ChainUsesTheCombinedTree(unittest.TestCase):
         self.assertNotIn("og.fasta", txt)
 
 
+def load(name, rel):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, os.path.join(ROOT, rel))
+    mod = importlib.util.module_from_spec(spec)
+    sys.path.insert(0, os.path.join(ROOT, "bin"))
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class DeletedInRefPresenceGuard(unittest.TestCase):
+    """R2-GENO-1: ABSENT only where R really lacks the position. A base whose
+    H37Rv context occurs in R near the target is present, whatever the anchors
+    near the target say."""
+
+    @classmethod
+    def setUpClass(cls):
+        import random
+        rnd = random.Random(7)
+        cls.h37 = "".join(rnd.choice("ACGT") for _ in range(6000))
+        cls.p5 = load("p5_states_r2", "bin/p5_states.py")
+
+    def test_real_deletion_is_absent(self):
+        # R lacks H37Rv 1001..1100 (1-based); odgi lands p near the junction
+        r = self.h37[:1000] + self.h37[1100:]
+        self.assertTrue(self.p5.deleted_in_ref(self.h37, r, 1050, 1000, "+",
+                                               dist=50))
+
+    def test_context_present_near_target_is_not_absent(self):
+        # the same deletion, but R also carries p's H37Rv context (12 bases
+        # each side) 800 bases away -- the base is in R, in another copy
+        ctx = self.h37[1049 - 12:1049 + 13]
+        r = self.h37[:1000] + self.h37[1100:1800] + ctx + self.h37[1800:]
+        self.assertTrue(self.p5._present_in(r[0:3000], self.h37, 1050))
+        self.assertFalse(self.p5.deleted_in_ref(self.h37, r, 1050, 1000, "+",
+                                                dist=50))
+
+    def test_context_with_a_substitution_at_p_still_present(self):
+        ctx = self.h37[1049 - 12:1049] + ("A" if self.h37[1049] != "A" else "C") \
+            + self.h37[1050:1050 + 12]
+        r = self.h37[:1000] + self.h37[1100:1800] + ctx + self.h37[1800:]
+        self.assertFalse(self.p5.deleted_in_ref(self.h37, r, 1050, 1000, "+",
+                                                dist=50))
+
+
 if __name__ == "__main__":
     unittest.main(warnings="ignore")
