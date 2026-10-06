@@ -63,6 +63,25 @@ def deleted_span(r):
     return None
 
 
+def small_deleted_span(r):
+    """(first, last) deleted base, 1-based, for a left-anchored small
+    deletion (REF longer than ALT and ALT is REF's first base); else None.
+
+    The same rule as deleted_span: the anchor base at POS is not deleted, so
+    the record removes POS+1 .. POS+len(REF)-1. The `*` allele is not the
+    record's ALT. Insertions have no deleted base and complex replacements no
+    anchor, so both stay on the unit at POS."""
+    ref = (r.get("ref") or "").upper()
+    alts = [x for x in (r.get("alt") or "").upper().split(",") if x != "*"]
+    if len(alts) != 1 or not r["pos"].isdigit():
+        return None
+    alt = alts[0]
+    if len(ref) > 1 and len(alt) == 1 and ref[0] == alt and \
+            not set(ref) - set("ACGTN"):
+        return int(r["pos"]) + 1, int(r["pos"]) + len(ref) - 1
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--events", default="assoc/scale200/events")
@@ -96,7 +115,8 @@ def main():
                          "7-9%% (is6110) of burden origins came from records "
                          "the scan treats as untestable.")
     ap.add_argument("--sv-min-overlap", type=int, default=1,
-                    help="--cls sv: a deletion is credited to EVERY gene it "
+                    help="--cls sv, and small deletions under --cls small: a "
+                         "deletion is credited to EVERY gene it "
                          "removes at least this many bp of. 1 credits any "
                          "partial overlap. A deletion that touches no gene "
                          "falls back to the promoter or intergenic unit at "
@@ -217,7 +237,11 @@ def main():
         # put it on the gene ENDING at the anchor base, which it does not touch
         # at all (svi:DEL:3348474:59 and Rv2991). 21% of gwas1000's deletions
         # with an origin removed a gene other than the one credited.
-        span = deleted_span(r) if a.cls == "sv" else None
+        # The same holds for a SMALL deletion: crediting its anchor base put
+        # 99 of scale200's 3,862 small deletions with an origin (gwas1000: 175
+        # of 9,133) on a unit other than the genes whose bases they remove.
+        span = (deleted_span(r) if a.cls == "sv" else
+                small_deleted_span(r) if a.cls == "small" else None)
         if span:
             units = [(g, "gene") for g in genes_over(*span)]
             if not units:
@@ -246,7 +270,7 @@ def main():
           f"the {a.min_determinacy:.0%} callability floor. The rest enter the "
           f"burden over {len(by_gene):,} units"
           + (f" ({n_multi:,} deletions span two or more genes)"
-             if a.cls == "sv" else "") + ":")
+             if a.cls in ("sv", "small") else "") + ":")
     for k in ("gene", "promoter", "intergenic"):
         if n_kind[k]:
             nu = sum(1 for u, kk in kind_of.items() if kk == k)
