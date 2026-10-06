@@ -179,6 +179,10 @@ _done() {
 }
 _mark() {
     local kv
+    # A MANIFEST PREDATES ANY STEP DONE AFTER IT (review 2, R2-INT-3): a step
+    # re-run once the build was marked complete changes what the manifest
+    # vouches for, so the build is incomplete again until it is re-made.
+    [[ "$1" == manifest ]] || rm -f "${BUILD}/logs/manifest.done"
     [[ "${#_STEP_KEYS[@]}" -gt 0 ]] || _STEP_KEYS=("build_id	${BUILD_ID}")
     { printf 'completed\t%s\n' "$(date -Is)"
       for kv in "${_STEP_KEYS[@]}"; do printf '%s\n' "$kv"; done
@@ -683,6 +687,9 @@ step_ancestral() {
 # it; bin/p0_check.py verify re-hashes exactly these rows at every use.
 step_manifest() {
     local out="${BUILD}/manifest.tsv"
+    # an earlier complete manifest must not vouch for this one, which may be
+    # a snapshot (review 2, R2-INT-3)
+    rm -f "${BUILD}/logs/manifest.done"
     { printf 'asset\tpath\tbytes\tsha256\n'
       local p
       while IFS= read -r p; do
@@ -708,8 +715,10 @@ step_manifest() {
     # partial build cannot be mistaken for a finished one later.
     local incomplete=""
     local s2
+    # ancestral too (review 2, R2-BUILD-2): without it the build was marked
+    # complete and the chain failed only at its last pass, p5vcf
     for s2 in stamp paths accessions gff refs frames assets catalogue nodes \
-              is6110_intervals panel_polarity; do
+              is6110_intervals panel_polarity ancestral; do
         _have "$s2" || incomplete="${incomplete} ${s2}"
     done
     if [[ -n "$incomplete" ]]; then

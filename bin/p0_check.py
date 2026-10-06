@@ -192,11 +192,16 @@ def cmd_verify(a):
         # the recorded path is relative to where P0 ran; locate the file by
         # its place inside the build, so a moved build still verifies
         parts = r["path"].split(os.sep)
-        top = next((x for x in ("assets", "annotation") if x in parts), "")
-        if not top:
-            continue
         p = r["path"]
-        loc = os.path.join(b, *parts[parts.index(top):])
+        if parts[-1] == "build_info.tsv":
+            # the build's identity record, hashed by the manifest but never
+            # checked here before (review 2, R2-INT-3)
+            loc = os.path.join(b, "build_info.tsv")
+        else:
+            top = next((x for x in ("assets", "annotation") if x in parts), "")
+            if not top:
+                continue
+            loc = os.path.join(b, *parts[parts.index(top):])
         if not os.path.exists(loc):
             bad.append(f"{r['asset']}: recorded, now missing ({p})")
             continue

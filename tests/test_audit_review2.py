@@ -386,5 +386,79 @@ class SameDeletionRule(unittest.TestCase):
                       open("bin/merge_cohort_vcf.py").read())
 
 
+class BuildManifestCompleteness(unittest.TestCase):
+    """R2-BUILD-2 / R2-INT-3: the manifest requires the ancestral step, a
+    stale manifest.done never survives, and build_info.tsv is verified."""
+
+    def setUp(self):
+        import hashlib, shutil  # noqa: F401
+        self.d = d = tempfile.mkdtemp()
+        for x in ("bin", "accessory"):
+            os.symlink(os.path.join(ROOT, x), os.path.join(d, x))
+        self.og = os.path.join(d, "g", "g.smooth.final.og")
+        os.makedirs(os.path.dirname(self.og))
+        write(self.og, "graph bytes\n")
+        gsha = hashlib.sha256(b"graph bytes\n").hexdigest()
+        self.b = os.path.join(d, "build", gsha[:12])
+        os.makedirs(os.path.join(self.b, "logs"))
+        os.makedirs(os.path.join(self.b, "assets"))
+        write(os.path.join(self.b, "build_info.tsv"),
+              f"build_id\t{gsha[:12]}\ngraph_sha256\t{gsha}\n")
+        write(os.path.join(self.b, "assets", "x.tsv"), "x\n")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.d)
+
+    def p0(self, *args, **kw):
+        env = dict(os.environ, BUILD_ROOT=os.path.join(self.d, "build"),
+                   MTB_GATK_SIF="/nonexistent.sif", OG=self.og, **kw)
+        return run(["bash", os.path.join(ROOT, "bin/p0_prepare.sh"), *args],
+                   cwd=self.d, env=env)
+
+    def mark(self, *steps):
+        for st in steps:
+            write(os.path.join(self.b, "logs", f"{st}.done"), "2026-10-06\n")
+
+    def test_manifest_requires_ancestral(self):
+        self.mark("stamp", "paths", "accessions", "gff", "refs", "frames",
+                  "assets", "catalogue", "nodes", "is6110_intervals",
+                  "panel_polarity")
+        r = self.p0("--step", "manifest")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("ancestral", r.stderr)
+        self.assertFalse(os.path.exists(os.path.join(self.b, "logs", "manifest.done")))
+
+    def test_incomplete_remanifest_clears_old_marker(self):
+        self.mark("manifest")               # from an earlier, complete run
+        r = self.p0("--step", "manifest")   # now incomplete
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(os.path.exists(os.path.join(self.b, "logs", "manifest.done")))
+
+    def test_step_after_manifest_clears_it(self):
+        self.mark("manifest", "assets")
+        r = self.p0("--step", "panel_polarity", OUTGROUP="")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertTrue(os.path.exists(os.path.join(self.b, "logs", "panel_polarity.done")))
+        self.assertFalse(os.path.exists(os.path.join(self.b, "logs", "manifest.done")))
+
+    def test_verify_checks_build_info(self):
+        import hashlib
+        bi = os.path.join(self.b, "build_info.tsv")
+        x = os.path.join(self.b, "assets", "x.tsv")
+        def h(p): return hashlib.sha256(open(p, "rb").read()).hexdigest()
+        write(os.path.join(self.b, "manifest.tsv"),
+              "asset\tpath\tbytes\tsha256\n"
+              f"build_info.tsv\t{bi}\t1\t{h(bi)}\n"
+              f"x.tsv\t{x}\t1\t{h(x)}\n")
+        ok = run([sys.executable, "bin/p0_check.py", "verify", "--build", self.b])
+        self.assertEqual(ok.returncode, 0, ok.stderr + ok.stdout)
+        with open(bi, "a") as fh:
+            fh.write("outgroup\tSOMETHING_ELSE\n")
+        bad = run([sys.executable, "bin/p0_check.py", "verify", "--build", self.b])
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertIn("build_info.tsv", bad.stderr)
+
+
 if __name__ == "__main__":
     unittest.main(warnings="ignore")
