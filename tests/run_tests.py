@@ -272,7 +272,7 @@ class ShardedMerge(unittest.TestCase):
     def merge(self, d, *extra):
         r = subprocess.run([sys.executable, "bin/merge_cohort_vcf.py",
                             "--states-array", d, "--keys", os.path.join(d, "keys.tsv"),
-                            "--cohort-name", "t", "--ancestral", "",
+                            "--cohort-name", "t", "--ancestral", "", "--build-id", "testbuild",
                             "--bgzip", self.bgzip, "--tabix", self.tabix, *extra],
                            capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)

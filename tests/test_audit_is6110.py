@@ -292,7 +292,8 @@ class Is6110MergedVcf(unittest.TestCase):
         return subprocess.run(
             [sys.executable, "bin/merge_cohort_vcf.py", "--matrix", f"{d}/m.tsv",
              "--is6110-keys", f"{d}/is.tsv", "--is6110-states", f"{d}/none.tsv",
-             "--cohort-name", "t", "--ancestral", "", "--bgzip", self.bgzip,
+             "--cohort-name", "t", "--ancestral", "", "--build-id", "testbuild",
+             "--bgzip", self.bgzip,
              "--tabix", self.tabix, "--out", f"{d}/o.vcf.gz"],
             capture_output=True, text=True)
 
