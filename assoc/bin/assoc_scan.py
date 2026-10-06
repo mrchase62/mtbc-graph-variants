@@ -137,6 +137,78 @@ def load_carriers(path, li):
     return carriers
 
 
+# ---- ADAPTIVE PERMUTATIONS (review 2, R2-TREES-3 / ASSOC-11; the user's
+# option b, 2026-10-06). A p-value is max(1, c) / P, so with P = 20,000 none can
+# fall below 5e-5, and in a BH family as large as the small burden's 3,548
+# genes a lone true hit could reach at best q = 0.177: it could never be
+# significant. Every row is first tested at P; a null whose count c is at or
+# below REFINE_BELOW -- p <= 5e-4, where the floor and Monte Carlo error decide
+# significance -- is re-tested with REFINE_P fresh permutations, drawn in chunks
+# so memory stays bounded, and that p-value replaces the first. BH then runs on
+# the refined values. Nothing above the threshold changes.
+REFINE_P = 1_000_000
+REFINE_BELOW = 10
+REFINE_CHUNK = 20_000
+
+
+def needs_refine(p, P, below=REFINE_BELOW):
+    return p == p and p * P <= below + 1e-9
+
+
+def refine_branch(rng, ov, w, n, br, obs, P2, chunk=REFINE_CHUNK):
+    """The branch null re-drawn P2 times: k branches with edge-length weights."""
+    k, c, done = len(br), 0, 0
+    while done < P2:
+        m = min(chunk, P2 - done)
+        d = rng.choice(n, size=(m, k), p=w)
+        c += int((ov[d].mean(axis=1) >= obs).sum())
+        done += m
+    return max(1, c) / P2
+
+
+def refine_region(rng, ov, pa, k, obs, P2, chunk=REFINE_CHUNK):
+    """The region null re-drawn P2 times from the stratum's branch pool."""
+    c, done = 0, 0
+    while done < P2:
+        m = min(chunk, P2 - done)
+        d2 = pa[rng.integers(0, len(pa), size=(m, k))]
+        c += int((ov[d2].mean(axis=1) >= obs).sum())
+        done += m
+    return max(1, c) / P2
+
+
+def strat_perm_chunk(rng, strata, n_leaves, m):
+    """(n_leaves, m) float32: m permutations of the phenotype, each holding the
+    carrier count k fixed within every stratum (idx array, k)."""
+    M = np.zeros((n_leaves, m), dtype=np.float32)
+    for idx, k in strata:
+        if k <= 0:
+            continue
+        if k >= len(idx):
+            M[idx, :] = 1.0
+            continue
+        pick = np.argpartition(rng.random((m, len(idx))), k - 1, axis=1)[:, :k]
+        M[idx[pick], np.arange(m)[:, None]] = 1.0
+    return M
+
+
+def refine_strat(rng, strata, n_leaves, items, P2, chunk=REFINE_CHUNK):
+    """The lineage (or level-2) null re-drawn P2 times for several rows at
+    once: each chunk of stratified permutations is built once and applied to
+    every row. items: (Dsub float32 (k, n_leaves), denominators (k,), obs).
+    Returns one p-value per item."""
+    counts = [0] * len(items)
+    done = 0
+    while done < P2:
+        m = min(chunk, P2 - done)
+        M = strat_perm_chunk(rng, strata, n_leaves, m)
+        for i, (Ds, den, obs) in enumerate(items):
+            ovp = (Ds @ M) / np.maximum(den, 1)[:, None]
+            counts[i] += int((ovp.mean(axis=0) >= obs).sum())
+        done += m
+    return [max(1, c) / P2 for c in counts]
+
+
 def bh(p):
     p = np.asarray(p, dtype=float)
     n = len(p)
@@ -158,6 +230,10 @@ def main():
                     help="one sample name per line: the carriers")
     ap.add_argument("--min-gains", type=int, default=2)
     ap.add_argument("--permutations", type=int, default=20000)
+    ap.add_argument("--refine-permutations", type=int, default=REFINE_P,
+                    help="permutations for a null whose count is at or below "
+                         "--refine-below after the first pass; 0: no refinement")
+    ap.add_argument("--refine-below", type=int, default=REFINE_BELOW)
     ap.add_argument("--sv-intervals", default="",
                     help="the deletion catalogue carrying `evidence_tier` from "
                          "bin/retier_intervals.py. With it, a catalogued "
@@ -624,7 +700,7 @@ def main():
               f"  {'ok' if len(pool[k]) >= a.min_pool else 'below'}")
 
     P = a.permutations
-    out = []
+    out, aux = [], []
     for r in rows:
         br = ev_of[r["row_key"]]
         k = len(br)
@@ -678,6 +754,49 @@ def main():
                         p_cond=p_cond,
                         cond_carriers=n_carr,
                         cond_carriers_pheno=n_carr_pheno))
+        aux.append((br, np.asarray(pl) if len(pl) >= a.min_pool else None, obs))
+
+    # adaptive permutations: re-test, with more draws, the nulls at the floor
+    for o in out:
+        o["refined"] = ""
+    if a.refine_permutations:
+        P2 = a.refine_permutations
+        lin_items, lin_rows = [], []
+        cond_jobs = collections.defaultdict(list)
+        for o, (br, pa, obs) in zip(out, aux):
+            done = []
+            if needs_refine(o["p_branch"], P, a.refine_below):
+                o["p_branch"] = refine_branch(rng, ov, w, T["n"], br, obs, P2)
+                done.append("branch")
+            if pa is not None and needs_refine(o["p_region"], P, a.refine_below):
+                o["p_region"] = refine_region(rng, ov, pa, len(br), obs, P2)
+                done.append("region")
+            if OVP is not None and needs_refine(o["p_lineage"], P, a.refine_below):
+                lin_items.append((D[br].astype(np.float32), nd[br], obs))
+                lin_rows.append(o)
+                done.append("lineage")
+            if o["acc_locus"] and needs_refine(o["p_cond"], P, a.refine_below):
+                cond_jobs[o["acc_locus"]].append((o, br))
+                done.append("cond")
+            o["refined"] = ",".join(done)
+        if lin_items:
+            strata = [(np.asarray(ix), int(dep[np.asarray(ix)].sum()))
+                      for ix in groups.values()]
+            for o, pv in zip(lin_rows, refine_strat(
+                    rng, strata, len(T["leaves"]), lin_items, P2)):
+                o["p_lineage"] = pv
+        for lid, lst in cond_jobs.items():
+            A = cond_carriers[lid]
+            strata = [(np.flatnonzero(A), int((dep & A).sum()))]
+            items = [(D[br].astype(np.float32), (D[br] & A).sum(axis=1),
+                      float(o["obs_cond"])) for o, br in lst]
+            for (o, _), pv in zip(lst, refine_strat(
+                    rng, strata, len(T["leaves"]), items, P2)):
+                o["p_cond"] = pv
+        nref = collections.Counter(x for o in out for x in o["refined"].split(",") if x)
+        print(f"  refined with {P2:,} permutations (count <= {a.refine_below} at "
+              f"{P:,}): " + (", ".join(f"{k} {v:,}" for k, v in sorted(nref.items()))
+                             or "none"))
 
     # BH within region, on each null separately
     for field, q in (("p_branch", "q_branch"), ("p_region", "q_region"),
@@ -706,7 +825,7 @@ def main():
             "obs", "obs_cond", "acc_locus", "cond_carriers",
             "cond_carriers_pheno", "p_cond", "q_cond",
             "p_branch", "q_branch", "p_region", "q_region",
-            "p_lineage", "q_lineage", "null_pool"])
+            "p_lineage", "q_lineage", "null_pool", "refined"])
         w2.writeheader()
         w2.writerows(out)
 

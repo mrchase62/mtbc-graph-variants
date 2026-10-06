@@ -354,6 +354,51 @@ class BurdenFloor(BurdenBase):
         self.assertIn("G2", u)
 
 
+class AdaptivePermutations(ScanBase):
+    """Review 2, R2-TREES-3 / ASSOC-11 (the user's option b): a null whose
+    count is at the floor of --permutations is re-tested with
+    --refine-permutations draws, so a p-value can fall below 1/P."""
+
+    STRONG = ("100|A|G", "strong", 100, "small", "core", CARRIERS, 0)
+
+    def test_stratified_permutations_hold_each_stratum(self):
+        import numpy as np
+        rng = np.random.default_rng(1)
+        strata = [(np.arange(0, 8), 3), (np.arange(8, 16), 1)]
+        M = self.scan.strat_perm_chunk(rng, strata, 16, 500)
+        self.assertTrue((M[:8].sum(axis=0) == 3).all())
+        self.assertTrue((M[8:].sum(axis=0) == 1).all())
+        self.assertTrue(set(np.unique(M)) <= {0.0, 1.0})
+
+    def test_floor_is_refined(self):
+        rows, log = self.scan_run(BACKGROUND + [self.STRONG], "--permutations",
+                                  "100", "--refine-permutations", "5000")
+        r = rows["100|A|G"]
+        self.assertIn("branch", r["refined"])
+        self.assertLess(float(r["p_branch"]), 1 / 100)   # below the old floor
+        self.assertIn("refined with 5,000 permutations", log)
+
+    def test_refinement_off_keeps_the_floor(self):
+        rows, _ = self.scan_run(BACKGROUND + [self.STRONG], "--permutations",
+                                "100", "--refine-permutations", "0")
+        r = rows["100|A|G"]
+        self.assertEqual(r["refined"], "")
+        p = float(r["p_branch"])
+        self.assertGreaterEqual(p, 1 / 100)                  # the floor holds
+        self.assertAlmostEqual(p * 100, round(p * 100))      # a count of 100
+
+
+class AdaptivePermutationsBurden(BurdenBase):
+    """The same rule in the gene burden."""
+
+    def test_floor_is_refined(self):
+        strong = [("1050|A|G", "s", 1050, "small", "core", CARRIERS, 0)]
+        u = self.units(strong, "small", "--refine-permutations", "5000")
+        g = next(iter(u.values()))
+        self.assertIn("branch", g["refined"])
+        self.assertLess(float(g["p_branch"]), 1 / 100)
+
+
 class SurvivorRule(ScanBase):
     """ASSOC-9: survival must mean q < 0.05 under all three nulls."""
 

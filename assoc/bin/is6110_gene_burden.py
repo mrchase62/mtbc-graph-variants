@@ -27,6 +27,8 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sv_scatter import tree_frame
+from assoc_scan import (needs_refine, refine_branch, refine_region,
+                        refine_strat, REFINE_P, REFINE_BELOW)
 from assoc_scan import (descendant_matrix, bh, event_key, leave_one_out,
                         load_lineages, load_carriers)
 
@@ -98,6 +100,11 @@ def main():
                          "minus-strand gene is at HIGHER coordinates.")
     ap.add_argument("--min-origins", type=int, default=2)
     ap.add_argument("--permutations", type=int, default=20000)
+    ap.add_argument("--refine-permutations", type=int, default=REFINE_P,
+                    help="permutations for a null whose count is at or below "
+                         "--refine-below after the first pass (assoc_scan.py's "
+                         "adaptive rule); 0: no refinement")
+    ap.add_argument("--refine-below", type=int, default=REFINE_BELOW)
     ap.add_argument("--lineages", default="",
                     help="TSV with `sample` and `lineage` columns. Adds a third "
                          "null that permutes the PHENOTYPE within lineage, "
@@ -297,7 +304,7 @@ def main():
               f"units" + ("" if len(pool[k]) >= a.min_pool
                           else f"   (below {a.min_pool}: no null)"))
 
-    P, out = a.permutations, []
+    P, out, aux = a.permutations, [], []
     for g, br in sorted(tested.items()):
         br = np.asarray(br)
         obs = float(ov[br].mean())
@@ -319,6 +326,36 @@ def main():
                         carriers_with_phenotype=carr,
                         p_branch=p_branch, p_region=p_region,
                         p_lineage=p_lineage, null_pool=len(pl)))
+        aux.append((br, np.asarray(pl) if len(pl) >= a.min_pool else None, obs))
+    # adaptive permutations, as in assoc_scan.py: a null at the floor of P is
+    # re-tested with --refine-permutations draws before BH
+    for o in out:
+        o["refined"] = ""
+    if a.refine_permutations:
+        P2 = a.refine_permutations
+        lin_items, lin_rows = [], []
+        for o, (br, pa, obs) in zip(out, aux):
+            done = []
+            if needs_refine(o["p_branch"], P, a.refine_below):
+                o["p_branch"] = refine_branch(rng, ov, w, T["n"], br, obs, P2)
+                done.append("branch")
+            if pa is not None and needs_refine(o["p_region"], P, a.refine_below):
+                o["p_region"] = refine_region(rng, ov, pa, len(br), obs, P2)
+                done.append("region")
+            if OVP is not None and needs_refine(o["p_lineage"], P, a.refine_below):
+                lin_items.append((D[br].astype(np.float32), nd[br], obs))
+                lin_rows.append(o)
+                done.append("lineage")
+            o["refined"] = ",".join(done)
+        if lin_items:
+            strata = [(np.asarray(ix), int(dep[np.asarray(ix)].sum()))
+                      for ix in groups.values()]
+            for o, pv in zip(lin_rows, refine_strat(
+                    rng, strata, len(T["leaves"]), lin_items, P2)):
+                o["p_lineage"] = pv
+        nref = collections.Counter(x for o in out for x in o["refined"].split(",") if x)
+        print(f"  refined with {P2:,} permutations: "
+              + (", ".join(f"{k} {v:,}" for k, v in sorted(nref.items())) or "none"))
     # BH within stratum, for the same reason the null is within stratum.
     for f, q in (("p_branch", "q_branch"), ("p_region", "q_region"),
                  ("p_lineage", "q_lineage")):
@@ -337,7 +374,7 @@ def main():
             "gene", "kind", "stratum", "origins", "obs",
             "carriers_with_phenotype",
             "p_branch", "q_branch", "p_region", "q_region",
-            "p_lineage", "q_lineage", "null_pool"])
+            "p_lineage", "q_lineage", "null_pool", "refined"])
         wr.writeheader()
         wr.writerows(out)
     nb = sum(1 for o in out if o["q_branch"] < 0.05)
