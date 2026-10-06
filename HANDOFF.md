@@ -44,7 +44,8 @@ fixes, with tests) were approved on 2026-10-05.
 - **Every audit fix is on branch `audit-fixes`** (254 tests), not yet in
   main. The current association results remain provisional.
 - **Waiting on the user:** the 44 decisions, and D41.
-- **Step 4 (the second review) is running** (section 0p).
+- **Step 4 is done:** section 0q lists 12 items to fix before any rerun.
+  They are worked one at a time, starting with item 1.
 - **Then:** the new panel, graph and build, then scale200 first.
 
 **Before anything else after downtime:**
@@ -1769,6 +1770,54 @@ trust them.
 5. Then the new panel and graph.
 
 The working tree was synced to durable storage on 2026-10-06.
+
+## 0q. Step 4 review results: 12 items before any rerun (2026-10-06)
+
+Full list: `analysis/audit/review2/CONSOLIDATED.md`. The five reports are
+beside it.
+
+### Verified independently on real data
+
+- **The P4 and P5 strand corrections:** right in every orientation (31-mer
+  homology).
+- **Forward node offsets:** consistent in every producer and reader.
+- **Fitch reconstruction, gains and losses:** match a separate implementation
+  on all 85,575 comparable scale200 records.
+- **The fixed ancestral alleles:** equal check 2's MTBC ancestor at 72,986 /
+  72,986 sites.
+- **The fixed association tail on scale200:**
+  - every change traces to a fix;
+  - survivors unchanged (rpoB 761155, embB 4247429/4247730);
+  - DR controls hold;
+  - leave-one-out, BH and the nulls are correct.
+- **IS6110 P3IS-1:** correct end to end.
+- **A fresh build** works through P0; stale outputs are refused.
+- **D1-D44:** implemented as described.
+
+### To fix before any rerun
+
+| # | Severity | Item |
+|---|---|---|
+| 1 | HIGH | Indel keys in the panel polarity table are not left-aligned like the cohort VCF's, so ancestral alleles are missed for 2,951 of 8,711 scale200 indels (103 inverted) |
+| 2 | HIGH (process) | The chain builds a cohort-only tree (against the CX333-included rule); the guards refuse the combined tree; `build_alignment.py` still has fault A and TP-1 (TP-5 unaddressed) |
+| 3 | MEDIUM | False ABSENT (`*`) calls from repeat-copy anchors in `p5_states.deleted_in_ref`; read downstream as unknown |
+| 4 | MEDIUM | D6 "unmeasurable" judged at any identity; 3 real variable accessory loci wrongly dropped |
+| 5 | MEDIUM | Variants conditioned on unmeasurable accessory loci silently leave the scan (about 249 of 308) |
+| 6 | MEDIUM | Reciprocal overlap not applied when matching caller deletions to intervals; 65 scale200 deletions dropped |
+| 7 | MEDIUM | Chain provenance omits code, tree, outgroup and node-locus |
+| 8 | MEDIUM | The manifest does not require `ancestral`; `build_info.tsv` is not hashed |
+| 9 | MEDIUM | The I/O contract refuses a fresh build |
+| 10 | MEDIUM | `p3acc` has no dependency on P1 (pre-existing) |
+| 11 | decision | D8 repeat-node exclusion removes about 19% of IS6110 sites, about half of them keepable |
+| 12 | decision | The permutation floor of 1/20,000: a lone true hit in the small gene burden can reach at best q = 0.177 |
+
+There are also about 20 LOW items in the reports.
+
+### Working mode (the user's preference, 2026-10-06)
+
+- Fewer agents, one bug at a time, so the user can respond as bugs emerge.
+- Items 1-12 are to be fixed sequentially in the main session, on
+  `audit-fixes`, each with a test, starting with item 1.
 
 ## 1. State before the rerun (2026-09-30)
 
