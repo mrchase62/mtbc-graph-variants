@@ -82,9 +82,17 @@ def cigar_ref_span(cig):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--sites", default="is6110/results/p1i_sites_h37rv.tsv")
-    ap.add_argument("--refs", default="refbias/build/7713a8d71d8e/refs")
+    # The build's references, from MTB_BUILD_DIR (refbias_run.sh exports it).
+    # These defaulted to the CX333 build 7713a8d71d8e, and p1i_vcf.sh passes
+    # neither, so a new build's flanks were read from the old build's FASTAs.
+    _b = os.environ.get("MTB_BUILD_DIR", "")
+    ap.add_argument("--refs", default=os.path.join(_b, "refs") if _b else "",
+                    help="<build>/refs; default from MTB_BUILD_DIR")
     ap.add_argument("--crossmap-dir", default="is6110/assets/isclean_matched")
-    ap.add_argument("--h37rv", default="refbias/build/7713a8d71d8e/refs/GCF_000195955.fasta")
+    ap.add_argument("--h37rv",
+                    default=os.path.join(_b, "refs", "GCF_000195955.fasta") if _b else "",
+                    help="<build>/refs/GCF_000195955.fasta; default from "
+                         "MTB_BUILD_DIR")
     ap.add_argument("--minimap2", default="minimap2")
     ap.add_argument("--window", type=int, default=300)
     ap.add_argument("--gap", type=int, default=5,
@@ -98,7 +106,13 @@ def main():
                     help="tolerance on the element-sized gap, wider because "
                          "element length varies between copies")
     ap.add_argument("--element-len", type=int, default=1355)
-    ap.add_argument("--ismapper-dir", default="refbias/p1f")
+    # NO DEFAULT DIRECTORY, as in is6110_project_sites.py: refbias/p1f is the
+    # PILOT's, and p1i_vcf.sh does not pass one, so every cohort joined
+    # against the pilot's tables wherever a sample name matched. Empty turns
+    # the join off and the column is blank.
+    ap.add_argument("--ismapper-dir", default="",
+                    help="this cohort's ISMapper output directory; empty, the "
+                         "default, turns the ISMapper join off")
     ap.add_argument("--ism-window", type=int, default=50)
     ap.add_argument("--graph-fallback", action="store_true",
                     help="on a one_flank_unique verdict, accept the graph "
@@ -118,6 +132,8 @@ def main():
     ap.add_argument("--workdir", default="refbias/p1i/flankplace")
     ap.add_argument("--out", default="is6110/results/p1i_sites_flank.tsv")
     a = ap.parse_args()
+    if not a.refs or not a.h37rv:
+        sys.exit("FATAL: no --refs/--h37rv and no MTB_BUILD_DIR to take them from")
     os.makedirs(a.workdir, exist_ok=True)
 
     sites = list(csv.DictReader(open(a.sites), delimiter="\t"))
@@ -198,7 +214,7 @@ def main():
 
     ism = collections.defaultdict(list)
     ism_ran = set()
-    for s in {x["sample"] for x in sites}:
+    for s in ({x["sample"] for x in sites} if a.ismapper_dir else ()):
         tp = os.path.join(a.ismapper_dir, s, s, "IS6110",
                           f"{s}__NC_000962.3_table.txt")
         if os.path.exists(tp):

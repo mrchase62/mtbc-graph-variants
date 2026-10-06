@@ -11,6 +11,12 @@
 #
 #   sbatch is6110/bin/p1i_build_matched.sh     # or bash, it runs either way
 #
+#   MTB_BUILD_DIR=<build> sbatch is6110/bin/p1i_build_matched.sh
+#                       every panel genome of that build, for P0's
+#                       is6110_intervals step (stage-1 GFFs for every genome
+#                       first: is6110/bin/p1i_discover_matched.sh)
+#   REFMAP=<refmap>     only that cohort's matched references
+#
 # WHY THERE IS AN #SBATCH BLOCK AT ALL. There was none, so sbatch refused the
 # script outright and it had to be run with `bash`. That is not just an
 # inconvenience: a waiter watching for the job id reported BUILD_DONE although
@@ -53,27 +59,48 @@ done
 source "$_mtb_env"
 cd "${SLURM_SUBMIT_DIR:-.}"
 
-REFMAP="${REFMAP:-refbias/p1/refmap.tsv}"
-REFS="${REFS:-refbias/build/7713a8d71d8e/refs}"
+# THE BUILD'S REFERENCES, AND EVERY PANEL GENOME BY DEFAULT. REFS was the
+# CX333 build's refs/ (7713a8d71d8e), hard-coded, and the reference list was
+# the refmap's, so P0's is6110_intervals step -- which needs a crossmap for
+# every panel genome of the build -- could not be fed on a new build. The
+# build is MTB_BUILD_DIR (or the only completed build); the references are
+# every accession in its assets/accessions.txt, or the refmap's when REFMAP
+# is set (one cohort's matched references, as before).
+BUILD="$(mtb_resolve_build)" || exit 1
+REFS="${REFS:-${BUILD}/refs}"
 GFFDIR="${GFFDIR:-is6110/assets/matched_gff}"
 OUTDIR="${OUTDIR:-is6110/assets/isclean_matched}"
 ELEMENT="${ELEMENT:-is6110/assets/IS6110.query.fasta}"
 BWA="${MTB_BWA:-${MTB_QC_BIN}/bwa}"
+if [[ -n "${REFMAP:-}" ]]; then
+    mapfile -t REFLIST < <(awk -F'\t' 'NR>1{print $5}' "$REFMAP" | sort -u)
+    echo "[P1i-build] ${#REFLIST[@]} references from ${REFMAP}"
+else
+    mtb_require_file "${BUILD}/assets/accessions.txt" || exit 1
+    mapfile -t REFLIST < <(sort -u "${BUILD}/assets/accessions.txt")
+    echo "[P1i-build] all ${#REFLIST[@]} panel genomes of ${BUILD}"
+fi
 mkdir -p "$OUTDIR"
 
 MAN="${OUTDIR}/manifest.tsv"
 printf 'reference\tcontig\tintervals\tbp_removed\tchrom_clean_bp\n' > "$MAN"
 
-for R in $(awk -F'\t' 'NR>1{print $5}' "$REFMAP" | sort -u); do
+for R in "${REFLIST[@]}"; do
     REF="${REFS}/${R}.fasta"
     GFF="${GFFDIR}/${R}.is6110.gff"
     OUT="${OUTDIR}/${R}.isclean.fasta"
     XMAP="${OUTDIR}/${R}.crossmap.tsv"
+    # which reference bytes a build was made from: OUTDIR is shared by
+    # builds, and an accession's refs FASTA can differ between them (a new
+    # rotation, a new assembly version) with the same name and length
+    REFSHA="${OUTDIR}/${R}.ref.sha256"
     [[ -s "$REF" ]] || { echo "FATAL: missing ${REF}" >&2; exit 1; }
     [[ -s "$GFF" ]] || { echo "FATAL: missing ${GFF} -- run stage 1 first" >&2; exit 1; }
     CONTIG="$(awk '/^>/{print substr($1,2); exit}' "$REF")"
+    _sha="$(sha256sum "$REF" | cut -d' ' -f1)"
 
-    if [[ -s "$OUT" && -s "${OUT}.bwt" && -s "$XMAP" ]]; then
+    if [[ -s "$OUT" && -s "${OUT}.bwt" && -s "$XMAP" \
+          && "$(cat "$REFSHA" 2>/dev/null)" == "$_sha" ]]; then
         echo "[P1i-build] ${R}: already built"
         # still emit the manifest row. It used to be written only on the build
         # path, so after any incremental run the manifest recorded the last
@@ -93,6 +120,7 @@ for R in $(awk -F'\t' 'NR>1{print $5}' "$REFMAP" | sort -u); do
     mv -f "${OUT}.tmp" "$OUT"; mv -f "${XMAP}.tmp" "$XMAP"
     "$BWA" index "$OUT" 2>/dev/null
     "$MTB_SAMTOOLS" faidx "$OUT"
+    printf '%s\n' "$_sha" > "$REFSHA"
 
     # `grep -c` exits 1 when the count is zero, which under `set -e` killed the
     # whole loop on the one reference that carries no IS6110 copies -- after it

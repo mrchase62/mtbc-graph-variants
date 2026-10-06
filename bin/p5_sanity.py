@@ -70,8 +70,11 @@ def main():
     ap.add_argument("--refmap", default="refbias/p1/refmap.tsv")
     ap.add_argument("--p2-summary", default="refbias/p2/p2_summary.tsv")
     ap.add_argument("--cohort", default="refbias/cohort.pilot.tsv")
-    ap.add_argument("--graph-vcf",
-                    default="graphs/CX333.s10k.k23.K15/all_variants.nolab.vcf.gz")
+    # The build's collapsed graph VCF, passed by p5_finish.sh. No default:
+    # the default was CX333's nolab file, which a new build does not have,
+    # and check 1 then silently skipped (it reads the file only if it exists).
+    ap.add_argument("--graph-vcf", required=True,
+                    help="<build>/assets/graph_collapsed.vcf.gz (P0 step assets)")
     ap.add_argument("--out", default="refbias/p5/sanity.tsv")
     a = ap.parse_args()
 

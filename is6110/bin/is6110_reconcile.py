@@ -133,7 +133,12 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--elside-dir", default="refbias/p1h")
     ap.add_argument("--junc-dir", default="refbias/p1g")
-    ap.add_argument("--ismapper-dir", default="refbias/p1f")
+    # NO DEFAULT DIRECTORY, as in is6110_project_sites.py: refbias/p1f is the
+    # PILOT's. Empty turns the join off, and the ismapper column is then
+    # blank (not compared), not 0 (compared and not confirmed).
+    ap.add_argument("--ismapper-dir", default="",
+                    help="this cohort's ISMapper output directory; empty, the "
+                         "default, turns the ISMapper join off")
     ap.add_argument("--crossmap", default="is6110/assets/H37Rv.isclean.crossmap.tsv",
                     help="one crossmap, when every isolate shares a reference")
     ap.add_argument("--crossmap-dir", default=None,
@@ -231,7 +236,9 @@ def main():
         ism = []
         tp = os.path.join(a.ismapper_dir, s, s, "IS6110",
                           f"{s}__NC_000962.3_table.txt")
-        if os.path.exists(tp):
+        # an isolate with no table (or the join off) is not compared: blank
+        ism_ran = bool(a.ismapper_dir) and os.path.exists(tp)
+        if ism_ran:
             for r in csv.DictReader(open(tp), delimiter="\t"):
                 try:
                     ism.append((int(r["x"]), int(r["y"]), r.get("call", "")))
@@ -290,8 +297,9 @@ def main():
                           else "BOTH")
                 nb_comp = int({"START": "END", "END": "START"}.get(mine, "") == theirs)
 
-            ism_hit = int(any(abs(orig - x) <= a.ism_window or
-                              abs(orig - y) <= a.ism_window for x, y, _ in ism))
+            ism_hit = (int(any(abs(orig - x) <= a.ism_window or
+                               abs(orig - y) <= a.ism_window for x, y, _ in ism))
+                       if ism_ran else "")
 
             out_rows.append(dict(
                 sample=s, clean_pos=p, orig_pos=orig,
@@ -311,9 +319,9 @@ def main():
                 reads="", reads_q="", geometry="", span="",
                 el_start="", el_end="", sa_mapq_mean="",
                 chrom_side="chrom_side_only", nbr_dist="", nbr_complementary="",
-                ismapper=int(any(abs(clean_to_orig(pk, xm) - x) <= a.ism_window or
-                                 abs(clean_to_orig(pk, xm) - y) <= a.ism_window
-                                 for x, y, _ in ism))))
+                ismapper=(int(any(abs(clean_to_orig(pk, xm) - x) <= a.ism_window or
+                                  abs(clean_to_orig(pk, xm) - y) <= a.ism_window
+                                  for x, y, _ in ism)) if ism_ran else "")))
 
     if mismatches:
         for s, got, want in mismatches:
@@ -335,7 +343,7 @@ def main():
     for r in out_rows:
         k = (r["chrom_side"], r["geometry"])
         piv[k] += 1
-        ismd[k] += 1; ismn[k] += r["ismapper"]
+        ismd[k] += 1; ismn[k] += r["ismapper"] or 0     # blank: not compared
     order = ["agreed", "merged_by_clustering", "readthrough", "min_peak",
              "no_element_sa", "not_scanned", "chrom_side_only"]
     geos = ["tsd", "two_sided_wide", "one_sided", ""]
@@ -358,7 +366,10 @@ def main():
                   f"{tot:6d} {conf:6d} {conf/tot:6.0%}")
             w.writerow([k, cells[0], cells[1], cells[2] + cells[3], tot, conf])
     print("-" * len(hdr))
-    tot = len(out_rows); conf = sum(r["ismapper"] for r in out_rows)
+    tot = len(out_rows); conf = sum(r["ismapper"] or 0 for r in out_rows)
+    if not a.ismapper_dir:
+        print("  (ISMapper join off: the ismapper column is blank, and the "
+              "ISMapper counts above are not a comparison)")
     print(f"{'all rows':22s} {sum(piv[(k,'tsd')] for k in order):5d} "
           f"{sum(piv[(k,'two_sided_wide')] for k in order):7d} "
           f"{sum(piv[(k,'one_sided')] for k in order):7d} {tot:6d} "

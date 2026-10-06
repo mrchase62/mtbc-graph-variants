@@ -47,17 +47,19 @@ OUT="${OUTDIR}/${S}.presence.tsv"
 # AN EXISTING TABLE IS KEPT ONLY IF IT WAS MADE AGAINST THIS BUILD'S
 # CATALOGUE (audit P3IS-8). Locus ids are ACC_<H37Rv anchor>, and on a new
 # graph the catalogue is rebuilt: an old table merged by id would describe a
-# different sequence, with no warning. The catalogue locus_presence.py reads
-# (accessory/assets/, its default) must be byte-identical to the build's copy
-# (P0 step assets), and each table's sidecar <table>.build records the build
-# id and catalogue checksum it was made with. A table from another build or
-# catalogue is refused, not overwritten: use a new OUTDIR or move it aside.
+# different sequence, with no warning. locus_presence.py reads THE BUILD'S
+# catalogue (P0 step catalogue), passed through locus_presence_one.sh; it
+# used to read its own default, accessory/assets/ (CX333's hand-placed copy).
+# ACC_CATALOGUE, if set, must be byte-identical to the build's copy. Each
+# table's sidecar <table>.build records the build id and catalogue checksum
+# it was made with. A table from another build or catalogue is refused, not
+# overwritten: use a new OUTDIR or move it aside.
 BUILD="$(mtb_resolve_build)" || exit 1
 BUILD_ID="$(awk -F'\t' '$1=="build_id"{print $2}' "${BUILD}/build_info.tsv")"
-CAT="${ACC_CATALOGUE:-accessory/assets/accessory_catalogue}"
+CAT="${ACC_CATALOGUE:-${BUILD}/assets/accessory_catalogue}"
 for ext in tsv fasta; do
     [[ -s "${BUILD}/assets/accessory_catalogue.${ext}" ]] || {
-        echo "FATAL: build ${BUILD_ID} has no accessory_catalogue.${ext}; run bin/p0_prepare.sh --step assets" >&2; exit 1; }
+        echo "FATAL: build ${BUILD_ID} has no accessory_catalogue.${ext}; run bin/p0_prepare.sh --step catalogue" >&2; exit 1; }
     cmp -s "${CAT}.${ext}" "${BUILD}/assets/accessory_catalogue.${ext}" || {
         echo "FATAL: ${CAT}.${ext}, which locus_presence.py reads, differs from build ${BUILD_ID}'s copy" >&2; exit 1; }
 done
@@ -80,6 +82,6 @@ if [[ -s "$OUT" ]]; then
          "move it aside." >&2
     exit 1
 fi
-OUTDIR="$OUTDIR" bash accessory/bin/locus_presence_one.sh "$S" "$COHORT_TAG"
+OUTDIR="$OUTDIR" ACC_CATALOGUE="$CAT" bash accessory/bin/locus_presence_one.sh "$S" "$COHORT_TAG"
 [[ -s "$OUT" ]] || { echo "FATAL: no ${OUT} written" >&2; exit 1; }
 printf 'build_id\t%s\ncatalogue_sha\t%s\ncompleted\t%s\n' "$BUILD_ID" "$CAT_SHA" "$(date -Is)" > "$SIDE"

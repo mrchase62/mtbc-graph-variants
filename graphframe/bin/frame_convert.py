@@ -26,19 +26,28 @@ sequences, which is `-` when exactly one of the two accessions is stored
 reverse complemented in the panel and `+` otherwise. odgi's own value is kept,
 appended as a fifth column, so nothing is lost.
 
-That column 4 does NOT incorporate odgi's flag is a measured decision, not an
-oversight. Scoring P4's projected SNPs against H37Rv's own base over the
-23-isolate pilot:
+Column 4 does NOT incorporate odgi's flag, so a reader must apply column 5
+itself. odgi does NOT already account for a locally inverted step. Where
+odgi's own flag is `-` (source and target walk the node in opposite
+directions) the reported target is one base past the homolog and the source
+reads complemented relative to column 4. Measured by reading the source's
+31-mer against the target's (bin/p4_place.py, parse_pos_file):
 
-    cause of `-`            n     allele matches as-is    complemented
-    accession stored rc    31              0.0%              100.0%
-    odgi's own local `-`    4             75.0%                0.0%
-    neither (`+`)         547            100.0%                0.0%
+    col 4  col 5  homolog              GCF_000193185    scale200 P4
+    +      -      t-1, complemented    8,684 / 8,694    167 / 228
+    -      -      t-1, same strand          -              7 / 7
+    +      +      t, same strand      34,298 / 34,465
 
-So `odgi position` already accounts for a locally inverted step when it reports
-the target position, and the only thing that still needs complementing is the
-storage flip this file knows about. Folding odgi's flag in as well double-counts
-it and corrupts the allele at exactly the inverted sites.
+bin/p4_place.py, bin/p4b_place_sv.py and is6110/bin/is6110_project_sites.py
+shift and toggle there; bin/p5_states.py does the same for the H37Rv -> R
+direction. The earlier reading of this note, that odgi accounts for the
+inverted step and column 5 must be ignored, rested on 4 pilot SNPs (75% "as
+is") and was wrong.
+
+The `-v` form's node offset is likewise counted along the source path's
+walking direction: one base of a node walked `+` by one path and `-` by
+another has offsets off and L-1-off. Node keys are written with the node's
+forward offset (bin/mtb_norm.py, forward_offset).
 """
 import argparse, importlib.util, os, sys
 

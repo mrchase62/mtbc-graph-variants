@@ -21,8 +21,12 @@ REL="$(awk -F'\t' -v s="$S" '$1==s{print $2; exit}' "$CRAMTAB")"
 [[ -n "$REL" ]] || { echo "FATAL: ${S} not in ${CRAMTAB}" >&2; exit 1; }
 REF="$(awk -F"\t" -v s="$S" 'NR==1{for(i=1;i<=NF;i++)if($i=="reference")c=i;next} $1==s{print $c; exit}' "$REFMAP")"
 
+# the catalogue: the build's (locus_presence_array.sh passes it), never
+# locus_presence.py's default under accessory/assets/
+CAT="${ACC_CATALOGUE:?ACC_CATALOGUE is unset: <build>/assets/accessory_catalogue (run through locus_presence_array.sh)}"
 mkdir -p "$OUTDIR"
 "$MTB_PY_VT" accessory/bin/locus_presence.py \
   --sample "$S" --reference "$REF" \
+  --catalogue "${CAT}.tsv" --fasta "${CAT}.fasta" \
   --cram "${CRAMROOT}/${REL}" --h37rv "$MTB_H37RV" \
   --out "${OUTDIR}/${S}.presence.tsv"

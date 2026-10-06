@@ -75,7 +75,8 @@ else
     PROBES_NAME="probes.h37rv.txt"
     OUTSUF="svgt"
 fi
-OG="${OG:-$(ls graphs/CX333.s10k.k23.K15/*.smooth.final.og 2>/dev/null | head -1)}"
+# the build's own graph, as its stamp records it (was a glob over CX333)
+OG="${OG:-$(awk -F'\t' '$1=="graph"{print $2}' "${BUILD}/build_info.tsv")}"
 ODGI="${MTB_ODGI:?MTB_ODGI is unset; see config/project_env.sh}"
 H37RV_PATH="${H37RV_PATH:-GCF_000195955#1#NC_000962.3}"
 PATHS="${BUILD}/assets/paths.txt"
@@ -171,8 +172,10 @@ STEP="${1:-${SVGTSTEP:-}}"
 case "$STEP" in
   --catalogue)
     [[ -n "$IVTAB" ]] || { echo "FATAL: --catalogue needs IVTAB, the path to write" >&2; exit 1; }
-    # the collapsed graph VCF: one record per allele, carriers unioned (PGB-9)
-    GRAPH_VCF="${GRAPH_VCF:-$(dirname "$OG")/all_variants.collapsed.vcf.gz}"
+    # the collapsed graph VCF: one record per allele, carriers unioned (PGB-9).
+    # The build's own copy (P0 step assets) of all_variants.collapsed.vcf.gz,
+    # not the file beside the graph, which a build does not own.
+    GRAPH_VCF="${GRAPH_VCF:-${BUILD}/assets/graph_collapsed.vcf.gz}"
     [[ -s "$GRAPH_VCF" ]] || { echo "FATAL: no graph VCF at ${GRAPH_VCF}" >&2; exit 1; }
     CAT_ARGS=(--graph-vcf "$GRAPH_VCF")
     case "$SVCAT" in
