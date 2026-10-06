@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Refresh the MTBC complete-genome set from NCBI RefSeq.
 #
-#   bin/refresh_assemblies.sh [--summary-only] [--outdir DIR]
+#   bin/refresh_assemblies.sh [--summary-only] [--outdir DIR] [--summary FILE]
+#
+# --summary FILE re-applies the selection to an archived assembly summary
+# (e.g. data/ncbi/assembly_summary_refseq.20260907.txt) instead of fetching.
 #
 # The 2025 panel was assembled without a download script, so the selection could
 # not be reproduced. This records it.
@@ -9,11 +12,26 @@
 # SELECTION CRITERION, stated explicitly:
 #   assembly_level  == "Complete Genome"
 #   version_status  == "latest"
-#   organism_name   matches ^Mycobacterium (tuberculosis|canetti)
+#   species_taxid   in MTBC_SPECIES_TAXIDS (default 1773 M. tuberculosis,
+#                   78331 M. canettii, 1305738 M. orygis)
+#     OR organism_name matches ^Mycobacterium (tuberculosis|canetti|orygis)
 #
-# Note "canetti" with ONE t: that is how RefSeq spells M. canettii, and the
-# obvious two-t spelling silently drops the outgroup GCF_035581225 that the
-# phylogeny is rooted on.
+# The name regex alone failed twice: "canettii" with two t's dropped the
+# outgroup GCF_035581225 (RefSeq spells it "canetti"), and
+# ^Mycobacterium (tuberculosis|canetti) dropped both complete M. orygis genomes,
+# GCF_015265495 and GCF_033782915 (audit PGB-13). The taxid alone fails too:
+# the six "Mycobacterium tuberculosis complex sp. N0052 ..." genomes each carry
+# their own species taxid. So both are used. Every other MTBC member in RefSeq
+# (bovis, africanum, microti, caprae, pinnipedii, mungi) is filed under
+# species_taxid 1773 as "M. tuberculosis variant ...". After selecting, the
+# script lists any complete genome whose name looks like an MTBC member but was
+# not selected, so a new species name cannot be dropped silently.
+#
+# On the 2026-09-07 summary this selects 516: the 514 of panel_manifest.tsv
+# plus the two M. orygis genomes.
+#
+# NOT covered: GenBank-only complete genomes (assembly_summary_genbank.txt);
+# this script reads RefSeq only.
 #
 # The criterion matches 468 assemblies in the 2025-10-22 summary but only 416 were
 # built. The additional filter that removed those 52 was never recorded and is NOT
@@ -33,10 +51,12 @@ source "$_mtb_env"
 
 SUMMARY_ONLY=0
 OUTDIR="${MTB_DATA}/assemblies"
+LOCAL_SUM=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --summary-only) SUMMARY_ONLY=1; shift ;;
         --outdir) OUTDIR="$2"; shift 2 ;;
+        --summary) LOCAL_SUM="$2"; shift 2 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -46,19 +66,36 @@ mkdir -p "$NCBI" "$OUTDIR"
 SUM="${NCBI}/assembly_summary_refseq.txt"
 STAMP=$(date -u +%Y%m%d)
 
-echo "=== fetching RefSeq assembly summary"
-curl -fsS -o "${SUM}.new" \
-    https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_refseq.txt
-mv "${SUM}.new" "$SUM"
-cp -n "$SUM" "${NCBI}/assembly_summary_refseq.${STAMP}.txt" 2>/dev/null || true
+if [[ -n "$LOCAL_SUM" ]]; then
+    [[ -s "$LOCAL_SUM" ]] || { echo "FATAL: no summary $LOCAL_SUM" >&2; exit 1; }
+    SUM="$LOCAL_SUM"
+    echo "=== using archived RefSeq assembly summary $SUM"
+else
+    echo "=== fetching RefSeq assembly summary"
+    curl -fsS -o "${SUM}.new" \
+        https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_refseq.txt
+    mv "${SUM}.new" "$SUM"
+    cp -n "$SUM" "${NCBI}/assembly_summary_refseq.${STAMP}.txt" 2>/dev/null || true
+fi
 echo "    $(wc -l < "$SUM") rows"
 
 echo "=== applying the selection criterion"
-awk -F'\t' '!/^#/ && $12=="Complete Genome" && $11=="latest" &&
-    ($8 ~ /^Mycobacterium tuberculosis/ || $8 ~ /^Mycobacterium canetti/) \
+MTBC_SPECIES_TAXIDS="${MTBC_SPECIES_TAXIDS:-1773 78331 1305738}"
+awk -F'\t' -v tx="$MTBC_SPECIES_TAXIDS" '
+    BEGIN {n = split(tx, t, " "); for (i = 1; i <= n; i++) keep[t[i]] = 1}
+    !/^#/ && $12=="Complete Genome" && $11=="latest" &&
+    (($7 in keep) || $8 ~ /^Mycobacterium (tuberculosis|canetti|orygis)/) \
     {split($1,a,"."); print a[1]"\t"$1"\t"$8"\t"$20}' "$SUM" \
     | sort -u > "${NCBI}/selected.${STAMP}.tsv"
-echo "    $(wc -l < "${NCBI}/selected.${STAMP}.tsv") assemblies selected"
+echo "    $(wc -l < "${NCBI}/selected.${STAMP}.tsv") assemblies selected" \
+     "(species taxids: ${MTBC_SPECIES_TAXIDS})"
+# names that look like MTBC members but were not selected: review, never drop silently
+awk -F'\t' -v tx="$MTBC_SPECIES_TAXIDS" '
+    BEGIN {n = split(tx, t, " "); for (i = 1; i <= n; i++) keep[t[i]] = 1}
+    !/^#/ && $12=="Complete Genome" && $11=="latest" && !($7 in keep) &&
+    $8 !~ /^Mycobacterium (tuberculosis|canetti|orygis)/ &&
+    $8 ~ /^Mycobacterium (tubercul|canett|orygis|bovis|africanum|microti|caprae|pinnipedii|mungi|suricattae)/ \
+    {print "    NOT SELECTED, check taxid " $7 ": " $1 "  " $8}' "$SUM"
 
 MANIFEST="${NCBI}/panel_manifest.tsv"
 if [[ -f "$MANIFEST" ]]; then

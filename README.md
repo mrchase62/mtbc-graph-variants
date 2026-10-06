@@ -8,7 +8,9 @@ choose a per-isolate reference and to project every call into a common frame.
 **Output:** `refbias/<cohort>/p5/merged.vcf.gz`.
 
 See `INPUTS.md` for the full input specification. The graph is built by the
-companion repository **mtbc-pangenome-graph**.
+companion repository **mtbc-pangenome-graph**. The panel the graph is built
+from is chosen by the screens in `bin/`, run as `docs/PANEL_BUILD.md`
+describes; that file supersedes the working tree's RUNBOOK.md Segment 1.
 
 ## What makes this different from calling against one reference
 
