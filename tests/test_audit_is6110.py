@@ -155,6 +155,29 @@ class Is6110RepeatedNode(unittest.TestCase, WriterFixture):
             keyed = [(x["sample"], x["key"]) for x in k if x["key"]]
             self.assertEqual(len(keyed), len(set(keyed)))
 
+    def test_repeated_node_kept_where_carriers_agree(self):
+        """Review 2, R2-IS-2 (the user's option b): a repeated node is a key
+        when every site on it projects onto the H37Rv path within 1 kb of the
+        others and no sample is there twice; otherwise it stays excluded."""
+        cols = self.FLANK + ["graph_placement", "graph_h37rv"]
+        G = lambda nid, occ, g, where="on_path": dict(
+            NODE(nid, occ), graph_placement=where, graph_h37rv=g)
+        with tempfile.TemporaryDirectory() as d:
+            r = subprocess.run(self.build(d, [
+                ("A", 4000, G(500, 3, 1500)),       # node 500: both carriers
+                ("B", 6000, G(500, 2, 1500)),       #   at H37Rv 1500 -> a key
+                ("A", 5000, G(46966, 3, 100)),      # node 46966: 2.4 kb apart
+                ("B", 3000, G(46966, 3, 2500)),     #   -> still excluded
+                ("A", 7000, G(900, 2, 800, "off_path_near")),  # off path
+            ], flank_cols=cols), capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            k = rows_of(f"{d}/keys.tsv")
+        frame = {(x["sample"], x["r_pos"]): (x["frame"], x["key"]) for x in k}
+        self.assertEqual(frame[("A", "4000")], ("node", "node:500:0"))
+        self.assertEqual(frame[("B", "6000")], ("node", "node:500:0"))
+        for sp in (("A", "5000"), ("B", "3000"), ("A", "7000")):
+            self.assertEqual(frame[sp], ("repeat_node", ""))
+
     def test_table_without_occurrence_count_is_refused(self):
         with tempfile.TemporaryDirectory() as d:
             cmd = self.build(d, [("A", 5000, NODE(12, 1))],

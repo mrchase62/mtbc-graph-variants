@@ -214,8 +214,49 @@ def main():
         sys.exit(f"FATAL: {a.flank} has no node_occ column; rerun "
                  f"is6110_project_sites.py and is6110_place_by_flank.py")
 
+    # A REPEATED NODE IS KEPT WHERE ITS CARRIERS AGREE (review 2, R2-IS-2; the
+    # user's choice, 2026-10-06). Excluding every site on a node its path
+    # visits more than once dropped about 19% of IS6110 sites, but only about
+    # half of them sat on a node that really gathered different insertions. A
+    # repeated node is a safe key when every site placed on it -- across all
+    # carriers -- projects onto the H37Rv path through the graph
+    # (graph_placement on_path, graph_h37rv) within REPEAT_SPAN bp of the others,
+    # and no sample has two sites on it: then one insertion locus is what the
+    # node stands for. Any site off the path, a spread wider than that, or a
+    # sample twice keeps the whole node excluded (frame repeat_node).
+    REPEAT_SPAN = 1000
+
+    def _placed_at(sample, p):
+        fr = flank.get((sample, p), {})
+        v = fr.get("verdict", "")
+        placed = v in ("placed_h37rv_empty", "placed_h37rv_occupied")
+        return fr, (fr.get("h37rv_pos", "") if placed else "")
+    on_node = collections.defaultdict(list)
+    for sample in ref_of:
+        for s in sites.get(sample, []):
+            fr, hp = _placed_at(sample, int(s["orig_pos"]))
+            if hp or not fr.get("node") or fr.get("node_occ") == "1":
+                continue
+            g = fr.get("graph_h37rv", "")
+            on_node[fr["node"]].append(
+                (sample, int(g) if fr.get("graph_placement") == "on_path"
+                 and g.lstrip("-").isdigit() else None))
+    agree_nodes = set()
+    for nd, obs in on_node.items():
+        pos = [g for _, g in obs]
+        smp = [x for x, _ in obs]
+        if (None not in pos and max(pos) - min(pos) <= REPEAT_SPAN
+                and len(set(smp)) == len(smp)):
+            agree_nodes.add(nd)
+    n_rep_sites = sum(len(v) for v in on_node.values())
+    n_rep_kept = sum(len(on_node[nd]) for nd in agree_nodes)
+    print(f"  repeated nodes: {len(on_node):,} carrying {n_rep_sites:,} sites; "
+          f"{len(agree_nodes):,} nodes ({n_rep_kept:,} sites) keyed, their "
+          f"carriers projecting within {REPEAT_SPAN} bp, one site each")
+
     def node_ok(fr):
-        return bool(fr.get("node")) and fr.get("node_occ") == "1"
+        return bool(fr.get("node")) and (fr.get("node_occ") == "1"
+                                         or fr.get("node") in agree_nodes)
 
     def placement(sample, p):
         fr = flank.get((sample, p), {})
@@ -314,9 +355,10 @@ def main():
             # site_class stays in the table as information about the matched
             # frame only.
             # A node the carrier's path visits more than once is no identity
-            # (P3IS-3), nor one whose count is unknown: the site gets frame
-            # repeat_node and no key, and P5 and the merged VCF leave it out,
-            # counted.
+            # (P3IS-3), nor one whose count is unknown, unless its carriers
+            # agree on one locus (agree_nodes, above): otherwise the site gets
+            # frame repeat_node and no key, and P5 and the merged VCF leave it
+            # out, counted.
             if hpos:
                 frame, key = "h37rv", f"h37rv:{hpos}"
                 state = "REF" if hstate == "occupied" else "ALT"
