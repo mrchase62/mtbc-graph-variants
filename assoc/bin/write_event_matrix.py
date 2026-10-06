@@ -774,23 +774,41 @@ def main():
                 if r.get("locus"):
                     node_locus[r["node"]] = r["locus"]
         per = collections.defaultdict(set)
+        measured = set()
         pf = sorted(glob.glob(os.path.join(a.accessory_presence,
                                            "*.presence.tsv")))
         for f in pf:
             with open(f, newline="") as fh:
                 for r in csv.DictReader(fh, delimiter="\t"):
+                    if r.get("state") in ("PRESENT", "ABSENT", "UNCERTAIN"):
+                        measured.add(r["locus"])
                     if r.get("state") == "PRESENT":
                         per[r["locus"]].add(r["sample"])
         acc_carriers = dict(per)
         eprint(f"  level 2: {len(node_locus):,} nodes placed in "
                f"{len({v for v in node_locus.values()}):,} accessory loci; "
                f"{len(pf):,} presence tables")
-        # attach the locus to every variant that sits on a placed node
+        # attach the locus to every variant that sits on a placed node.
+        #
+        # A LOCUS LEVEL 1 NEVER MEASURED IS NOT CONDITIONED ON (review 2,
+        # R2-INT-2). Where no sample was measured at the locus -- every cell
+        # UNMEASURABLE, the read route being blind to sequence H37Rv already
+        # carries -- there is no carrier set, and conditioning on an empty one
+        # made every leaf unknown: the variant silently left the scan (249 of
+        # 308 conditional variants on gwas1000). Such a variant is left
+        # unconditional, on P5's own per-cell states, with the locus recorded
+        # in acc_locus_unmeasured. A locus that WAS measured and has no carrier
+        # in the cohort still makes its variants inapplicable everywhere.
+        n_unmeasured = 0
         for v in variants:
             nd = ""
             if v["id"].startswith("node:"):
                 nd = v["id"].split(":")[1]
             lid = node_locus.get(nd, "")
+            if lid and lid not in measured:
+                v["acc_locus"], v["acc_locus_unmeasured"] = "", lid
+                n_unmeasured += 1
+                continue
             v["acc_locus"] = lid
             if lid:
                 n_l2 += 1
@@ -798,7 +816,8 @@ def main():
         for lid, ss in acc_carriers.items():
             car_leaf[lid] = np.asarray([l in ss for l in leaves])
         eprint(f"  {n_l2:,} variants are inside a placed accessory locus and "
-               f"become conditional")
+               f"become conditional; {n_unmeasured:,} are inside a locus no "
+               f"sample was measured at and stay unconditional")
     else:
         for v in variants:
             v["acc_locus"] = ""
@@ -995,7 +1014,8 @@ def main():
         fh.write("row_key\tid\tchrom\tpos\tref\talt\tclass\tframe\tregion\t"
                  "aa\taa_flag\tpolarity\tderived\tpanel_af\tevidence\t"
                  "siteclass\tacc_locus\tn_applicable\tn_inapplicable\t"
-                 "root_state\tn_gain\tn_loss\tn_undet\tn_derived_leaves\n")
+                 "root_state\tn_gain\tn_loss\tn_undet\tn_derived_leaves\t"
+                 "acc_locus_unmeasured\n")
         leaf_rows = np.asarray([i for i in range(n_n) if is_leaf[i]])
         branch_rows = np.asarray([i for i in range(n_n) if i != root_i])
         for j, v in enumerate(variants):
@@ -1012,7 +1032,8 @@ def main():
                 ROOT_STATE[int(states[root_i, j])],
                 int((ev == EV_GAIN).sum()), int((ev == EV_LOSS).sum()),
                 int((ev == EV_UNDET).sum()),
-                int((states[leaf_rows, j] == ST_DER).sum()))) + "\n")
+                int((states[leaf_rows, j] == ST_DER).sum()),
+                v.get("acc_locus_unmeasured", ""))) + "\n")
     with open(os.path.join(a.out, "nodes.tsv"), "w") as fh:
         fh.write("label\tparent\tedge_length\tis_leaf\tsupport\tn_leaves\n")
         n_leaves_under = [0] * n_n

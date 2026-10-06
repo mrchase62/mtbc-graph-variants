@@ -284,5 +284,62 @@ class AccessoryBlindByIdentity(unittest.TestCase):
         self.assertFalse(self.blind(rows["ACC_0001500"]))
 
 
+class Level2UnmeasuredLocus(unittest.TestCase):
+    """R2-INT-2: a variant inside an accessory locus no sample was measured at
+    is left unconditional (it used to have every leaf blanked and leave the
+    scan); a locus that was measured and has no carrier still makes its
+    variants inapplicable."""
+
+    HDR = ("##fileformat=VCFv4.2\n"
+           "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t"
+           "S1\tS2\tS3\tS4\n")
+    TREE = "(O:1,((S1:1,S2:1)x:1,(S3:1,S4:1)y:1)ing:1);\n"
+
+    def test_unmeasured_locus_is_not_conditioned_on(self):
+        py = os.environ.get("MTB_PY_VT", "")
+        if not (py and os.access(py, os.X_OK) and run(
+                [py, "-c", "import mtbvartools, dendropy"]).returncode == 0):
+            self.skipTest("MTB_PY_VT with mtbvartools not set; source "
+                          "config/project_env.sh")
+        with tempfile.TemporaryDirectory() as d:
+            write(f"{d}/m.vcf", self.HDR
+                  + "NC_000962.3\t100\th37rv:100:A>G\tA\tG\t.\tPASS\t"
+                    "CLASS=small;FRAME=h37rv\tGT\t1\t1\t0\t0\n"
+                  + "node_7\t1\tnode:7:0:A>G\tA\tG\t.\tPASS\t"
+                    "CLASS=small;FRAME=node\tGT\t1\t0\t0\t0\n"
+                  + "node_8\t1\tnode:8:0:C>T\tC\tT\t.\tPASS\t"
+                    "CLASS=small;FRAME=node\tGT\t1\t0\t0\t0\n")
+            write(f"{d}/t.nwk", self.TREE)
+            write(f"{d}/og.fa", ">O\nA\n")
+            write(f"{d}/og.tsv", "column\tchrom\tpos\tref\talt\n"
+                  "0\tNC_000962.3\t100\tA\tG\n")
+            write(f"{d}/nl.tsv", "node\tlocus\n7\tLBLIND\n8\tLMEAS\n")
+            os.makedirs(f"{d}/pres")
+            for smp in ("S1", "S2", "S3", "S4"):
+                write(f"{d}/pres/{smp}.presence.tsv",
+                      "sample\tlocus\tstate\n"
+                      f"{smp}\tLBLIND\tUNMEASURABLE\n{smp}\tLMEAS\tABSENT\n")
+            r = run([py, "assoc/bin/write_event_matrix.py",
+                     "--vcf", f"{d}/m.vcf", "--tree", f"{d}/t.nwk",
+                     "--out", f"{d}/ev", "--outgroup-name", "O",
+                     "--outgroup-fasta", f"{d}/og.fa",
+                     "--outgroup-sites", f"{d}/og.tsv", "--panel-polarity", "",
+                     "--accessory-presence", f"{d}/pres",
+                     "--node-locus", f"{d}/nl.tsv"])
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            import csv
+            v = {x["id"]: x for x in
+                 csv.DictReader(open(f"{d}/ev/variants.tsv"), delimiter="\t")}
+        blind = v["node:7:0:A>G"]
+        self.assertEqual(blind["acc_locus"], "")
+        self.assertEqual(blind["acc_locus_unmeasured"], "LBLIND")
+        # S1 alone carries it: one gain on S1's branch, not every leaf unknown
+        self.assertEqual((blind["n_derived_leaves"], blind["n_gain"]), ("1", "1"))
+        meas = v["node:8:0:C>T"]
+        self.assertEqual(meas["acc_locus"], "LMEAS")
+        self.assertEqual(meas["n_applicable"], "0")
+        self.assertEqual((meas["n_derived_leaves"], meas["n_gain"]), ("0", "0"))
+
+
 if __name__ == "__main__":
     unittest.main(warnings="ignore")
