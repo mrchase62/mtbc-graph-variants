@@ -480,6 +480,32 @@ class ChainScript(unittest.TestCase):
                         exist_ok=True)
             with open(os.path.join(d, f), "w") as fh:
                 fh.write("x\n")
+        # rerun safety (audit TP-4): the merged VCF names its build, the build
+        # holds the panel assets, and each existing product records the VCF
+        # and build it was made from, so steps 1-4 are skipped as done
+        import gzip, hashlib
+        with gzip.open(os.path.join(d, "refbias/t/p5/merged.vcf.gz"), "wt") as fh:
+            fh.write("##fileformat=VCFv4.2\n##MTB_graph_build=b0\n"
+                     "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n")
+        b = os.path.join(d, "refbias", "build", "b0")
+        os.makedirs(os.path.join(b, "assets"))
+        for f, txt in (("build_info.tsv", "build_id\tb0\n"),
+                       ("assets/panel_polarity.tsv", "chrom\n"),
+                       ("assets/graph_collapsed.vcf.gz", "x\n")):
+            with open(os.path.join(b, f), "w") as fh:
+                fh.write(txt)
+
+        def sha16(p):
+            return hashlib.sha256(open(p, "rb").read()).hexdigest()[:16]
+        prov = (f"build_id\tb0\nvcf_sha\t"
+                f"{sha16(os.path.join(d, 'refbias/t/p5/merged.vcf.gz'))}\n")
+        for f in ("data/trees/t.snps.fasta", "data/trees/t.og.fasta",
+                  "data/trees/t.rooted.nwk"):
+            with open(os.path.join(d, f + ".prov"), "w") as fh:
+                fh.write(prov)
+        with open(os.path.join(d, "assoc/t/events/summary.txt.prov"), "w") as fh:
+            fh.write(prov + "polarity_sha\t" + sha16(
+                os.path.join(b, "assets/panel_polarity.tsv")) + "\n")
         log = os.path.join(d, "calls.log")
         stub = os.path.join(d, "stub.sh")
         with open(stub, "w") as fh:

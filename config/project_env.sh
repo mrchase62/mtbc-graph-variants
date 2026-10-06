@@ -279,6 +279,46 @@ mtb_require_file() {
     done
 }
 
+# --- Build identity of products (audit section B, rerun safety) --------------
+# A skip-if-exists guard that tests only existence keeps a previous build's
+# output when the chain is rerun on a new graph (audit P0P2-1, TP-4, P3IS-8).
+# These helpers let a guard ask WHICH build a product came from.
+
+# The single P0 build to use: $MTB_BUILD_DIR, else the one build under
+# $BUILD_ROOT whose manifest step completed. A half-built directory is never
+# picked by default (audit P0P2-13), and two completed builds are refused.
+mtb_resolve_build() {
+    local root="${BUILD_ROOT:-refbias/build}" b
+    if [[ -n "${MTB_BUILD_DIR:-}" ]]; then
+        printf '%s\n' "${MTB_BUILD_DIR%/}"; return 0
+    fi
+    local -a cands=()
+    for b in "${root}"/*/; do
+        [[ -s "${b}logs/manifest.done" ]] && cands+=("${b%/}")
+    done
+    if [[ "${#cands[@]}" -ne 1 ]]; then
+        echo "[project_env] FATAL: ${#cands[@]} completed builds (logs/manifest.done) under ${root}; set MTB_BUILD_DIR" >&2
+        return 1
+    fi
+    printf '%s\n' "${cands[0]}"
+}
+
+# The ##MTB_graph_build stamp of a VCF (plain or bgzipped); empty if none.
+mtb_vcf_build_id() {
+    local f="$1"
+    [[ -s "$f" ]] || return 0
+    { if [[ "$f" == *.gz ]]; then gzip -cd "$f"; else cat "$f"; fi; } 2>/dev/null \
+        | awk '/^#CHROM/{exit} /^##MTB_graph_build=/{sub(/^##MTB_graph_build=/,""); print; exit}' \
+        || true
+}
+
+# A value from a key<TAB>value file (a .done marker or provenance sidecar);
+# empty when the file or the key is absent.
+mtb_kv() {
+    [[ -s "$1" ]] || return 0
+    awk -F'\t' -v k="$2" '$1==k{print $2; exit}' "$1"
+}
+
 # Print a script's leading comment block as its usage message.
 # Immune to line-number drift, unlike `sed -n '11,17p' "$0"`.
 mtb_usage() {

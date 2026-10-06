@@ -717,9 +717,13 @@ class RunnerCohortTable(unittest.TestCase):
         og = write(os.path.join(d, "g.og"), "x\n")
         write(os.path.join(b, "logs", "manifest.done"), "done\n")
         write(os.path.join(b, "build_info.tsv"), f"build_id\tb0\ngraph\t{og}\n")
-        frames = write(os.path.join(d, "frames.tsv"), "accession\n")
-        env = dict(os.environ, REGISTRY=reg, BUILD_ROOT=os.path.join(d, "build"),
-                   MTB_GRAPH_FRAMES=frames)
+        # the runner verifies the build against its manifest and takes the
+        # frame table from the build only (audit section B, rerun safety)
+        write(os.path.join(b, "manifest.tsv"), "asset\tpath\tbytes\tsha256\n")
+        os.makedirs(os.path.join(b, "assets"))
+        write(os.path.join(b, "assets", "graph_frame_offsets.tsv"), "accession\n")
+        env = dict(os.environ, REGISTRY=reg, BUILD_ROOT=os.path.join(d, "build"))
+        env.pop("MTB_GRAPH_FRAMES", None)
         return subprocess.run(["bash", "bin/refbias_run.sh", "--cohort", "t",
                                "--dry-run", *extra], capture_output=True,
                               text=True, env=env)

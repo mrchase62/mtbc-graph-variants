@@ -47,14 +47,12 @@ done
 source "$_mtb_env"
 
 BUILD_ROOT="${BUILD_ROOT:-refbias/build}"
-BUILD="${MTB_BUILD_DIR:-}"
-if [[ -z "$BUILD" ]]; then
-    mapfile -t _c < <(find "$BUILD_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
-    [[ "${#_c[@]}" -eq 1 ]] || { echo "FATAL: set MTB_BUILD_DIR (${#_c[@]} builds found)" >&2; exit 1; }
-    BUILD="${_c[0]}"
-fi
+# One resolver for every pass: MTB_BUILD_DIR, else the single COMPLETED build.
+# "The only directory under refbias/build" accepted a half-built one (P0P2-13).
+BUILD="$(mtb_resolve_build)" || exit 1
 export MTB_BUILD_DIR="$BUILD"
 BUILD_ID="$(awk -F'\t' '$1=="build_id"{print $2}' "${BUILD}/build_info.tsv")"
+[[ -n "$BUILD_ID" ]] || { echo "FATAL: no build_id in ${BUILD}/build_info.tsv" >&2; exit 1; }
 [[ -s "${BUILD}/logs/refs.done" && -s "${BUILD}/logs/assets.done" ]] \
     || { echo "FATAL: P0 build ${BUILD_ID} is incomplete (refs/assets)" >&2; exit 1; }
 
@@ -87,7 +85,12 @@ if [[ "${1:-${P1STEP:-}}" == "--summary" ]]; then
     # Python, not shell: IFS=$'\t' read collapses consecutive tabs because tab is
     # IFS whitespace, which silently shifted every column after an empty lineage
     # field. See bin/p1_summary.py.
+    # The tie-break's interval counts are a build asset (P0 step
+    # is6110_intervals), passed explicitly; the summary refuses a candidates
+    # file whose .p1.done marker names another build.
     exec "$MTB_PY" bin/p1_summary.py --cohort "$COHORT" --dir "$OUTDIR" \
+        --intervals "${BUILD}/assets/is6110_intervals.tsv" \
+        --build-id "$BUILD_ID" \
         --out "${OUTDIR}/refmap.tsv"
 fi
 
@@ -107,8 +110,39 @@ RELPATH="$(awk -F'\t' -v s="$SAMPLE" '$1==s{print $2; exit}' "$CRAMMAP")"
 CRAM="${CRAMROOT}/${RELPATH}"
 [[ -r "$CRAM" ]] || { echo "FATAL: ${SAMPLE}: CRAM unreadable: ${CRAM}" >&2; exit 1; }
 
-if [[ -s "${OUTDIR}/${SAMPLE}.candidates.tsv" && -s "${WORK}/${SAMPLE}.h37rv.vcf.gz" ]]; then
-    echo "[P1] ${SAMPLE}: already done"; exit 0
+# DONE MEANS DONE AGAINST THIS BUILD (audit P0P2-1). Existence alone kept the
+# candidates of whichever build's panel_snps.vcf.gz made them, so a rerun on a
+# new graph into the same folders silently selected references from the old
+# panel. The H37Rv VCF carries the build stamp, and <s>.p1.done records the
+# build the candidates were selected against; both must name this build.
+# Products from another build are refused, never overwritten or reused: rerun
+# into new output folders, or move the old ones aside.
+CAND="${OUTDIR}/${SAMPLE}.candidates.tsv"
+H37VCF="${WORK}/${SAMPLE}.h37rv.vcf.gz"
+P1DONE="${OUTDIR}/${SAMPLE}.p1.done"
+_m_build="$(mtb_kv "$P1DONE" build_id)"
+_v_build="$(mtb_vcf_build_id "$H37VCF")"
+_foreign=""
+[[ -s "$P1DONE" && "$_m_build" != "$BUILD_ID" ]] && _foreign="${P1DONE} names build '${_m_build:-none}'"
+[[ -s "$H37VCF" && "$_v_build" != "$BUILD_ID" ]] && _foreign="${H37VCF} is stamped '${_v_build:-unstamped}'"
+[[ -s "$CAND" && ! -s "$P1DONE" && "$_v_build" != "$BUILD_ID" ]] \
+    && _foreign="${CAND} has no build marker and no H37Rv VCF of build ${BUILD_ID}"
+if [[ -n "$_foreign" ]]; then
+    echo "FATAL: ${SAMPLE}: P1 output from another build: ${_foreign}; this" \
+         "is build ${BUILD_ID}. Rerun into new output folders (OUTDIR, WORK)" \
+         "or move the old outputs aside." >&2
+    exit 1
+fi
+if [[ -s "$CAND" && -s "$H37VCF" ]]; then
+    if [[ "$_m_build" == "$BUILD_ID" ]]; then
+        echo "[P1] ${SAMPLE}: already done (build ${BUILD_ID})"; exit 0
+    fi
+    # From before the marker: the candidates were selected in the same task
+    # that wrote the H37Rv VCF, so that VCF's stamp is their build. Recorded,
+    # not assumed again.
+    printf 'build_id\t%s\nreference\t%s\nsource\tinferred_from_h37rv_vcf_stamp\n' \
+        "$BUILD_ID" "$(awk -F'\t' 'NR==2{print $2}' "$CAND")" > "$P1DONE"
+    echo "[P1] ${SAMPLE}: already done (build ${BUILD_ID}, from the H37Rv VCF stamp)"; exit 0
 fi
 
 echo "[P1] ${SAMPLE}: build ${BUILD_ID}"
@@ -146,4 +180,7 @@ REFID="$("$MTB_PY" bin/t8_select_reference.py \
     || { echo "FATAL: ${SAMPLE}: chose ${REFID} but P0 has no index for it" >&2; exit 1; }
 echo "[P1] ${SAMPLE}: reference ${REFID} (d=$(awk -F'\t' 'NR==2{print $3}' "${OUTDIR}/${SAMPLE}.candidates.tsv"))"
 rm -f "$FQ1" "$FQ2"
+printf 'build_id\t%s\nreference\t%s\ncompleted\t%s\n' "$BUILD_ID" "$REFID" "$(date -Is)" \
+    > "${P1DONE}.tmp"
+mv -f "${P1DONE}.tmp" "$P1DONE"
 echo "[P1] ${SAMPLE}: done"

@@ -150,6 +150,19 @@ INFO="${BUILD}/build_info.tsv"
 OG="$(awk -F'\t' '$1=="graph"{print $2}' "$INFO")"
 BUILD_ID="$(awk -F'\t' '$1=="build_id"{print $2}' "$INFO")"
 [[ -s "$OG" ]] || die "the graph recorded in ${INFO} is not readable: ${OG}"
+[[ -n "$BUILD_ID" ]] || die "no build_id in ${INFO}"
+
+# THE BUILD IS VERIFIED AT USE, NOT ONLY RECORDED (audit P0P2-2). Its assets
+# used to be links to files outside it, and the repeat mask changed under a
+# recorded checksum. Every manifest asset is re-hashed and any link leaving
+# the build is refused, before anything is submitted. BUILD_VERIFY=0 skips it,
+# loudly, for a deliberate run on a build known to predate this check.
+if [[ "${BUILD_VERIFY:-1}" != 0 ]]; then
+    "$MTB_PY" bin/p0_check.py verify --build "$BUILD" >&2 \
+        || die "build ${BUILD} does not match its manifest; rerun bin/p0_prepare.sh --step assets and --step manifest, or use a new build"
+else
+    echo "WARNING: BUILD_VERIFY=0: build ${BUILD} is used WITHOUT checking its assets against its manifest" >&2
+fi
 
 REFMAP="${OUTROOT}/p1/refmap.tsv"
 
@@ -274,16 +287,51 @@ DIRS="${DIRS},P6DIR=${OUTROOT}/p6"
 DIRS="${DIRS},P1GDIR=${OUTROOT}/p1g,P1IDIR=${OUTROOT}/p1i"
 DIRS="${DIRS},P1IVCF=${OUTROOT}/p1i/vcf"
 DIRS="${DIRS},P1WORK=${WORKPFX}p1,P2WORK=${WORKPFX}p2"
-# The panel-vs-refs frame table is a build asset (p0_prepare.sh --step frames).
-# Older builds predate that step; they fall back to graph_frame.py's default
-# table, with a warning, rather than failing a chain that ran before.
-FRAMES="${MTB_GRAPH_FRAMES:-${BUILD}/assets/graph_frame_offsets.tsv}"
-if [[ ! -s "$FRAMES" ]]; then
-    echo "WARNING: no frame table at ${FRAMES}; run bin/p0_prepare.sh --step frames." >&2
-    echo "         Falling back to graphframe/results/graph_frame_offsets.tsv." >&2
-    FRAMES="${HERE}/graphframe/results/graph_frame_offsets.tsv"
-    [[ -s "$FRAMES" ]] || die "no frame table there either; run bin/p0_prepare.sh --step frames"
-fi
+# The panel-vs-refs frame table is a build asset (p0_prepare.sh --step frames),
+# and only the build's own. The fallback to graphframe/results/ was the CX333
+# graph's table whatever the build, so on a new graph every projection would
+# have been converted with the old frames.
+FRAMES="${BUILD}/assets/graph_frame_offsets.tsv"
+[[ -z "${MTB_GRAPH_FRAMES:-}" || "$MTB_GRAPH_FRAMES" == "$FRAMES" ]] \
+    || die "MTB_GRAPH_FRAMES=${MTB_GRAPH_FRAMES} is not build ${BUILD_ID}'s frame table (${FRAMES})"
+[[ -s "$FRAMES" ]] || die "no frame table at ${FRAMES}; run bin/p0_prepare.sh --step frames"
+
+# ONE COHORT OUTPUT ROOT HOLDS ONE BUILD (audit P0P2-1, P3IS-8). Most per-sample
+# passes skip a sample whose output exists, whatever build made it, so a
+# rerun on a new graph into the same folders would keep the old results. The
+# output root and the accessory presence folder record their build in
+# .mtb_build, and a chain for another build is refused before anything is
+# submitted: run the new build under new output folders (a new registry row).
+# A folder from before the record is adopted only when its outputs' own build
+# stamps (P2 VCFs, else the merged VCF) all name this build.
+ACCDIR="accessory/${COHORT_NAME}"
+_stamp_root() {   # dir: check, adopt or create its build record
+    local d="$1" rec="${1}/.mtb_build" have f b n=0
+    if [[ -s "$rec" ]]; then
+        have="$(mtb_kv "$rec" build_id)"
+        [[ "$have" == "$BUILD_ID" ]] || die "${d} holds outputs of build ${have}; this chain is build ${BUILD_ID}. Use new output folders for a new build."
+        return 0
+    fi
+    if [[ -d "$d" && -n "$(find -H "$d" -mindepth 1 -maxdepth 2 -type f ! -name '.mtb_build' -print -quit 2>/dev/null)" ]]; then
+        for f in "$d"/p2/*.vcf.gz "$d"/p5/merged.vcf.gz; do
+            [[ -s "$f" && "$f" != *.g.vcf.gz ]] || continue
+            b="$(mtb_vcf_build_id "$f")"
+            [[ "$b" == "$BUILD_ID" ]] || die "${d} has no build record and ${f} is stamped '${b:-unstamped}', not ${BUILD_ID}. Use new output folders."
+            n=$((n + 1)); [[ "$n" -ge 20 ]] && break
+        done
+        # the presence folder has no stamped VCFs; its tables are checked one
+        # by one against the build's catalogue by locus_presence_array.sh
+        if [[ "$n" -eq 0 && "$d" != "$ACCDIR" ]]; then
+            die "${d} holds outputs but no build record and no stamped VCF to infer one from. Use new output folders, or write ${rec} by hand if you know its build."
+        fi
+        echo "  ${d}: no build record; adopting build ${BUILD_ID} (${n} stamped outputs checked)" >&2
+    fi
+    [[ "$DRY" -eq 1 ]] && return 0
+    mkdir -p "$d"
+    printf 'build_id\t%s\nrecorded\t%s\n' "$BUILD_ID" "$(date -Is)" > "$rec"
+}
+_stamp_root "$OUTROOT"
+_stamp_root "$ACCDIR"
 EXPORT="ALL,MTB_BUILD_DIR=${BUILD},BUILD_ROOT=${BUILD_ROOT},OG=${OG},MTB_GRAPH_FRAMES=${FRAMES}"
 EXPORT="${EXPORT},COHORT=${COHORT},CRAMMAP=${CRAMS},CRAMS=${CRAMS},REFMAP=${REFMAP}"
 EXPORT="${EXPORT},${DIRS}"
