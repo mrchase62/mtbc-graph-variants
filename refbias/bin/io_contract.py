@@ -38,7 +38,11 @@ def main():
     ap.add_argument("cohort")
     ap.add_argument("--contract", default="refbias/io_contract.tsv")
     ap.add_argument("--registry", default="refbias/cohorts.tsv")
-    ap.add_argument("--build", default="refbias/build/7713a8d71d8e")
+    # the build refbias_run.sh resolved, passed by it; it was 7713a8d71d8e
+    # (CX333) whatever the build, so a new build's chain was checked against
+    # the old build's assets
+    ap.add_argument("--build", default=os.environ.get("MTB_BUILD_DIR", ""),
+                    required=not os.environ.get("MTB_BUILD_DIR"))
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--pass", dest="only", default="", help="one pass only")
     ap.add_argument("--will-run", default="",

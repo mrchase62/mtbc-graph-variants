@@ -12,10 +12,14 @@
 # P0: per-graph preprocessing. Build every asset the per-sample stages need,
 # once per graph build, and stamp a build id so a rebuild is detectable.
 #
-#   bash bin/p0_prepare.sh                     # all cheap steps, in order
-#   bash bin/p0_prepare.sh --step gff          # one step
-#   bash bin/p0_prepare.sh --list              # what exists and what does not
-#   sbatch --array=1-333 bin/p0_prepare.sh --step refs   # the expensive step
+#   OG=<graph.og> ACCESSORY_DIR=<panel dir> bash bin/p0_prepare.sh   # all cheap steps
+#   OG=<graph.og> bash bin/p0_prepare.sh --step gff          # one step
+#   OG=<graph.og> bash bin/p0_prepare.sh --list              # what exists and what does not
+#   sbatch --array=1-333 bin/p0_prepare.sh --step refs   # the expensive step (OG exported)
+#
+# Every input is the graph's or named: OG (or GRAPH_DIR) has no default, nor
+# has ACCESSORY_DIR (docs/PANEL_TREE.md section 4); the outgroup is
+# config/project_env.sh's MTB_OUTGROUP, stamped into build_info.tsv.
 #
 # Why a separate stage. Assets belong to a graph BUILD, not to a sample. The
 # graph build changes because bugs are found, not because anyone chose to version
@@ -49,7 +53,13 @@ source "$_mtb_env"
 # THE GRAPH AND ITS DIRECTORY ARE ONE CHOICE (audit P0P2-3). OG alone used to
 # leave GRAPH_DIR at CX333, so a new graph got a new build id and the old
 # graph's SNP matrix. Given OG, the directory is OG's; given both, they must
-# agree; given neither, the CX333 graph, and only if its directory holds one.
+# agree; given GRAPH_DIR alone, the one graph in it. Given neither, P0
+# refuses: it used to fall back to graphs/CX333..., so a run that forgot OG
+# re-prepared the old graph under its old build id without a word.
+if [[ -z "${OG:-}" && -z "${GRAPH_DIR:-}" ]]; then
+    echo "FATAL: set OG (the graph's .og) or GRAPH_DIR (the directory holding it)" >&2
+    exit 1
+fi
 if [[ -n "${OG:-}" ]]; then
     _og_dir="$(cd "$(dirname "$OG")" 2>/dev/null && pwd -P)" \
         || { echo "FATAL: OG=${OG} is not readable" >&2; exit 1; }
@@ -59,7 +69,6 @@ if [[ -n "${OG:-}" ]]; then
     fi
     GRAPH_DIR="${GRAPH_DIR:-$(dirname "$OG")}"
 else
-    GRAPH_DIR="${GRAPH_DIR:-graphs/CX333.s10k.k23.K15}"
     mapfile -t _ogs < <(ls "${GRAPH_DIR}"/*.smooth.final.og 2>/dev/null)
     [[ "${#_ogs[@]}" -le 1 ]] \
         || { echo "FATAL: ${#_ogs[@]} graphs in ${GRAPH_DIR}; set OG" >&2; exit 1; }
@@ -70,7 +79,11 @@ PANEL_SNPS="${PANEL_SNPS:-${GRAPH_DIR}/snps.vcf.gz}"
 # source of panel allele frequencies (P5) and the outgroup's alleles
 # (panel_polarity). Copied into the build like every other asset.
 GRAPH_VCF="${GRAPH_VCF:-${GRAPH_DIR}/all_variants.collapsed.vcf.gz}"
-OUTGROUP="${OUTGROUP-GCF_035581225}"
+# The outgroup: config/project_env.sh's MTB_OUTGROUP unless OUTGROUP is set
+# (empty: the graph has none). Recorded in build_info.tsv by step stamp, and
+# step panel_polarity refuses a different one, so the polarity table and the
+# association tail's tree root are always the same genome.
+OUTGROUP="${OUTGROUP-${MTB_OUTGROUP-}}"
 # The IS6110-clean builds whose crossmaps give P1's tie-break its interval
 # counts. (The accessory catalogue is made by step 'catalogue'.)
 ISCLEAN_DIR="${ISCLEAN_DIR:-is6110/assets/isclean_matched}"
@@ -89,7 +102,12 @@ PANEL_FASTA="${PANEL_FASTA:-data/fastas/$(basename "${OG:-x}" | sed -n 's/^\(.*\
 BWA="${MTB_BWA:-${MTB_QC_BIN}/bwa}"
 GATK_SIF="${MTB_GATK_SIF:?MTB_GATK_SIF is unset; see config/project_env.sh}"
 gatk_run() { singularity exec -B "${MTB_WORK}:${MTB_WORK}" "$GATK_SIF" gatk "$@"; }
-ACCESSORY_DIR="${ACCESSORY_DIR:-refbias/panel}"
+# The accessory panel directory: panel_manifest.tsv (the locus table) and
+# accessory_{novel,mosaic}.fasta, made from THIS graph by the commands in
+# docs/PANEL_TREE.md section 4. No default: it was refbias/panel, CX333's, which a
+# new graph's build would have copied in. Step assets requires it and checks
+# its genome record against the build's.
+ACCESSORY_DIR="${ACCESSORY_DIR:-}"
 BUILD_ROOT="${BUILD_ROOT:-refbias/build}"
 STEP=""
 LIST=0
@@ -216,6 +234,9 @@ step_stamp() {
         # the RefSeq GFFs in annotation/ and the IS6110 crossmaps are in the
         # deposited frame, and assets/graph_frame_offsets.tsv converts.
         echo "refs_source\t${ASM_DIR} (deposited frame; graph frame via assets/graph_frame_offsets.tsv)"
+        # the panel genome that roots the trees and polarises the variants
+        # (config MTB_OUTGROUP); 'none' when the graph has no outgroup
+        echo "outgroup\t${OUTGROUP:-none}"
     } | sed 's/\\t/\t/g' > "${BUILD}/build_info.tsv"
     _say "stamp: ${BUILD}/build_info.tsv"
     _mark stamp
@@ -404,15 +425,27 @@ step_assets() {
     _inputs panel_snps_sha256 "$PANEL_SNPS" graph_vcf_sha256 "$GRAPH_VCF" \
             mask_sha256 "$MASK" \
             accessory_loci_sha256 "${ACCESSORY_DIR}/panel_manifest.tsv" \
-            is6110_loci_sha256 "${IS6110_LOCI:-refbias/t11/loci_clean.tsv}" \
-            is6110_anchors_sha256 "${IS6110_ANCHORS:-refbias/t11/anchor_sets.tsv}" \
+            accessory_genomes_sha256 "${ACCESSORY_DIR}/panel_manifest.genomes.txt" \
+            is6110_loci_sha256 "${IS6110_LOCI:-}" \
+            is6110_anchors_sha256 "${IS6110_ANCHORS:-}" \
             is6110_gff_sha256 "${IS6110_GFF:-data/annotation/H37Rv_IS6110.pansn.gff}"
     _done assets && { _say "assets: already done"; return 0; }
     _have accessions || { echo "FATAL: step 'assets' needs step 'accessions' done first" >&2; return 1; }
-    mtb_require_file "$PANEL_SNPS" "$GRAPH_VCF" "$MASK" || return 1
+    [[ -n "$ACCESSORY_DIR" ]] || {
+        echo "FATAL: step 'assets' needs ACCESSORY_DIR: this graph's accessory panel" >&2
+        echo "       (panel_manifest.tsv and its genome record; docs/PANEL_TREE.md section 4)" >&2
+        return 1; }
+    mtb_require_file "$PANEL_SNPS" "$GRAPH_VCF" "$MASK" \
+        "${ACCESSORY_DIR}/panel_manifest.tsv" || return 1
     "$MTB_PY" bin/p0_check.py vcf-samples --vcf "$PANEL_SNPS" \
         --accessions "$acc" --ref-acc "$H37RV_ACC" || return 1
     "$MTB_PY" bin/p0_check.py vcf-samples --vcf "$GRAPH_VCF" \
+        --accessions "$acc" --ref-acc "$H37RV_ACC" || return 1
+    # The accessory panel is made outside P0 (an array of blasts), so it must
+    # say which genomes it was made from: build_accessory_panel.py writes
+    # panel_manifest.genomes.txt, the graph VCF's samples, and they must be
+    # this build's. A table with no record (CX333's refbias/panel) is refused.
+    "$MTB_PY" bin/p0_check.py accessory-panel --dir "$ACCESSORY_DIR" \
         --accessions "$acc" --ref-acc "$H37RV_ACC" || return 1
     # replace links left by an earlier version of this step, never write
     # through them into the file they point at
@@ -429,18 +462,23 @@ step_assets() {
     # it is the naming layer for off-path records and is shared across samples
     # regardless of which reference they were called against. P0 previously
     # linked only the FASTAs, which carry sequence but no anchors.
-    [[ -s "${ACCESSORY_DIR}/panel_manifest.tsv" ]] && \
-        _copy "${ACCESSORY_DIR}/panel_manifest.tsv" "${BUILD}/assets/accessory_loci.tsv"
+    _copy "${ACCESSORY_DIR}/panel_manifest.tsv" "${BUILD}/assets/accessory_loci.tsv"
+    _copy "${ACCESSORY_DIR}/panel_manifest.genomes.txt" "${BUILD}/assets/accessory_loci.genomes.txt"
     # The accessory catalogue is no longer copied from accessory/assets/: it
     # is made from this build's own files by step 'catalogue' below.
-    # IS6110 catalogue. These currently live under refbias/t11/, a test
-    # directory: the extraction audit flagged the pipeline depending on test
-    # artefacts, and the IS6110 locus list and anchor sets are per-graph inputs
-    # like any other, so they belong in the build's assets.
-    [[ -s "${IS6110_LOCI:-refbias/t11/loci_clean.tsv}" ]] && \
-        _copy "${IS6110_LOCI:-refbias/t11/loci_clean.tsv}" "${BUILD}/assets/is6110_loci.tsv"
-    [[ -s "${IS6110_ANCHORS:-refbias/t11/anchor_sets.tsv}" ]] && \
-        _copy "${IS6110_ANCHORS:-refbias/t11/anchor_sets.tsv}" "${BUILD}/assets/is6110_anchors.tsv"
+    # IS6110 locus list and anchor sets: copied ONLY WHEN NAMED. They were
+    # taken by default from refbias/t11/, a pilot test directory, though no
+    # pass of the chain reads them (only the working tree's p1b/p1c
+    # benchmarks, which are not production passes) and nothing in this
+    # repository makes them. A build of a new graph must not carry CX333's.
+    if [[ -n "${IS6110_LOCI:-}" ]]; then
+        mtb_require_file "$IS6110_LOCI" || return 1
+        _copy "$IS6110_LOCI" "${BUILD}/assets/is6110_loci.tsv"
+    fi
+    if [[ -n "${IS6110_ANCHORS:-}" ]]; then
+        mtb_require_file "$IS6110_ANCHORS" || return 1
+        _copy "$IS6110_ANCHORS" "${BUILD}/assets/is6110_anchors.tsv"
+    fi
     [[ -s "${IS6110_GFF:-data/annotation/H37Rv_IS6110.pansn.gff}" ]] && \
         _copy "${IS6110_GFF:-data/annotation/H37Rv_IS6110.pansn.gff}" "${BUILD}/assets/is6110_elements.gff"
     local f
@@ -552,6 +590,13 @@ step_panel_polarity() {
     _STEP_KEYS+=("outgroup	${OUTGROUP:-none}")
     _done panel_polarity && { _say "panel_polarity: already done"; return 0; }
     _have assets || { echo "FATAL: step 'panel_polarity' needs step 'assets' done first" >&2; return 1; }
+    # the outgroup the build was stamped with is the one the association tail
+    # roots its trees on; a table made with another would disagree with it
+    local rec; rec="$(mtb_kv "${BUILD}/build_info.tsv" outgroup)"
+    if [[ -n "$rec" && "$rec" != "${OUTGROUP:-none}" ]]; then
+        echo "FATAL: build ${BUILD_ID} was stamped with outgroup ${rec}, not '${OUTGROUP:-none}'" >&2
+        return 1
+    fi
     if [[ -z "$OUTGROUP" ]]; then
         _say "panel_polarity: OUTGROUP is empty; no table (the event writer needs --panel-polarity '')"
         _mark panel_polarity; return 0
@@ -676,6 +721,7 @@ else
     _say "  sbatch --array=1-\$(wc -l < ${BUILD}/assets/accessions.txt) bin/p0_prepare.sh --step refs"
     _say "  bash bin/p0_prepare.sh --step frames"
     _say "  bash bin/p0_prepare.sh --step is6110_intervals   # crossmaps for every panel genome first:"
+    _say "      MTB_BUILD_DIR=${BUILD} bash is6110/bin/p1i_discover_matched.sh"
     _say "      MTB_BUILD_DIR=${BUILD} bash is6110/bin/p1i_build_matched.sh"
     _say "  ANC_TREE=.. ANC_ALN=.. ANC_SITES=.. bash bin/p0_prepare.sh --step ancestral   # docs/PANEL_TREE.md"
     _say "  bash bin/p0_prepare.sh --step manifest"

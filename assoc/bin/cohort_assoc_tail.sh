@@ -22,7 +22,8 @@
 #   2  the outgroup read off the panel VCF -- without it the cohort root is
 #      inferred from the cohort alone and deep branches go undetermined
 #   3  the tree, rooted on that outgroup
-#   4  the event matrix: per-branch gains, the input every test reads
+#   4  the event matrix: per-branch gains, the input every test reads (with
+#      presence tables, after the cohort's node -> accessory locus table)
 #   5  the tests -- variant-level scan, then IS6110 collapsed to genes
 set -euo pipefail
 _mtb_env=""
@@ -48,6 +49,7 @@ if [[ "$_here_rel" != "$HERE" || "$_bin_rel" != "${REPO}/bin" ]]; then
 fi
 for _s in "${HERE}/add_outgroup.py" "${HERE}/write_event_matrix.py" \
           "${HERE}/assoc_scan.py" "${HERE}/is6110_gene_burden.py" \
+          "${REPO}/accessory/bin/node_locus_from_p4.py" \
           "${REPO}/bin/vcf_to_alignment.py" "${REPO}/bin/build_snp_tree.sh" \
           "${REPO}/bin/retier_intervals.py" "${REPO}/bin/audit_chain.py"; do
     [[ -s "$_s" ]] || { echo "FATAL: missing ${_s}" >&2; exit 1; }
@@ -92,6 +94,18 @@ POLARITY="${BUILD}/assets/panel_polarity.tsv"
 for _f in "$PANEL_VCF" "$POLARITY"; do
     [[ -s "$_f" ]] || { echo "FATAL: build ${VCF_BUILD} has no ${_f}; run bin/p0_prepare.sh" >&2; exit 1; }
 done
+# THE OUTGROUP IS THE BUILD'S. It was GCF_035581225 written into the tree
+# and event steps; P0 now records the outgroup it polarised the panel with in
+# build_info.tsv (config/project_env.sh MTB_OUTGROUP), and the tree is rooted
+# on that genome. A build stamped before the key existed falls back to
+# MTB_OUTGROUP, whose default is the same genome.
+OUTGROUP="$(mtb_kv "${BUILD}/build_info.tsv" outgroup)"
+if [[ -z "$OUTGROUP" ]]; then
+    OUTGROUP="${MTB_OUTGROUP:-}"
+    echo "  note: ${BUILD}/build_info.tsv records no outgroup; MTB_OUTGROUP=${OUTGROUP:-<empty>}"
+fi
+[[ -n "$OUTGROUP" && "$OUTGROUP" != none ]] || {
+    echo "FATAL: build ${VCF_BUILD} has no outgroup; the cohort tree cannot be rooted" >&2; exit 1; }
 VCF_SHA="$(sha256sum "$VCF" | cut -c1-16)"
 POL_SHA="$(sha256sum "$POLARITY" | cut -c1-16)"
 _prov() {   # the record a product of this run must carry
@@ -127,7 +141,7 @@ if ! _current "data/trees/${C}.og.fasta"; then
     "$MTB_PY" "${HERE}/add_outgroup.py" \
         --alignment "data/trees/${C}.snps.fasta" \
         --sites "data/trees/${C}.sites.tsv" \
-        --panel-vcf "$PANEL_VCF" \
+        --panel-vcf "$PANEL_VCF" --outgroup "$OUTGROUP" \
         --out "data/trees/${C}.og.fasta"
     _record "data/trees/${C}.og.fasta"
 else echo "  already built"; fi
@@ -143,10 +157,28 @@ fi
 if ! _current "$_tree"; then
     _record "${_tree}"; mv -f "${_tree}.prov" "${_tree}.prov.pending"
     J=$(sbatch --parsable "${REPO}/bin/build_snp_tree.sh" "data/trees/${C}.og.fasta" \
-            GCF_035581225 "data/trees/${C}")
+            "$OUTGROUP" "data/trees/${C}")
     echo "  submitted ${J}; re-run this script when it finishes"
     exit 0
 else echo "  already built"; fi
+
+# LEVEL 2 NEEDS THE NODE -> LOCUS TABLE, and it is this cohort's: P4 records
+# each off-path accessory record's locus, and node ids belong to one graph.
+# write_event_matrix.py used to default to a hand-made CX333 table and now
+# refuses presence tables without one, so it is made here from the cohort's
+# own P4 output whenever presence tables are passed.
+NODELOCUS=""
+if [[ -n "$ACCPRES" ]]; then
+    echo "=== 4a. node -> accessory locus, from this cohort's P4"
+    NODELOCUS="assoc/${C}/node_locus.tsv"
+    if ! _current "$NODELOCUS"; then
+        compgen -G "${OUT}/p4/*.placed.tsv" >/dev/null || {
+            echo "FATAL: presence tables in ${ACCPRES} but no ${OUT}/p4/*.placed.tsv" >&2; exit 1; }
+        "$MTB_PY" "${REPO}/accessory/bin/node_locus_from_p4.py" \
+            --p4dir "${OUT}/p4" --out "$NODELOCUS"
+        _record "$NODELOCUS"
+    else echo "  already built"; fi
+fi
 
 echo "=== 4. event matrix"
 # GUARD ON THE LAST FILE WRITTEN, NOT THE FIRST. labelled.nwk is written
@@ -158,11 +190,11 @@ echo "=== 4. event matrix"
 if ! _current "assoc/${C}/events/summary.txt" events; then
     "$MTB_PY_VT" "${HERE}/write_event_matrix.py" --vcf "$VCF" \
         --tree "data/trees/${C}.rooted.nwk" --out "assoc/${C}/events" \
-        --ref-sample H37Rv --outgroup-name GCF_035581225 \
+        --ref-sample H37Rv --outgroup-name "$OUTGROUP" \
         --outgroup-fasta "data/trees/${C}.og.fasta" \
         --outgroup-sites "data/trees/${C}.sites.tsv" \
         --panel-polarity "$POLARITY" \
-        ${ACCPRES:+--accessory-presence "$ACCPRES"} \
+        ${ACCPRES:+--accessory-presence "$ACCPRES" --node-locus "$NODELOCUS"} \
         --dedupe suffix
     _record "assoc/${C}/events/summary.txt" events
 else echo "  already built"; fi

@@ -154,12 +154,17 @@ def main():
     ap.add_argument("--reconcile", default="is6110/results/p1i_reconcile.tsv")
     ap.add_argument("--flank", default="is6110/results/p1i_sites_flank_all.tsv")
     ap.add_argument("--refmap", default="refbias/p1/refmap.tsv")
-    ap.add_argument("--refs", default="refbias/build/7713a8d71d8e/refs")
+    # NO BUILD DEFAULTS: --refs, --h37rv and --build-id were build
+    # 7713a8d71d8e's (CX333), and bin/p1i_vcf.sh did not pass them, so every
+    # build's IS6110 records were stamped 7713a8d71d8e. p1i_vcf.sh passes the
+    # resolved build's.
+    ap.add_argument("--refs", required=True, help="<build>/refs")
     ap.add_argument("--crossmap-dir", default="is6110/assets/isclean_matched")
     ap.add_argument("--gff-dir", default="is6110/assets/matched_gff")
-    ap.add_argument("--h37rv", default="refbias/build/7713a8d71d8e/refs/GCF_000195955.fasta")
+    ap.add_argument("--h37rv", required=True,
+                    help="<build>/refs/GCF_000195955.fasta")
     ap.add_argument("--h37rv-contig", default="NC_000962.3")
-    ap.add_argument("--build-id", default="7713a8d71d8e")
+    ap.add_argument("--build-id", required=True)
     ap.add_argument("--outdir", default="refbias/p1i/vcf")
     ap.add_argument("--keys-out", default="is6110/results/p1i_cohort_keys.tsv")
     ap.add_argument("--key-window", type=int, default=6,

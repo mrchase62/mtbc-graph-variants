@@ -483,8 +483,13 @@ def main():
                          "is6110_p5_merge.py --out-states-dir; read instead of "
                          "--stage1-states so a task never parses the cohort's")
     ap.add_argument("--refmap", default="refbias/p1/refmap.tsv")
-    ap.add_argument("--paths", default="refbias/build/7713a8d71d8e/assets/paths.txt")
-    ap.add_argument("--graph", default=None)
+    # no build defaults: --paths was build 7713a8d71d8e's and --graph a glob
+    # over graphs/CX333...; p1i_p5states.sh passes the build's. Needed by the
+    # projecting modes (all, project) only.
+    ap.add_argument("--paths", default="",
+                    help="<build>/assets/paths.txt")
+    ap.add_argument("--graph", default="",
+                    help="the build's .og (build_info.tsv `graph`)")
     ap.add_argument("--odgi", default=os.environ.get("MTB_ODGI", "odgi"))
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--samtools", default=os.environ.get("MTB_SAMTOOLS", "samtools"))
@@ -525,10 +530,9 @@ def main():
 
     if a.mode in ("all", "project"):
         og = a.graph
-        if og is None:
-            import glob
-            g = sorted(glob.glob("graphs/CX333.s10k.k23.K15/*.smooth.final.og"))
-            og = g[0] if g else sys.exit("no graph; pass --graph")
+        if not og or not a.paths:
+            sys.exit(f"FATAL: --mode {a.mode} needs --graph and --paths, the "
+                     f"build's graph and assets/paths.txt")
         fr = graph_frame.Frames()
         paths = {l.split("#")[0]: l.strip() for l in open(a.paths) if l.strip()}
         carrier_of = carriers(a)

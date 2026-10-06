@@ -63,8 +63,11 @@ def probe(samtools, panel, name, start, n):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--panel", default="data/fastas/mtb.complex333.fasta.gz")
-    ap.add_argument("--refs", default="refbias/build/7713a8d71d8e/refs")
+    # no defaults: they were CX333's panel FASTA and build 7713a8d71d8e's
+    # refs; P0 step frames passes the build's
+    ap.add_argument("--panel", required=True,
+                    help="the FASTA the graph was built from")
+    ap.add_argument("--refs", required=True, help="<build>/refs")
     ap.add_argument("--samtools", default=os.environ.get("MTB_SAMTOOLS", "samtools"))
     ap.add_argument("--probe-len", type=int, default=200)
     ap.add_argument("--probes", type=int, default=4)

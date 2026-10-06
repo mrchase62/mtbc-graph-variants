@@ -84,17 +84,22 @@ STAGE2=("$MTB_PY" is6110/bin/is6110_p5_stage2.py
     --isclean-dir "$P1IDIR" --workdir "${P1IDIR}/p5stage2" --out "$OUT2"
     --threads "${SLURM_CPUS_PER_TASK:-1}")
 
+# The graph, its path list and H37Rv come from the build, never from the
+# scripts' defaults, which were a relative glob and build 7713a8d71d8e's files.
+BUILD="${MTB_BUILD_DIR:?MTB_BUILD_DIR is unset; run through bin/refbias_run.sh}"
+H37RV_ACC="${H37RV_ACC:-GCF_000195955}"
+
 if [[ "$P1ISSTEP" == "--all" || "$P1ISSTEP" == "--stage1" ]]; then
     echo "=== stage 1: into P5's key space ==="
+    [[ -s "${BUILD}/refs/${H37RV_ACC}.fasta" ]] \
+        || { echo "FATAL: no ${BUILD}/refs/${H37RV_ACC}.fasta" >&2; exit 1; }
     "$MTB_PY" is6110/bin/is6110_p5_merge.py \
         --cohort-keys "$KEYTAB" --refmap "$REFMAP" \
+        --h37rv "${BUILD}/refs/${H37RV_ACC}.fasta" \
         --out-keys "$OUT1K" --out-states "$OUT1S" --out-states-dir "$STAGE1DIR"
     [[ "$P1ISSTEP" == "--stage1" ]] && exit 0
 fi
 
-# The graph and its path list come from the build, never from the script's
-# defaults, which are a relative glob and a hard-coded build id.
-BUILD="${MTB_BUILD_DIR:?MTB_BUILD_DIR is unset; run through bin/refbias_run.sh}"
 OG="${OG:-$(awk -F'\t' '$1=="graph"{print $2}' "${BUILD}/build_info.tsv")}"
 [[ -s "$OG" ]] || { echo "FATAL: no graph at '${OG}'" >&2; exit 1; }
 [[ -s "${BUILD}/assets/paths.txt" ]] || { echo "FATAL: no ${BUILD}/assets/paths.txt" >&2; exit 1; }

@@ -406,7 +406,7 @@ if [[ "${IO_CHECK:-1}" != "0" && -s refbias/io_contract.tsv ]]; then
     # earlier pass in THIS chain produces is not reported as missing.
     _willrun="$(IFS=,; echo "${RUN[*]}")"
     if ! "$MTB_PY" refbias/bin/io_contract.py "$COHORT_NAME" \
-            --will-run "$_willrun" > "${TMPDIR:-/tmp}/io_$$.txt" 2>&1; then
+            --build "$BUILD" --will-run "$_willrun" > "${TMPDIR:-/tmp}/io_$$.txt" 2>&1; then
         sed 's/^/  /' "${TMPDIR:-/tmp}/io_$$.txt" >&2
         rm -f "${TMPDIR:-/tmp}/io_$$.txt"
         if [[ "$DRY" -eq 1 ]]; then

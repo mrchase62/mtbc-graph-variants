@@ -13,6 +13,7 @@ refuses to mark the step done.
     p0_check.py fasta-names   --fasta F --paths P
     p0_check.py taxa          --fasta F --accessions A
     p0_check.py catalogue     --tsv T --accessions A
+    p0_check.py accessory-panel --dir D --accessions A [--ref-acc H37RV]
     p0_check.py is6110-intervals --isclean-dir D --refs R --accessions A
                               --skip H37RV --out O
     p0_check.py verify        --build B
@@ -97,6 +98,28 @@ def cmd_catalogue(a):
         return 1
     print(f"  {a.tsv}: {len(seen)} carrier genomes, all in the build")
     return 0
+
+
+def cmd_accessory_panel(a):
+    """The accessory panel's genome record against the build's genomes.
+
+    build_accessory_panel.py writes <dir>/panel_manifest.genomes.txt, the
+    genomes the locus table was made from (the graph VCF's samples, so not the
+    reference path). No record, no proof the table is this graph's: refused,
+    as CX333's refbias/panel would be on any build."""
+    rec = os.path.join(a.dir, "panel_manifest.genomes.txt")
+    if not os.path.exists(rec):
+        print(f"FATAL: {rec} is missing: the accessory locus table in {a.dir} "
+              f"does not record which genomes it was made from, so it cannot "
+              f"be shown to be this graph's. Make it with "
+              f"bin/build_accessory_panel.py --genomes (docs/PANEL_TREE.md section 4)",
+              file=sys.stderr)
+        return 1
+    have = set(lines(rec))
+    if a.ref_acc:
+        have.add(a.ref_acc)
+    return report_sets(f"genomes of {a.dir}/panel_manifest.tsv", have,
+                       set(lines(a.accessions)))
 
 
 def cmd_is6110_intervals(a):
@@ -211,6 +234,10 @@ def main():
     p = sp.add_parser("catalogue")
     p.add_argument("--tsv", required=True)
     p.add_argument("--accessions", required=True)
+    p = sp.add_parser("accessory-panel")
+    p.add_argument("--dir", required=True)
+    p.add_argument("--accessions", required=True)
+    p.add_argument("--ref-acc", default="")
     p = sp.add_parser("is6110-intervals")
     p.add_argument("--isclean-dir", required=True)
     p.add_argument("--refs", required=True)
@@ -222,6 +249,7 @@ def main():
     a = ap.parse_args()
     return {"vcf-samples": cmd_vcf_samples, "fasta-names": cmd_fasta_names,
             "taxa": cmd_taxa, "catalogue": cmd_catalogue,
+            "accessory-panel": cmd_accessory_panel,
             "is6110-intervals": cmd_is6110_intervals,
             "verify": cmd_verify}[a.cmd](a)
 

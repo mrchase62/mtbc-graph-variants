@@ -44,8 +44,10 @@ def main():
     ap.add_argument("--cohort-keys",
                     default="is6110/results/p1i_cohort_keys.tsv")
     ap.add_argument("--refmap", default="refbias/p1/refmap.tsv")
-    ap.add_argument("--h37rv",
-                    default="refbias/build/7713a8d71d8e/refs/GCF_000195955.fasta")
+    # no default: it was build 7713a8d71d8e's (CX333) H37Rv; p1i_p5states.sh
+    # passes the build's
+    ap.add_argument("--h37rv", required=True,
+                    help="<build>/refs/GCF_000195955.fasta")
     ap.add_argument("--out-keys", default="is6110/results/p5_is6110_keys.tsv")
     ap.add_argument("--out-states",
                     default="is6110/results/p5_is6110_states.tsv",

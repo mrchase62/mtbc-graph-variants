@@ -80,7 +80,7 @@ class WriterFixture:
                 "--refmap", f"{d}/refmap.tsv", "--refs", f"{d}/refs",
                 "--crossmap-dir", f"{d}/cm", "--gff-dir", f"{d}/gff",
                 "--h37rv", f"{d}/h37.fasta", "--outdir", f"{d}/vcf",
-                "--keys-out", f"{d}/keys.tsv"]
+                "--keys-out", f"{d}/keys.tsv", "--build-id", "b"]
 
 
 EMPTY = lambda pos: dict(verdict="placed_h37rv_empty", h37rv_pos=pos)

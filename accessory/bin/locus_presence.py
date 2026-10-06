@@ -68,8 +68,12 @@ def main():
     ap.add_argument("--reference", default="",
                     help="the sample's matched panel accession, for the "
                          "reference route")
-    ap.add_argument("--catalogue", default="accessory/assets/accessory_catalogue.tsv")
-    ap.add_argument("--fasta", default="accessory/assets/accessory_catalogue.fasta")
+    # no defaults: accessory/assets/ held CX333's hand-placed catalogue;
+    # locus_presence_one.sh passes the build's (P0 step catalogue)
+    ap.add_argument("--catalogue", required=True,
+                    help="<build>/assets/accessory_catalogue.tsv")
+    ap.add_argument("--fasta", required=True,
+                    help="<build>/assets/accessory_catalogue.fasta")
     ap.add_argument("--cram", required=True)
     ap.add_argument("--h37rv", required=True)
     ap.add_argument("--contig", default="NC_000962.3")

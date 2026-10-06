@@ -27,18 +27,26 @@ import argparse, bisect, collections, csv, gzip, os, sys
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--loci",
-                    default="refbias/build/7713a8d71d8e/assets/accessory_loci.tsv")
-    ap.add_argument("--graph-vcf",
-                    default="graphs/CX333.s10k.k23.K15/all_variants.collapsed.vcf.gz",
-                    help="the COLLAPSED graph VCF (audit PGB-9). The most-"
+    # NO BUILD DEFAULTS. --loci and --graph-vcf were build 7713a8d71d8e's
+    # and CX333's; the clusters, routing and census were insgt's CX333
+    # tables and gwas1000's census, which a build of a new graph must not
+    # inherit. P0 step catalogue passes the build's two files and "" for the
+    # rest; docs/PANEL_TREE.md gives the CX333 reproduction with all five.
+    ap.add_argument("--loci", required=True,
+                    help="<build>/assets/accessory_loci.tsv")
+    ap.add_argument("--graph-vcf", required=True,
+                    help="<build>/assets/graph_collapsed.vcf.gz, the "
+                         "COLLAPSED graph VCF (audit PGB-9). The most-"
                          "carried allele is chosen per record, so on the "
                          "decomposed file, where one allele's carriers are "
                          "split over several records, a split allele lost to "
                          "a less common one (26 of 802 CX333 loci)")
-    ap.add_argument("--clusters", default="insgt/assets/insertions.tsv")
-    ap.add_argument("--routing", default="insgt/assets/insertion_routing.tsv")
-    ap.add_argument("--census", default="accessory/gwas1000_accessory_census.tsv")
+    ap.add_argument("--clusters", default="",
+                    help="this graph's insgt clusters; empty: none")
+    ap.add_argument("--routing", default="",
+                    help="this graph's insgt routing; empty: none")
+    ap.add_argument("--census", default="",
+                    help="a cohort's accessory census; empty: none")
     ap.add_argument("--window", type=int, default=200,
                     help="how close a graph record or cluster must be to count "
                          "as the same locus")

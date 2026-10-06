@@ -73,7 +73,9 @@ OUTDIR="${OUTDIR:-refbias/p3}"
 WORK="${WORK:-refbias/work/p3}"
 LOCI="${BUILD}/assets/accessory_loci.tsv"
 PATHS="${BUILD}/assets/paths.txt"
-OG="${OG:-$(ls graphs/CX333.s10k.k23.K15/*.smooth.final.og 2>/dev/null | head -1)}"
+# The build's own graph, as its stamp records it. The default was a glob over
+# graphs/CX333..., which on a new build projected against the old graph.
+OG="${OG:-$(awk -F'\t' '$1=="graph"{print $2}' "${BUILD}/build_info.tsv")}"
 H37RV_PATH="${H37RV_PATH:-GCF_000195955#1#NC_000962.3}"
 BWA="${MTB_BWA:-${MTB_QC_BIN}/bwa}"
 ODGI="${MTB_ODGI:?MTB_ODGI is unset; see config/project_env.sh}"

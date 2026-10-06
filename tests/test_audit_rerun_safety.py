@@ -315,6 +315,14 @@ class P0(unittest.TestCase):
         return run(["bash", os.path.join(ROOT, "bin/p0_prepare.sh"), *args],
                    cwd=self.d, **kw)
 
+    def acc(self):
+        # an accessory panel made from this graph's genomes (cleanup2: step
+        # assets requires one, with its genome record)
+        a = os.path.join(self.d, "acc")
+        write(os.path.join(a, "panel_manifest.tsv"), "locus_id\tpos\n")
+        write(os.path.join(a, "panel_manifest.genomes.txt"), "A1\nA2\n")
+        return a
+
     def test_og_and_other_graph_dir_refused(self):
         os.makedirs(os.path.join(self.d, "oldgraph"))
         r = self.p0("--list", OG=self.og, GRAPH_DIR=os.path.join(self.d, "oldgraph"))
@@ -347,7 +355,7 @@ class P0(unittest.TestCase):
                      ["A1", "A2"])
         mask = write(os.path.join(self.d, "mask.bed"), "c\t0\t5\n")
         r = self.p0("--step", "assets", OG=self.og, MASK=mask,
-                    ACCESSORY_DIR=f"{self.d}/none", ACC_CATALOGUE_DIR=f"{self.d}/none")
+                    ACCESSORY_DIR=self.acc())
         self.assertEqual(r.returncode, 0, r.stderr)
         a = os.path.join(self.b, "assets")
         for f in ("panel_snps.vcf.gz", "graph_collapsed.vcf.gz", "repeat_mask.bed"):
@@ -358,7 +366,7 @@ class P0(unittest.TestCase):
         self.assertEqual(open(os.path.join(a, "repeat_mask.bed")).read(), "c\t0\t5\n")
         # and the step is now refused, not silently "already done"
         r = self.p0("--step", "assets", OG=self.og, MASK=mask,
-                    ACCESSORY_DIR=f"{self.d}/none", ACC_CATALOGUE_DIR=f"{self.d}/none")
+                    ACCESSORY_DIR=self.acc())
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("mask_sha256", r.stderr)
 
@@ -369,7 +377,7 @@ class P0(unittest.TestCase):
                      ["A1", "A2"])
         mask = write(os.path.join(self.d, "mask.bed"), "c\t0\t5\n")
         r = self.p0("--step", "assets", OG=self.og, MASK=mask,
-                    ACCESSORY_DIR=f"{self.d}/none", ACC_CATALOGUE_DIR=f"{self.d}/none")
+                    ACCESSORY_DIR=self.acc())
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("not in the build", r.stderr)
         self.assertFalse(os.path.exists(os.path.join(self.b, "logs", "assets.done")))

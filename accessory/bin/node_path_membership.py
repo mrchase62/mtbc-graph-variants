@@ -106,9 +106,12 @@ def main():
     pos_fh = open(a.out_positions + ".tmp", "w") if a.out_positions else None
     if pos_fh:
         # `length` is the node's own length, recorded so a reader can
-        # check that an offset falls inside the node. (P4's node offsets
-        # already run along the path, so the base is start + offset on
-        # either strand; see p5_states.py.)
+        # check that an offset falls inside the node, and so it can turn a
+        # key's offset into a walk offset. (A node key's offset is the
+        # node's FORWARD offset -- P4 and the IS6110 arm restate odgi's
+        # walking offset -- so the base along this path is start + off where
+        # the path walks the node '+', and start + (length-1-off) where it
+        # walks it '-': mtb_norm.forward_offset, as p5_states.py reads it.)
         pos_fh.write("node\taccession\tstart\tstrand\tn_occurrences\tlength\n")
     npairs = multi = 0
     cur, first, occ, done_accs = None, {}, collections.Counter(), set()
