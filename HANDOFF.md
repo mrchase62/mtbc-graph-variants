@@ -41,11 +41,13 @@ fixes, with tests) were approved on 2026-10-05.
 
 **State (2026-10-06): section 0o.**
 
-- **Every audit fix is on branch `audit-fixes`** (254 tests), not yet in
+- **Every audit fix is on branch `audit-fixes`** (283 tests), not yet in
   main. The current association results remain provisional.
 - **Waiting on the user:** the 44 decisions, and D41.
 - **Step 4 is done:** section 0q lists 12 items to fix before any rerun.
-  They are worked one at a time, starting with item 1.
+  **All 12 are fixed on `audit-fixes`** (283 tests). Waiting on the user:
+  the decisions, the canettii isolate and R2-TREES-6, before the merge into
+  main.
 - **Then:** the new panel, graph and build, then scale200 first.
 
 **Before anything else after downtime:**
@@ -1919,6 +1921,35 @@ There are also about 20 LOW items in the reports.
   - **Item 12, the permutation floor:** adaptive. Rerun only the rows at the
     1/20,000 floor with more permutations (for example 1,000,000), so a lone
     true hit can be significant.
+- **Item 11, done (ec2cda7). IS6110 repeat-node rows (option b).**
+  - In `is6110/bin/is6110_write_vcf.py`, a repeated node keys its rows when
+    every site on it is `on_path`, its H37Rv span is at most 1 kb
+    (`REPEAT_SPAN`), and no sample appears on it twice.
+  - On scale200, 37 of the 64 repeated nodes pass. That recovers 156 of the
+    456 excluded sites, all at the same H37Rv position (span 0).
+  - The other 27 nodes are still excluded as ambiguous.
+- **Item 12, done (4524fac). Adaptive permutations (option b).**
+  - Every row starts with 20,000 permutations. A null whose count of permuted
+    values at least as extreme is 10 or fewer is rerun with 1,000,000 fresh
+    permutations, before BH (`--refine-permutations`, `--refine-below`;
+    0 disables).
+  - This applies to the scan (branch, region, lineage and conditional nulls)
+    and to the burdens (branch, region and lineage). A new `refined` column
+    marks the nulls that were rerun.
+  - **scale200 small-variant burden:**
+    - units passing all three nulls go from 6 to 8: katG and the embA promoter
+      now pass;
+    - rpoB, rpoC, embB, gyrA, pncA and ethA pass more strongly (q_region
+      0.022 to 0.0006);
+    - the fabG1 promoter still fails the lineage null;
+    - the refinement adds about 4 minutes.
+- **All 12 items are done on `audit-fixes`; 283 tests pass.** The branch is
+  not yet merged into main.
+- **Waiting on the user before the merge:**
+  - the 44 decisions in `analysis/audit/DECISIONS.md` (D41 especially);
+  - the canettii isolate;
+  - R2-TREES-6: 80 variants derived at the MTBC root. Should they be pinned
+    to the `AA` allele?
 - **A running chat log** for the user is at `analysis/CHAT_LOG.md`
   (untracked), updated each turn.
 
