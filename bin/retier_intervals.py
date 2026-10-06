@@ -66,14 +66,29 @@ def load_bed_spans(path):
 
 
 def overlapper(spans):
+    """hit(a, b): the name of a BED span sharing a base with the 1-based
+    inclusive interval a..b, else "".
+
+    BED [s, e) covers 1-based bases s+1 .. e, so the interval overlaps it when
+    s < b and e >= a. The old test, e > a and s < b, read a as 0-based and
+    missed a span ending exactly at the interval's first base. It also looked
+    only at the 8 spans starting just before b, so a long span starting
+    earlier -- the mask nests PE_PGRS regions -- was never seen. The running
+    maximum of the ends says how far back a span can still reach."""
     st = [s[0] for s in spans]
+    reach, m = [], -1
+    for s in spans:
+        m = max(m, s[1]); reach.append(m)
 
     def hit(a, b):
-        i = bisect.bisect_right(st, b)
-        for j in range(max(0, i - 8), min(len(spans), i + 1)):
-            if min(spans[j][1], b) > max(spans[j][0], a):
-                return spans[j][2] or "masked"
-        return ""
+        # the earliest-starting overlapping span, as the old scan returned
+        j = bisect.bisect_left(st, b) - 1       # last span starting before b
+        best = ""
+        while j >= 0 and reach[j] >= a:
+            if spans[j][1] >= a:
+                best = spans[j][2] or "masked"
+            j -= 1
+        return best
     return hit
 
 
