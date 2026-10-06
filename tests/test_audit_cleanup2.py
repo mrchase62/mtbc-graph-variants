@@ -147,10 +147,13 @@ class AssocTail(unittest.TestCase):
                               capture_output=True, text=True)
 
     def prov(self, rel):
-        v = hashlib.sha256(open(f"{self.d}/refbias/t/p5/merged.vcf.gz",
-                                "rb").read()).hexdigest()[:16]
+        # the record the chain itself expects (review 2, R2-TREES-2: the
+        # inputs and code of each product, not only the build and VCF)
         write(f"{self.d}/{rel}", "x\n")
-        write(f"{self.d}/{rel}.prov", f"build_id\tb0\nvcf_sha\t{v}\n")
+        r = self.tail(MTB_CHAIN_PRINT_PROV=rel)
+        assert r.returncode == 0, r.stderr + r.stdout
+        rec = "".join(l + "\n" for l in r.stdout.splitlines() if "\t" in l)
+        write(f"{self.d}/{rel}.prov", rec)
 
     def test_tree_rooted_on_the_builds_outgroup(self):
         r = self.tail()
@@ -163,6 +166,34 @@ class AssocTail(unittest.TestCase):
         self.assertIn("data/trees/t.combined.fasta GCF_X data/trees/t.combined",
                       tree[0])
         self.assertNotIn("GCF_035581225", code("assoc/bin/cohort_assoc_tail.sh"))
+
+    def test_replaced_tree_makes_the_event_matrix_stale(self):
+        """Review 2, R2-TREES-2: a record holds the code and every input, so
+        a tree replaced after the event matrix was made is refused there,
+        naming the input that changed."""
+        self.prov("data/trees/t.combined.rooted.nwk")
+        self.prov("data/trees/t.rooted.nwk")
+        self.prov("assoc/t/node_locus.tsv")
+        self.prov("assoc/t/events/summary.txt")
+        rec = open(f"{self.d}/assoc/t/events/summary.txt.prov").read()
+        for key in ("code", "tree", "outgroup_aln", "polarity", "outgroup",
+                    "presence", "node_locus"):
+            self.assertIn(f"{key}\t", rec)
+        # the pruned tree is rebuilt (its own record kept current)
+        self.prov("data/trees/t.rooted.nwk")
+        write(f"{self.d}/data/trees/t.rooted.nwk", "(changed);\n")
+        self.prov_only("data/trees/t.rooted.nwk")
+        r = self.tail()
+        self.assertNotEqual(r.returncode, 0, r.stdout)
+        self.assertIn("events/summary.txt exists but was not made from this "
+                      "run's inputs", r.stderr)
+        self.assertIn("tree", r.stderr.split("differs in:")[1])
+
+    def prov_only(self, rel):
+        r = self.tail(MTB_CHAIN_PRINT_PROV=rel)
+        assert r.returncode == 0, r.stderr + r.stdout
+        write(f"{self.d}/{rel}.prov",
+              "".join(l + "\n" for l in r.stdout.splitlines() if "\t" in l))
 
     def test_presence_tables_get_the_cohorts_node_locus_table(self):
         self.prov("data/trees/t.combined.rooted.nwk")

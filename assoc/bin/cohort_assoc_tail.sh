@@ -109,25 +109,88 @@ fi
 [[ -n "$OUTGROUP" && "$OUTGROUP" != none ]] || {
     echo "FATAL: build ${VCF_BUILD} has no outgroup; the cohort tree cannot be rooted" >&2; exit 1; }
 VCF_SHA="$(sha256sum "$VCF" | cut -c1-16)"
-POL_SHA="$(sha256sum "$POLARITY" | cut -c1-16)"
+# the node -> locus table exists exactly when presence tables are given
+NODELOCUS=""
+[[ -n "$ACCPRES" ]] && NODELOCUS="assoc/${C}/node_locus.tsv"
+# PROVENANCE: A CHAIN OF CHECKSUMS (review 2, R2-TREES-2 / R2-INT-4; audit
+# TP-4). Each product's .prov records the build, the merged VCF, the code that
+# made it and every input it was made from -- upstream products included -- so a
+# change anywhere upstream, or a code fix, makes everything downstream stale
+# rather than silently reused. It used to hold only the build and the VCF (and,
+# for the event matrix, the polarity table): a rebuilt tree, new presence
+# tables or a fixed script under the same VCF left the old event matrix looking
+# current. Files and directories are recorded by checksum, plain values (the
+# outgroup) as they are. _args_for is the one list of each product's inputs.
+_sha() {    # 16 hex of a file; of a directory, over its files' checksums
+    local p="$1"
+    if [[ -f "$p" ]]; then sha256sum "$p" | cut -c1-16
+    elif [[ -d "$p" ]]; then
+        ( cd "$p" && find . -type f ! -name '*.prov*' -print0 | sort -z \
+            | xargs -0 -r sha256sum ) | sha256sum | cut -c1-16
+    else echo none; fi
+}
+_args_for() {   # the inputs of one product: key=path (checksummed), key==value
+    local t="data/trees/${C}"
+    case "$1" in
+        "${t}.snps.fasta")
+            printf '%s\n' "code=${REPO}/bin/vcf_to_alignment.py" ;;
+        "${t}.combined.fasta")
+            printf '%s\n' "code=${HERE}/combined_alignment.py" \
+                "rule=${HERE}/add_outgroup.py" "cohort_aln=${t}.snps.fasta" \
+                "cohort_sites=${t}.sites.tsv" "panel_vcf=${PANEL_VCF}" \
+                "outgroup==${OUTGROUP}" ;;
+        "${t}.combined.rooted.nwk")
+            printf '%s\n' "code=${REPO}/bin/build_snp_tree.sh" \
+                "alignment=${t}.combined.fasta" "outgroup==${OUTGROUP}" ;;
+        "${t}.rooted.nwk")
+            printf '%s\n' "code=${HERE}/prune_for_cohort.py" \
+                "tree=${t}.combined.rooted.nwk" "outgroup==${OUTGROUP}" ;;
+        "assoc/${C}/node_locus.tsv")
+            printf '%s\n' "code=${REPO}/accessory/bin/node_locus_from_p4.py" \
+                "p4=${OUT}/p4" ;;
+        "assoc/${C}/events/summary.txt")
+            printf '%s\n' "code=${HERE}/write_event_matrix.py" \
+                "tree=${t}.rooted.nwk" "outgroup_aln=${t}.combined.fasta" \
+                "polarity=${POLARITY}" "outgroup==${OUTGROUP}" \
+                "presence=${ACCPRES:-}" "node_locus=${NODELOCUS:-}" ;;
+        *) echo "FATAL: no provenance inputs defined for $1" >&2; exit 1 ;;
+    esac
+}
 _prov() {   # the record a product of this run must carry
     printf 'build_id\t%s\nvcf_sha\t%s\n' "$VCF_BUILD" "$VCF_SHA"
-    [[ "${1:-}" == events ]] && printf 'polarity_sha\t%s\n' "$POL_SHA"
-    return 0
+    local kv
+    while IFS= read -r kv; do
+        [[ -n "$kv" ]] || continue
+        if [[ "$kv" == *"=="* ]]; then
+            printf '%s\t%s\n' "${kv%%==*}" "${kv#*==}"
+        elif [[ -z "${kv#*=}" ]]; then
+            printf '%s\t%s\n' "${kv%%=*}" "none"
+        else
+            printf '%s\t%s\n' "${kv%%=*}" "$(_sha "${kv#*=}")"
+        fi
+    done < <(_args_for "$1")
 }
 # 0: product present and from this run's inputs; 1: absent; else refuse
 _current() {
-    local p="$1" kind="${2:-}"
+    local p="$1" want
     [[ -e "$p" ]] || return 1
-    if [[ -s "${p}.prov" ]] && [[ "$(cat "${p}.prov")" == "$(_prov "$kind")" ]]; then
+    want="$(_prov "$p")"
+    if [[ -s "${p}.prov" ]] && [[ "$(cat "${p}.prov")" == "$want" ]]; then
         return 0
     fi
-    echo "FATAL: ${p} exists but was not made from ${VCF} (build ${VCF_BUILD}," \
-         "sha ${VCF_SHA}): its record is '$(tr '\n' ' ' < "${p}.prov" 2>/dev/null || echo none)'." \
+    echo "FATAL: ${p} exists but was not made from this run's inputs. It" \
+         "differs in: $(diff <(cat "${p}.prov" 2>/dev/null) <(printf '%s\n' "$want") \
+         | sed -n 's/^> //p' | cut -f1 | tr '\n' ' ')(record ${p}.prov)." \
          "Move it aside, or run this cohort under a new name." >&2
     exit 1
 }
-_record() { _prov "${2:-}" > "${1}.prov"; }
+_record() { _prov "$1" > "${1}.prov"; }
+
+# MTB_CHAIN_PRINT_PROV=<product>: print the record that product must carry
+# under this run's inputs, and stop (for tests, and to inspect a refusal)
+if [[ -n "${MTB_CHAIN_PRINT_PROV:-}" ]]; then
+    _prov "$MTB_CHAIN_PRINT_PROV"; exit 0
+fi
 
 echo "=== 1. alignment"
 if ! _current "data/trees/${C}.snps.fasta"; then
@@ -158,7 +221,7 @@ echo "=== 3. tree"
 # .prov.pending and promoted when the tree is found on the next run.
 _tree="data/trees/${C}.combined.rooted.nwk"
 if [[ -e "$_tree" && ! -e "${_tree}.prov" && -s "${_tree}.prov.pending" ]] \
-        && [[ "$(cat "${_tree}.prov.pending")" == "$(_prov)" ]]; then
+        && [[ "$(cat "${_tree}.prov.pending")" == "$(_prov "$_tree")" ]]; then
     mv -f "${_tree}.prov.pending" "${_tree}.prov"
 fi
 if ! _current "$_tree"; then
@@ -182,10 +245,8 @@ else echo "  already built"; fi
 # write_event_matrix.py used to default to a hand-made CX333 table and now
 # refuses presence tables without one, so it is made here from the cohort's
 # own P4 output whenever presence tables are passed.
-NODELOCUS=""
 if [[ -n "$ACCPRES" ]]; then
     echo "=== 4a. node -> accessory locus, from this cohort's P4"
-    NODELOCUS="assoc/${C}/node_locus.tsv"
     if ! _current "$NODELOCUS"; then
         compgen -G "${OUT}/p4/*.placed.tsv" >/dev/null || {
             echo "FATAL: presence tables in ${ACCPRES} but no ${OUT}/p4/*.placed.tsv" >&2; exit 1; }
@@ -202,7 +263,7 @@ echo "=== 4. event matrix"
 # finished. gwas1000 did exactly that -- the writer refused a duplicate key,
 # left labelled.nwk behind, and the next attempt skipped step 4 and failed in
 # step 5 on a missing variants.tsv.
-if ! _current "assoc/${C}/events/summary.txt" events; then
+if ! _current "assoc/${C}/events/summary.txt"; then
     "$MTB_PY_VT" "${HERE}/write_event_matrix.py" --vcf "$VCF" \
         --tree "data/trees/${C}.rooted.nwk" --out "assoc/${C}/events" \
         --ref-sample H37Rv --outgroup-name "$OUTGROUP" \
@@ -211,7 +272,7 @@ if ! _current "assoc/${C}/events/summary.txt" events; then
         --panel-polarity "$POLARITY" \
         ${ACCPRES:+--accessory-presence "$ACCPRES" --node-locus "$NODELOCUS"} \
         --dedupe suffix
-    _record "assoc/${C}/events/summary.txt" events
+    _record "assoc/${C}/events/summary.txt"
 else echo "  already built"; fi
 
 [[ -n "$PHENO" ]] || { echo "no phenotype given; stopping before the tests"; exit 0; }

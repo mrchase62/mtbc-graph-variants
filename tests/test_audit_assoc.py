@@ -496,17 +496,18 @@ class ChainScript(unittest.TestCase):
             with open(os.path.join(b, f), "w") as fh:
                 fh.write(txt)
 
-        def sha16(p):
-            return hashlib.sha256(open(p, "rb").read()).hexdigest()[:16]
-        prov = (f"build_id\tb0\nvcf_sha\t"
-                f"{sha16(os.path.join(d, 'refbias/t/p5/merged.vcf.gz'))}\n")
+        # each product's record as the chain itself computes it (review 2,
+        # R2-TREES-2), upstream first since a record holds its inputs' checksums
         for f in ("data/trees/t.snps.fasta", "data/trees/t.combined.fasta",
-                  "data/trees/t.combined.rooted.nwk", "data/trees/t.rooted.nwk"):
+                  "data/trees/t.combined.rooted.nwk", "data/trees/t.rooted.nwk",
+                  "assoc/t/events/summary.txt"):
+            r = subprocess.run(["bash", self.CHAIN, "t", "p.txt"], cwd=d,
+                               capture_output=True, text=True,
+                               env=dict(os.environ, MTB_CHAIN_PRINT_PROV=f))
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
             with open(os.path.join(d, f + ".prov"), "w") as fh:
-                fh.write(prov)
-        with open(os.path.join(d, "assoc/t/events/summary.txt.prov"), "w") as fh:
-            fh.write(prov + "polarity_sha\t" + sha16(
-                os.path.join(b, "assets/panel_polarity.tsv")) + "\n")
+                fh.write("".join(l + "\n" for l in r.stdout.splitlines()
+                                 if "\t" in l))
         log = os.path.join(d, "calls.log")
         stub = os.path.join(d, "stub.sh")
         with open(stub, "w") as fh:
