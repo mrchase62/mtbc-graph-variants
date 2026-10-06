@@ -1871,8 +1871,19 @@ There are also about 20 LOW items in the reports.
   - **Not changed:** contiguous H37Rv copies with mixed old PRESENT/ABSENT
     calls stay blind. Their pool coverage comes from homologous copies
     elsewhere, because the pool is aligned to the whole catalogue.
-- **266 tests pass.** Next: item 5 (variants conditioned on unmeasurable
-  loci leave the scan).
+- **Item 5, done (4b5f33a). No level-2 conditioning on a never-measured
+  locus.**
+  - For a node-frame variant inside an accessory locus no sample was
+    measured at (every cell UNMEASURABLE), `write_event_matrix.py` now leaves
+    it unconditional on P5's own states. The locus goes in a new
+    `variants.tsv` column, `acc_locus_unmeasured`.
+  - A measured locus with no carrier still makes its variants inapplicable.
+  - The scan, burden and audit follow, because they read `variants.tsv`.
+  - **Production event matrices with item 4's rule:** 167 of 254 (scale200)
+    and 862 of 1,251 (gwas1000) conditional variants are now kept,
+    unconditional; 87 / 389 remain conditioned.
+- **267 tests pass.** Next: item 6 (reciprocal overlap when caller deletions
+  are matched to intervals).
 
 ### Working mode (the user's preference, 2026-10-06)
 
