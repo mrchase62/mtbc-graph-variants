@@ -24,7 +24,9 @@ import numpy as np
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--vcf", required=True)
+    ap.add_argument("--vcf", required=True,
+                    help="one record per allele: the graph's "
+                         "all_variants.collapsed.vcf.gz, or its SNP split")
     ap.add_argument("--accessions", required=True)
     ap.add_argument("--bcftools", required=True)
     ap.add_argument("--thresholds", type=int, nargs="+", default=[5, 20, 50, 100, 200])
@@ -36,8 +38,12 @@ def main():
                          "in their own right -- W-148, say -- a cluster-mate is a "
                          "fine phylogenetic stand-in but not a substitute for the "
                          "strain itself.")
-    ap.add_argument("--rank-by", help="TSV: accession<TAB>score; higher is a better "
-                                      "representative (e.g. insertions >=50bp)")
+    # Required: without it every score was 0 and the representative was simply
+    # the lexicographically largest accession, not the best-resolved assembly
+    # the docstring promises (audit PGB-12).
+    ap.add_argument("--rank-by", required=True,
+                    help="TSV: accession<TAB>score; higher is a better "
+                         "representative (e.g. insertions >=50bp)")
     ap.add_argument("--out")
     a = ap.parse_args()
 
@@ -51,15 +57,35 @@ def main():
               f"cannot be assessed: {', '.join(missing[:6])}"
               + (" ..." if len(missing) > 6 else ""))
     idx = [sm.index(s) for s in keep]
-    pr = subprocess.run([a.bcftools, "query", "-f", "[%GT\t]\n", a.vcf],
+    pr = subprocess.run([a.bcftools, "query", "-f",
+                         "%CHROM\t%POS\t%REF\t%ALT[\t%GT]\n", a.vcf],
                         capture_output=True, text=True)
+    if pr.returncode != 0:
+        sys.exit(f"FATAL: bcftools query failed on {a.vcf}: {pr.stderr.strip()}")
+    # ONE RECORD PER ALLELE, OR THE DISTANCES ARE WRONG (audit PGB-12). The
+    # graph's decomposed VCF repeats a (chrom, pos, ref, alt) once per vcfwave
+    # allele with the carriers split between the copies, so one difference was
+    # counted once per copy that separates the pair: 7 clusters at <= 50 SNPs
+    # where all_variants.collapsed.vcf.gz gives 4 on the same ten genomes.
+    seen, ndup = set(), 0
     rows = []
     for line in pr.stdout.splitlines():
-        f = line.rstrip("\t").split("\t")
-        if len(f) != len(sm):
+        f = line.split("\t")
+        if len(f) != len(sm) + 4:
             continue
-        rows.append([-1 if f[i] in (".", "./.", ".|.") else
-                     (0 if f[i] == "0" else 1) for i in idx])
+        key = tuple(f[:4])
+        ndup += key in seen
+        seen.add(key)
+        # the allele index, not 0/1: two genomes with different ALTs of one
+        # multiallelic record differ
+        g = f[4:]
+        rows.append([-1 if g[i] in (".", "./.", ".|.") else
+                     int(g[i].replace("|", "/").split("/")[0]) for i in idx])
+    if ndup:
+        sys.exit(f"FATAL: {ndup:,} records of {a.vcf} repeat a (CHROM, POS, REF, "
+                 f"ALT) key, so one difference would count several times. Use "
+                 f"the graph's all_variants.collapsed.vcf.gz (or its SNP split), "
+                 f"not all_variants.decomposed.vcf.gz.")
     A = np.array(rows, dtype=np.int8).T
     print(f"  {A.shape[0]} genomes x {A.shape[1]:,} SNP sites")
 

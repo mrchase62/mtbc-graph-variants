@@ -18,11 +18,13 @@ whose REF span covers the site is consulted, not only those starting at it: an
 outgroup MNP, deletion or complex record that starts upstream says what the
 outgroup has at the site too.
 
-  an exact (pos, ref, alt) record with GT 1       -> ALT. The decomposed VCF
-                                                     repeats a key once per
-                                                     allele path, and the
-                                                     outgroup's ALT may be in
-                                                     any one of the copies
+  an exact (pos, ref, alt) record with GT 1       -> ALT. The collapsed VCF
+                                                     has one record per key;
+                                                     the decomposed one repeats
+                                                     a key once per allele path
+                                                     with the outgroup's ALT in
+                                                     any one copy, so every
+                                                     copy is consulted
   exact records present, every one missing        -> N
   a covering record the outgroup carries (GT>=1)  -> the base that allele puts
                                                      at the site: an SNP or MNP
@@ -57,7 +59,13 @@ outgroup has at the site too.
 """
 import argparse, bisect, collections, csv, os, subprocess, sys
 
-PANEL_VCF = "graphs/CX333.s10k.k23.K15/all_variants.decomposed.vcf.gz"
+# THE COLLAPSED FILE, NOT THE DECOMPOSED ONE (audit PGB-9): one record per
+# trimmed (pos, ref, alt) with each genome's genotype unioned over vcfwave's
+# duplicates, and multiallelic records split, so an allele is found under its
+# minimal key. The rule above still tolerates duplicate keys, so the decomposed
+# file gives the same answer at every site it holds (CX333: identical outgroup
+# rows for scale200 and gwas1000).
+PANEL_VCF = "graphs/CX333.s10k.k23.K15/all_variants.collapsed.vcf.gz"
 PANEL_CONTIG = "GCF_000195955#1#NC_000962.3"
 
 

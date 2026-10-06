@@ -171,7 +171,8 @@ STEP="${1:-${SVGTSTEP:-}}"
 case "$STEP" in
   --catalogue)
     [[ -n "$IVTAB" ]] || { echo "FATAL: --catalogue needs IVTAB, the path to write" >&2; exit 1; }
-    GRAPH_VCF="${GRAPH_VCF:-$(dirname "$OG")/all_variants.decomposed.vcf.gz}"
+    # the collapsed graph VCF: one record per allele, carriers unioned (PGB-9)
+    GRAPH_VCF="${GRAPH_VCF:-$(dirname "$OG")/all_variants.collapsed.vcf.gz}"
     [[ -s "$GRAPH_VCF" ]] || { echo "FATAL: no graph VCF at ${GRAPH_VCF}" >&2; exit 1; }
     CAT_ARGS=(--graph-vcf "$GRAPH_VCF")
     case "$SVCAT" in

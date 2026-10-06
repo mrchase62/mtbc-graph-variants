@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Split the decomposed VCF into SNP / indel / SV views that share one
+# Split the collapsed graph VCF into SNP / indel / SV views that share one
 # coordinate system and one set of genotypes.
 #
 #   bin/vcf_split_classes.sh <graph-dir-name> [--sv-min 50] [--in FILE]
 #
-# Because all three come from the same decomposed VCF, an SV and a SNP in the
+# Because all three come from the same graph VCF, an SV and a SNP in the
 # same genome are directly comparable and can go into the same downstream
 # analysis (tree, PastML, GWAS). That was not true of the 2025 outputs, where
 # SVs lived in a genotype-free TSV.
@@ -32,7 +32,9 @@ source "$_mtb_env"
 GRAPH_NAME="$1"
 GRAPH_DIR="${MTB_GRAPHS}/${GRAPH_NAME}"; shift
 SV_MIN=50
-IN="${GRAPH_DIR}/all_variants.decomposed.vcf.gz"
+# the collapsed product, never the decomposed intermediate, whose duplicate
+# keys split each allele's carriers (audit PGB-9)
+IN="${GRAPH_DIR}/all_variants.collapsed.vcf.gz"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --sv-min) SV_MIN="$2"; shift 2 ;;

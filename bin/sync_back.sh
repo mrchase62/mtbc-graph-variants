@@ -83,6 +83,14 @@ rs() {
 EXCLUDES=()
 if [[ $FULL -eq 0 ]]; then
     EXCLUDES=(
+        # THE GRAPH'S VARIANT PRODUCT AND ITS PROVENANCE ARE ALWAYS KEPT. rsync
+        # applies the first matching rule, so these come before every exclude
+        # and no pattern added below can drop them.
+        --include 'all_variants.collapsed.vcf.gz'
+        --include 'all_variants.collapsed.vcf.gz.tbi'
+        --include 'all_variants.nolab.vcf.gz'
+        --include 'all_variants.nolab.vcf.gz.tbi'
+        --include 'graph_provenance.tsv'
         --exclude '*.seqwish.gfa'
         --exclude '*.seqwish.gfa.prep.*.gfa'
         --exclude '*.seqwish.gfa.smooth.*.gfa'
@@ -99,10 +107,11 @@ if [[ $FULL -eq 0 ]]; then
         # It is a convenience, not a last copy: the source graphs all live in
         # $MTB_ARCHIVE/data/<graph>/ -- see GRAPH_PROVENANCE.md section 1.
         --exclude 'variants.vcf'
-        # superseded by all_variants.collapsed.vcf.gz, and regenerable from
-        # variants.vcf via bin/vcf_decompose.sh -- see VARIANT_STRATEGY.md sec 8
-        --exclude 'all_variants.decomposed.vcf.gz'
-        --exclude 'all_variants.decomposed.vcf.gz.tbi'
+        # all_variants.decomposed.vcf.gz is NOT excluded. It used to be, as
+        # "superseded by the collapsed file", while production readers still
+        # read it (audit PGB-9). They now take the collapsed file, but the
+        # decomposed one is still the input vcf_collapse.sh rebuilds the product
+        # from without a 12-hour vcfwave rerun, and analysis scripts read it.
     )
     echo "### excluding regenerable intermediates (use --full to keep them)"
 fi

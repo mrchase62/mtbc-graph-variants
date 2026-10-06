@@ -24,9 +24,14 @@ resolve. `panel_af` is carried alongside, because an outgroup allele that is
 also common in the panel is a much safer ancestral call than one that is rare
 in it, and the reader should be able to see which they have.
 
+INPUT: THE COLLAPSED VCF (audit PGB-9). all_variants.collapsed.vcf.gz has one
+record per trimmed (chrom, pos, ref, alt), genotypes unioned and multiallelic
+records split, so every allele gets a row -- on CX333, 628 SNP alleles that sit
+in multiallelic decomposed records had none.
+
 ONE ROW PER (chrom, pos, ref, alt), NOT PER RECORD. The decomposed VCF repeats
 a key once per allele path through a bubble, and a genome carrying the ALT has
-GT 1 in only one of the copies. So the copies are pooled: the outgroup is ALT
+GT 1 in only one of the copies. So if it is given, the copies are pooled: the outgroup is ALT
 if it is 1 in any copy, REF if it is 0 in some copy and 1 in none; and
 `panel_af` counts each genome once, as a carrier if it is 1 in any copy, over
 the genomes with a call in any copy. Taking one record's genotype and its own
@@ -44,7 +49,7 @@ MISSING = {".", "./.", ".|."}
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--panel-vcf",
-                    default="graphs/CX333.s10k.k23.K15/all_variants.decomposed.vcf.gz")
+                    default="graphs/CX333.s10k.k23.K15/all_variants.collapsed.vcf.gz")
     ap.add_argument("--outgroup", default="GCF_035581225")
     ap.add_argument("--bcftools",
                     default=os.environ.get("MTB_BCFTOOLS", "bcftools"))
