@@ -45,7 +45,7 @@ fixes, with tests) were approved on 2026-10-05.
   main. The current association results remain provisional.
 - **Waiting on the user:** the 44 decisions, and D41.
 - **Step 4 is done:** section 0q lists 12 items to fix before any rerun.
-  **All 12 are fixed on `audit-fixes`** (283 tests). Waiting on the user:
+  **All 12 are fixed on `audit-fixes`, and D41 (b)** (293 tests). Waiting on the user:
   the decisions, the canettii isolate and R2-TREES-6, before the merge into
   main.
 - **Then:** the new panel, graph and build, then scale200 first.
@@ -1945,8 +1945,33 @@ There are also about 20 LOW items in the reports.
     - the refinement adds about 4 minutes.
 - **All 12 items are done on `audit-fixes`; 283 tests pass.** The branch is
   not yet merged into main.
+- **D41, done (f835497; the user chose option b).** Node-frame alleles are
+  written on the node's forward strand.
+  - **P4:** complements the alleles where R reads the node reverse
+    complemented (odgi's walk flag combined with R being stored flipped in
+    the panel); re-anchors indels on the forward left
+    (`mtb_norm.node_forward_alleles`).
+  - **P5:** the reversion test complements to match.
+  - **scale200** (P4 rerun locally, 199 samples):
+    - reverse-complement twin keys 3 to 0;
+    - SNP keys whose REF is the node's own base: 10,932 to 22,008 of 22,008.
+  - **Open edge:** 244 records (1.1%) are reverse-read indels or MNPs whose
+    forward start falls on the neighbouring node (64% of CX333 nodes are
+    1 bp). They are left in R's orientation and counted (`off_node`).
+  - The explanation is in `analysis/audit/D41_EXPLAINED.md`. 293 tests pass.
+- **New item (the user's request, 2026-10-06): an ancestral allele (`AA`)
+  for node-frame variants.**
+  - `bin/ancestral_alleles.py` writes `AA` only for H37Rv-frame panel SNPs.
+    Node-frame variants get none; their polarity rests only on the cohort
+    tree's Fitch.
+  - **Plan:**
+    - reconstruct the state at node-frame sites from the 333 panel genomes'
+      paths through each node, on the panel tree, as for H37Rv sites;
+    - record each node's ancestral orientation as an annotation.
+  - **When:** with the new panel and graph build, since node ids are
+    graph-specific. Not started.
 - **Waiting on the user before the merge:**
-  - the 44 decisions in `analysis/audit/DECISIONS.md` (D41 especially);
+  - the 44 decisions in `analysis/audit/DECISIONS.md` (D41 is decided: b);
   - the canettii isolate;
   - R2-TREES-6: 80 variants derived at the MTBC root. Should they be pinned
     to the `AA` allele?
