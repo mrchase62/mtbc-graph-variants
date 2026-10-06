@@ -825,7 +825,11 @@ def main():
             return False
         lo = bisect.bisect_left(cat_starts, p0 - _ivm.TOL_CAP)
         hi = bisect.bisect_right(cat_starts, p0 + _ivm.TOL_CAP)
-        return any(_ivm.same_event(p0, L, s0, l0) for s0, l0 in cat_rows[lo:hi])
+        # same_deletion: position, length AND half the bases shared (review
+        # 2, R2-GENO-2); h37rv_pos is the anchor, the catalogue's start the
+        # first deleted base
+        return any(_ivm.same_deletion(p0 + 1, L, s0, l0)
+                   for s0, l0 in cat_rows[lo:hi])
     n_uncat = 0
 
     n_iv = 0

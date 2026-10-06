@@ -341,5 +341,50 @@ class Level2UnmeasuredLocus(unittest.TestCase):
         self.assertEqual((meas["n_derived_leaves"], meas["n_gain"]), ("0", "0"))
 
 
+class SameDeletionRule(unittest.TestCase):
+    """R2-GENO-2: one rule -- near in position and length AND half the bases
+    shared -- for clustering graph deletions, adding caller deletions to the
+    catalogue, and the merge's "the catalogue supersedes this caller row"."""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, os.path.join(ROOT, "bin"))
+        import sv_intervals
+        cls.S = sv_intervals
+
+    def test_rule(self):
+        S = self.S
+        # two 58 bp deletions 150 bp apart: same_event alone said yes
+        self.assertTrue(S.same_event(1000, 58, 1150, 58))
+        self.assertFalse(S.same_deletion(1000, 58, 1150, 58))
+        self.assertTrue(S.same_deletion(1000, 58, 1020, 58))     # 38 of 58 shared
+        self.assertFalse(S.same_deletion(1000, 58, 1040, 58))    # 18 of 58
+
+    def test_caller_deletion_beside_an_interval_is_added(self):
+        h = ("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER"
+             "\tINFO\tFORMAT\tA\tB\n")
+        with tempfile.TemporaryDirectory() as d:
+            # graph: a 58 bp deletion of bases 1001-1058 (anchor 1000)
+            write(f"{d}/g.vcf", h + f"{PANSN}\t1000\t.\t" + "A" * 59
+                  + "\tA\t.\t.\t.\tGT\t1\t0\n")
+            # caller: one 58 bp deletion 150 bp along (no shared base) and one
+            # that is the graph's own (anchor 1000)
+            write(f"{d}/m.tsv", "key\tsvtype\th37rv_pos\tsvlen\tn_alt\n"
+                  "a\tDEL\t1150\t58\t3\nb\tDEL\t1000\t58\t3\n")
+            write(f"{d}/is.gff", "")
+            r = run([sys.executable, "bin/sv_intervals.py", "--graph-vcf",
+                     f"{d}/g.vcf", "--sv-matrix", f"{d}/m.tsv",
+                     "--is6110-gff", f"{d}/is.gff", "--out", f"{d}/iv.tsv"])
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            import csv
+            iv = list(csv.DictReader(open(f"{d}/iv.tsv"), delimiter="\t"))
+        got = sorted((x["source"], x["start"]) for x in iv)
+        self.assertEqual(got, [("caller", "1151"), ("graph", "1001")])
+
+    def test_merge_uses_the_rule(self):
+        self.assertIn("_ivm.same_deletion(p0 + 1, L, s0, l0)",
+                      open("bin/merge_cohort_vcf.py").read())
+
+
 if __name__ == "__main__":
     unittest.main(warnings="ignore")

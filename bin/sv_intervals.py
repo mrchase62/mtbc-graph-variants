@@ -65,6 +65,28 @@ def overlap_frac(a, b):
     return max(0, shared) / max(1, longer)
 
 
+MIN_OVERLAP = 0.5
+
+
+def same_deletion(s1, l1, s2, l2):
+    """THE ONE RULE for "these two deletions are the same event", used to
+    cluster the graph's deletions, to decide whether a caller deletion is
+    already in the catalogue, and (merge_cohort_vcf.py) whether the catalogue
+    supersedes a caller row. Starts are FIRST DELETED BASES, 1-based.
+
+    Near in position and length (same_event), AND sharing at least half of the
+    longer deletion's bases. The position tolerance alone -- max(200 bp, 20%
+    of length) -- let two 58 bp deletions 150 bp apart match without sharing a
+    base; the clustering had the overlap test (audit P4P5-5) but the two
+    matching steps did not, so 65 scale200 caller deletions, 25 of them
+    sharing no base with the interval, were dropped as covered (review 2,
+    R2-GENO-2)."""
+    if not same_event(s1, l1, s2, l2):
+        return False
+    return overlap_frac({"start": s1, "end": s1 + max(l1, 1) - 1},
+                        {"start": s2, "end": s2 + max(l2, 1) - 1}) >= MIN_OVERLAP
+
+
 def main():
     ap = argparse.ArgumentParser()
     # no default: it was CX333's; p5_svgt.sh passes the build's
@@ -131,8 +153,7 @@ def main():
     for r in rows:
         hit = None
         for c in reversed(merged[-50:]):
-            if (same_event(c["start"], c["svlen"], r["start"], r["svlen"])
-                    and overlap_frac(c, r) >= 0.5):
+            if same_deletion(c["start"], c["svlen"], r["start"], r["svlen"]):
                 hit = c
                 break
         if hit is None:
@@ -182,7 +203,9 @@ def main():
                 continue
             lo = bisect.bisect_left(starts, pos - TOL_CAP)
             hi = bisect.bisect_right(starts, pos + TOL_CAP)
-            if any(same_event(pos, L, s, l) for s, l, _ in idx[lo:hi]):
+            # the matrix's h37rv_pos is the anchor; the first deleted base
+            # is the next one, which is what the catalogue's start records
+            if any(same_deletion(pos + 1, L, s, l) for s, l, _ in idx[lo:hi]):
                 n_dup += 1
                 continue
             rows.append(dict(source="caller", svtype="DEL", start=pos + 1,
