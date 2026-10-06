@@ -43,10 +43,8 @@ fixes, with tests) were approved on 2026-10-05.
 
 - **Every audit fix is on branch `audit-fixes`** (254 tests), not yet in
   main. The current association results remain provisional.
-- **Waiting on the user:**
-  - the 44 decisions;
-  - D41;
-  - approval for step 4 (the second review).
+- **Waiting on the user:** the 44 decisions, and D41.
+- **Step 4 (the second review) is running** (section 0p).
 - **Then:** the new panel, graph and build, then scale200 first.
 
 **Before anything else after downtime:**
@@ -1743,6 +1741,34 @@ for byte.
 - **Those that change results most:** D3, D8, D9, D15, D16, D37.
 - **D41 (recommended):** write node-frame alleles on the node's forward
   strand, so the same event from opposite walks gets one key, not two.
+
+## 0p. Step 4: independent second review of `audit-fixes` (started 2026-10-06)
+
+Approved by the user 2026-10-06. The brief is
+`analysis/audit/review2/REVIEW_BRIEF.md`; reports go to
+`analysis/audit/review2/<area>.md`.
+
+**Rules for the reviewers:** read-only for code and data, no cluster jobs, no
+writes to the working tree. They verify the fix groups' claims rather than
+trust them.
+
+| reviewer | priorities |
+|---|---|
+| genotyping | the strand corrections in P4 (R→H37Rv) and P5 (H37Rv→R) for every path-orientation combination; forward node offsets in every producer and reader; rerun P5 on 2-3 scale200 samples and audit changed cells by hand |
+| is6110_accessory | P3IS-1 carrier semantics from writer to event direction on the tree; D9's effect on polarity and burdens; whether the D8 repeat-node exclusions are truly ambiguous; the D6 unmeasurable loci; node_locus with forward offsets |
+| trees_ancestral_assoc | Fitch reconstruction, root, outgroup polarity and gains re-derived by hand; the fixed ancestral alleles against check 2's MTBC-ancestor column; the fixed association tail end to end on scale200 in scratch, each change traced to a fix; the DR controls; the statistics of the nulls and BH |
+| build_graph_panel | a full fresh P0 on test graph arm B (no wrongful refusal, no silent CX333 input); stale outputs refused; `docs/PANEL_BUILD.md` and `docs/PANEL_TREE.md` followed literally; collapse union and trimming |
+| integration | every HIGH/MEDIUM finding and every D1-D44 against the code; every producer→consumer hand-off; test skips by environment; mutation tests; cost at 10,000 samples |
+
+**After the review:**
+
+1. Verify and consolidate the findings.
+2. Fix them, with tests.
+3. The user confirms the decisions.
+4. Merge `audit-fixes` into main.
+5. Then the new panel and graph.
+
+The working tree was synced to durable storage on 2026-10-06.
 
 ## 1. State before the rerun (2026-09-30)
 
