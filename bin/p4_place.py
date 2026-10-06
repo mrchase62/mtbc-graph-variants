@@ -341,6 +341,27 @@ def main():
     # in the panel, or when R itself is stored flipped in the panel (22 of 333
     # accessions), but not both. Asked once, and only if R has node rows.
     r_flipped = None
+    frames = None
+    walk = None
+
+    def locate(q):
+        """(node, forward offset, reading strand) of R's 1-based refs
+        position q, from R's walk in the build's node table; None where the
+        table cannot say. Loaded the first time it is needed."""
+        nonlocal walk
+        if not a.node_lengths:
+            return None
+        if walk is None:
+            walk = mtb_norm.load_path_nodes(a.node_lengths, a.reference)
+        pp = frames.to_panel(a.reference, q - 1) + 1
+        i = bisect.bisect_right(walk, (pp, float("inf"))) - 1
+        if i < 0:
+            return None
+        start, ln, nd, st, occ = walk[i]
+        if occ != 1 or not (start <= pp < start + ln):
+            return None
+        fo = mtb_norm.forward_offset(pp - start, st, ln)
+        return nd, fo, "-" if (st == "-") != r_flipped else "+"
 
     # --- direct arm: core sequence only ---------------------------------------
     for pos, ref, alt, qual in load_vcf(a.direct):
@@ -404,11 +425,11 @@ def main():
             # directions wrote one event as C>T and G>A, two keys. They are
             # restated from R's own alleles on the node's forward strand.
             if r_flipped is None:
-                r_flipped = graph_frame.Frames(a.frames or None).flipped(
-                    a.reference)
+                frames = graph_frame.Frames(a.frames or None)
+                r_flipped = frames.flipped(a.reference)
             rs = "-" if (np_[2] == "-") != r_flipped else "+"
-            off, ref, alt, nst = mtb_norm.node_forward_alleles(
-                off, rs, r_ref, r_alt, rseq, r_pos)
+            node, off, ref, alt, nst = mtb_norm.node_forward_restate(
+                node, off, rs, r_ref, r_alt, rseq, r_pos, locate)
             n_nodestrand[nst] += 1
             rows.append(dict(
                 sample=a.sample, reference=a.reference, build_id=a.build_id,

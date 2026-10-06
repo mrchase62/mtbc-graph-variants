@@ -134,6 +134,59 @@ def node_forward_alleles(off, strand, ref, alt, rseq="", r_pos=0):
     return new, rc(ref), rc(alt), "reversed_block"
 
 
+def node_forward_restate(node, off, strand, ref, alt, rseq="", r_pos=0,
+                         locate=None):
+    """node_forward_alleles, plus the record whose forward start is on
+    ANOTHER node. Returns (node, offset, ref, alt, status).
+
+    Read in reverse, an indel's forward anchor (or an MNP's forward first
+    base) is R's base AFTER the span, and where the span reaches the node's
+    forward start that base is on the neighbouring node -- the node a
+    reference reading forward keys the same event on. 64% of CX333's nodes
+    are 1 bp, so this is 1.1% of scale200's node-frame records, not a corner.
+
+    `locate(q)`, for R's 1-based position q, returns (node, forward offset,
+    reading strand) of the base there, or None where R's node table cannot
+    say (a node R visits more than once). The record moves to that node
+    when R reads it reverse complemented too; otherwise (an inversion
+    junction, or no answer) it is left as R reads it, status `off_node`.
+    """
+    o, r, a, st = node_forward_alleles(off, strand, ref, alt, rseq, r_pos)
+    if st != "off_node" or locate is None:
+        return node, o, r, a, st
+    rc = lambda x: x.translate(_COMP)[::-1]   # noqa: E731
+    if len(ref) != len(alt) and ref[:1] == alt[:1] and (
+            len(ref) == 1 or len(alt) == 1):
+        D, I = ref[1:], alt[1:]
+        q = r_pos + len(D) + 1                 # the forward anchor, in R
+        if not rseq or not (1 <= q <= len(rseq)):
+            return node, o, r, a, "off_node"
+        anc = rseq[q - 1].translate(_COMP).upper()
+        new_ref, new_alt = anc + rc(D), anc + rc(I)
+    else:
+        q = r_pos + len(ref) - 1               # the forward first base, in R
+        new_ref, new_alt = rc(ref), rc(alt)
+    hit = locate(q)
+    if hit is None or hit[2] != "-":
+        return node, o, r, a, "off_node"
+    return hit[0], hit[1], new_ref, new_alt, "moved_to_start_node"
+
+
+def load_path_nodes(path, accession):
+    """R's walk from the build's node table: a sorted list of
+    (start, length, node, strand, n_occurrences), `start` 1-based along the
+    PANEL path. For node_forward_restate's `locate`."""
+    import csv
+    out = []
+    with open(path, newline="") as fh:
+        for r in csv.DictReader(fh, delimiter="\t"):
+            if r["accession"] == accession and r.get("length"):
+                out.append((int(r["start"]), int(r["length"]), r["node"],
+                            r["strand"], int(r.get("n_occurrences") or 1)))
+    out.sort()
+    return out
+
+
 def load_node_lengths(path, want=None):
     """{node id (str): length} from the build's node table
     (assets/node_positions.tsv, columns node and length; P0 step nodes).

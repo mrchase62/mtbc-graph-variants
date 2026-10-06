@@ -410,6 +410,81 @@ class P4NodeAllelesOneKey(unittest.TestCase):
         self.assertEqual(b, a)
 
 
+class P4NodeEventCrossingNodes(unittest.TestCase):
+    """D41's open edge: read in reverse, a deletion's forward anchor is on the
+    neighbouring node -- here a 1 bp node 5 before node 9 -- where a reference
+    reading forward keys it. Both must give node:5:0."""
+
+    FWD = "ACGTACCGTAGGCTAACGTTGCAT"          # node 9, forward; node 5 is "G"
+
+    def place(self, d, tag, seq, rec_pos, ref, alt, npos_field, nodes):
+        write(f"{d}/{tag}/direct.vcf", VCFHDR + "c\t50\t.\tA\tG\t50\t.\t.\tGT\t1\n")
+        write(f"{d}/{tag}/matched.vcf",
+              VCFHDR + f"c\t{rec_pos}\t.\t{ref}\t{alt}\t50\t.\t.\tGT\t1\n")
+        write(f"{d}/{tag}/hpos.tsv",
+              f"#src\ttgt\tdist\nR#1#c,{rec_pos - 1},+\t{H},599,+\t100\t+\t+\n")
+        write(f"{d}/{tag}/npos.tsv", f"#src\tnode\nR#1#c,{rec_pos - 1},+\t{npos_field}\n")
+        write(f"{d}/{tag}/r.fasta", f">c\n{seq}\n")
+        write(f"{d}/{tag}/frames.tsv", "accession\tstrand\toffset\tpanel_len\n"
+              f"R\t+\t0\t{len(seq)}\n")
+        write(f"{d}/{tag}/nodes.tsv", NODEHDR + nodes)
+        write(f"{d}/mask.bed", "c\t1\t2\tx\n")
+        write(f"{d}/loci.tsv", "pos\tlocus_id\n")
+        write(f"{d}/graph.vcf", "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\t"
+              "QUAL\tFILTER\tINFO\tFORMAT\tOTHER\n")
+        r = subprocess.run(
+            [sys.executable, "bin/p4_place.py", "--sample", tag,
+             "--reference", "R", "--build-id", "b",
+             "--direct", f"{d}/{tag}/direct.vcf", "--matched", f"{d}/{tag}/matched.vcf",
+             "--h37rv-pos", f"{d}/{tag}/hpos.tsv", "--node-pos", f"{d}/{tag}/npos.tsv",
+             "--mask", f"{d}/mask.bed", "--loci", f"{d}/loci.tsv",
+             "--graph-vcf", f"{d}/graph.vcf", "--out", f"{d}/{tag}/placed.tsv",
+             "--ref-fasta", f"{d}/{tag}/r.fasta",
+             "--node-lengths", f"{d}/{tag}/nodes.tsv",
+             "--frames", f"{d}/{tag}/frames.tsv"],
+            capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        return r, [(q["key"], q["node"], q["ref"], q["alt"])
+                   for q in rows(f"{d}/{tag}/placed.tsv") if q["frame"] == "node"]
+
+    def test_deletion_anchored_on_the_previous_node(self):
+        F, L = self.FWD, len(self.FWD)
+        with tempfile.TemporaryDirectory() as d:
+            # forward reader: G (node 5) then F (node 9) from position 11;
+            # deletes F[0], anchored on node 5's G
+            _, a = self.place(d, "fwd", "N" * 10 + "G" + F + "N" * 10, 11,
+                              "G" + F[0], "G", "5,0,+",
+                              f"5\tR\t11\t+\t1\t1\n9\tR\t12\t+\t1\t{L}\n")
+            # reverse reader: rc(F) (node 9) then C (node 5) from position 11;
+            # the same deletion, left-anchored on comp(F[1]) inside node 9
+            r, b = self.place(d, "rev", "N" * 10 + _rc(F) + "C" + "N" * 10,
+                              11 + L - 2, _rc(F[:2]), _rc(F[1]),
+                              f"9,{L - 2},-",
+                              f"9\tR\t11\t-\t1\t{L}\n5\tR\t{11 + L}\t-\t1\t1\n")
+        self.assertEqual(a, [("node:5:0", "5", "G" + F[0], "G")])
+        self.assertEqual(b, a)
+        self.assertIn("moved_to_start_node 1", r.stdout)
+
+    def test_unresolved_when_the_table_cannot_say(self):
+        # the neighbouring node is visited twice: left as R reads it, counted
+        F, L = self.FWD, len(self.FWD)
+        with tempfile.TemporaryDirectory() as d:
+            r, b = self.place(d, "rev", "N" * 10 + _rc(F) + "C" + "N" * 10,
+                              11 + L - 2, _rc(F[:2]), _rc(F[1]),
+                              f"9,{L - 2},-",
+                              f"9\tR\t11\t-\t1\t{L}\n5\tR\t{11 + L}\t-\t2\t1\n")
+        self.assertEqual(b, [("node:9:1", "9", _rc(F[:2]), _rc(F[1]))])
+        self.assertIn("off_node 1", r.stdout)
+
+    def test_helper_moves_an_mnp(self):
+        n = load("mtb_norm_d41b", "bin/mtb_norm.py")
+        # an MNP read in reverse at forward offset 0 of node 9: its forward
+        # first base is R's last base, at r_pos+1, on node 5
+        got = n.node_forward_restate("9", 0, "-", "GA", "TC", "", 40,
+                                     lambda q: ("5", 0, "-") if q == 41 else None)
+        self.assertEqual(got, ("5", 0, "TC", "GA", "moved_to_start_node"))
+
+
 class P5NodeKeyOnForwardStrand(P5ReadsForwardOffset):
     """D41 in P5: a node key's REF is on the node's forward strand, and a
     reference walking the node `-` reads its complement. The sample's own
