@@ -1904,7 +1904,12 @@ There are also about 20 LOW items in the reports.
   - `manifest.done` is cleared at the start of each manifest run, and
     whenever any other step is marked done after it.
   - `p0_check verify` checks `build_info.tsv` against its manifest row.
-- **275 tests pass.** Next: item 9 (the I/O contract refuses a fresh build).
+- **Item 9, done (fb9997d). The I/O contract accepts a fresh build.**
+  - P0 step `assets` makes and indexes `accessory_panel.fasta` (identical to
+    production's on CX333). P3 requires it and never writes into the build.
+  - The contract declares p1g's `isclean.bam` and p1iv's cohort key table as
+    outputs.
+- **277 tests pass.** Next: item 10 (`p3acc` has no dependency on P1).
 - **A running chat log** for the user is at `analysis/CHAT_LOG.md`
   (untracked), updated each turn.
 
