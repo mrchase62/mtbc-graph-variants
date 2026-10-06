@@ -474,7 +474,8 @@ class ChainScript(unittest.TestCase):
         for f in ("refbias/t/p5/merged.vcf.gz", "refbias/t/p5/sv_intervals.tsv",
                   "refbias/t/p5/svgt_iv_states.tsv", "refbias/t/p1/refmap.tsv",
                   "refbias/t.phenotype.tsv", "data/trees/t.snps.fasta",
-                  "data/trees/t.og.fasta", "data/trees/t.rooted.nwk",
+                  "data/trees/t.combined.fasta",
+                  "data/trees/t.combined.rooted.nwk", "data/trees/t.rooted.nwk",
                   "assoc/t/events/summary.txt", "p.txt"):
             os.makedirs(os.path.dirname(os.path.join(d, f)) or d,
                         exist_ok=True)
@@ -499,8 +500,8 @@ class ChainScript(unittest.TestCase):
             return hashlib.sha256(open(p, "rb").read()).hexdigest()[:16]
         prov = (f"build_id\tb0\nvcf_sha\t"
                 f"{sha16(os.path.join(d, 'refbias/t/p5/merged.vcf.gz'))}\n")
-        for f in ("data/trees/t.snps.fasta", "data/trees/t.og.fasta",
-                  "data/trees/t.rooted.nwk"):
+        for f in ("data/trees/t.snps.fasta", "data/trees/t.combined.fasta",
+                  "data/trees/t.combined.rooted.nwk", "data/trees/t.rooted.nwk"):
             with open(os.path.join(d, f + ".prov"), "w") as fh:
                 fh.write(prov)
         with open(os.path.join(d, "assoc/t/events/summary.txt.prov"), "w") as fh:

@@ -19,9 +19,10 @@
 # re-run after a failure; a product from other inputs is refused.
 #
 #   1  alignment from the merged VCF, with the reference as a tip
-#   2  the outgroup read off the panel VCF -- without it the cohort root is
-#      inferred from the cohort alone and deep branches go undetermined
-#   3  the tree, rooted on that outgroup
+#   2  the combined alignment: that, plus every panel genome's row read off
+#      the panel VCF (the outgroup is one of them) and the panel-only SNPs
+#   3  the tree of cohort + panel, rooted on the outgroup (a job), then 3b,
+#      pruned to the cohort, the reference tip and the outgroup
 #   4  the event matrix: per-branch gains, the input every test reads (with
 #      presence tables, after the cohort's node -> accessory locus table)
 #   5  the tests -- variant-level scan, then IS6110 collapsed to genes
@@ -47,7 +48,8 @@ if [[ "$_here_rel" != "$HERE" || "$_bin_rel" != "${REPO}/bin" ]]; then
          "script's siblings are ${HERE} and ${REPO}/bin" >&2
     exit 1
 fi
-for _s in "${HERE}/add_outgroup.py" "${HERE}/write_event_matrix.py" \
+for _s in "${HERE}/add_outgroup.py" "${HERE}/combined_alignment.py" \
+          "${HERE}/prune_for_cohort.py" "${HERE}/write_event_matrix.py" \
           "${HERE}/assoc_scan.py" "${HERE}/is6110_gene_burden.py" \
           "${REPO}/accessory/bin/node_locus_from_p4.py" \
           "${REPO}/bin/vcf_to_alignment.py" "${REPO}/bin/build_snp_tree.sh" \
@@ -136,30 +138,43 @@ if ! _current "data/trees/${C}.snps.fasta"; then
     _record "data/trees/${C}.snps.fasta"
 else echo "  already built"; fi
 
-echo "=== 2. outgroup"
-if ! _current "data/trees/${C}.og.fasta"; then
-    "$MTB_PY" "${HERE}/add_outgroup.py" \
-        --alignment "data/trees/${C}.snps.fasta" \
-        --sites "data/trees/${C}.sites.tsv" \
-        --panel-vcf "$PANEL_VCF" --outgroup "$OUTGROUP" \
-        --out "data/trees/${C}.og.fasta"
-    _record "data/trees/${C}.og.fasta"
+echo "=== 2. combined alignment: the cohort plus every panel genome"
+# THE TREE IS BUILT WITH THE PANEL'S SNPs (review 2, R2-TREES-1). A cohort-only
+# tree places the deep branches from whatever lineages the cohort holds; the
+# panel genomes fix them. Every panel genome's row comes from add_outgroup.py's
+# allele rule, and the outgroup is one of those rows.
+if ! _current "data/trees/${C}.combined.fasta"; then
+    "$MTB_PY" "${HERE}/combined_alignment.py" \
+        --cohort-alignment "data/trees/${C}.snps.fasta" \
+        --cohort-sites "data/trees/${C}.sites.tsv" \
+        --vcf "$VCF" --panel-vcf "$PANEL_VCF" --outgroup "$OUTGROUP" \
+        --out "data/trees/${C}.combined.fasta" \
+        --sites-out "data/trees/${C}.combined.sites.tsv"
+    _record "data/trees/${C}.combined.fasta"
 else echo "  already built"; fi
 
 echo "=== 3. tree"
 # The tree is made by a job, so its record is written at submission as
 # .prov.pending and promoted when the tree is found on the next run.
-_tree="data/trees/${C}.rooted.nwk"
+_tree="data/trees/${C}.combined.rooted.nwk"
 if [[ -e "$_tree" && ! -e "${_tree}.prov" && -s "${_tree}.prov.pending" ]] \
         && [[ "$(cat "${_tree}.prov.pending")" == "$(_prov)" ]]; then
     mv -f "${_tree}.prov.pending" "${_tree}.prov"
 fi
 if ! _current "$_tree"; then
     _record "${_tree}"; mv -f "${_tree}.prov" "${_tree}.prov.pending"
-    J=$(sbatch --parsable "${REPO}/bin/build_snp_tree.sh" "data/trees/${C}.og.fasta" \
-            "$OUTGROUP" "data/trees/${C}")
+    J=$(sbatch --parsable "${REPO}/bin/build_snp_tree.sh" "data/trees/${C}.combined.fasta" \
+            "$OUTGROUP" "data/trees/${C}.combined")
     echo "  submitted ${J}; re-run this script when it finishes"
     exit 0
+else echo "  already built"; fi
+
+echo "=== 3b. prune the combined tree to the cohort, H37Rv and the outgroup"
+if ! _current "data/trees/${C}.rooted.nwk"; then
+    "$MTB_PY" "${HERE}/prune_for_cohort.py" --tree "$_tree" --vcf "$VCF" \
+        --ref-sample H37Rv --outgroup "$OUTGROUP" \
+        --out "data/trees/${C}.rooted.nwk"
+    _record "data/trees/${C}.rooted.nwk"
 else echo "  already built"; fi
 
 # LEVEL 2 NEEDS THE NODE -> LOCUS TABLE, and it is this cohort's: P4 records
@@ -191,8 +206,8 @@ if ! _current "assoc/${C}/events/summary.txt" events; then
     "$MTB_PY_VT" "${HERE}/write_event_matrix.py" --vcf "$VCF" \
         --tree "data/trees/${C}.rooted.nwk" --out "assoc/${C}/events" \
         --ref-sample H37Rv --outgroup-name "$OUTGROUP" \
-        --outgroup-fasta "data/trees/${C}.og.fasta" \
-        --outgroup-sites "data/trees/${C}.sites.tsv" \
+        --outgroup-fasta "data/trees/${C}.combined.fasta" \
+        --outgroup-sites "data/trees/${C}.combined.sites.tsv" \
         --panel-polarity "$POLARITY" \
         ${ACCPRES:+--accessory-presence "$ACCPRES" --node-locus "$NODELOCUS"} \
         --dedupe suffix

@@ -155,14 +155,17 @@ class AssocTail(unittest.TestCase):
     def test_tree_rooted_on_the_builds_outgroup(self):
         r = self.tail()
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
-        og = calls(self.log, "add_outgroup.py")
+        og = calls(self.log, "combined_alignment.py")
         self.assertTrue(og and "--outgroup GCF_X" in og[0], og)
         tree = calls(self.log, "build_snp_tree.sh")
         self.assertTrue(tree, open(self.log).read())
-        self.assertIn("data/trees/t.og.fasta GCF_X data/trees/t", tree[0])
+        # review 2, R2-TREES-1: the tree is the cohort + panel tree
+        self.assertIn("data/trees/t.combined.fasta GCF_X data/trees/t.combined",
+                      tree[0])
         self.assertNotIn("GCF_035581225", code("assoc/bin/cohort_assoc_tail.sh"))
 
     def test_presence_tables_get_the_cohorts_node_locus_table(self):
+        self.prov("data/trees/t.combined.rooted.nwk")
         self.prov("data/trees/t.rooted.nwk")
         r = self.tail()
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
@@ -182,7 +185,8 @@ class AssocTail(unittest.TestCase):
         write(f"{self.b}/build_info.tsv", "build_id\tb0\n")
         r = self.tail(MTB_OUTGROUP="GCF_Y")
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
-        self.assertIn("--outgroup GCF_Y", calls(self.log, "add_outgroup.py")[0])
+        self.assertIn("--outgroup GCF_Y",
+                      calls(self.log, "combined_alignment.py")[0])
 
     def test_build_with_no_outgroup_refused(self):
         write(f"{self.b}/build_info.tsv", "build_id\tb0\noutgroup\tnone\n")
