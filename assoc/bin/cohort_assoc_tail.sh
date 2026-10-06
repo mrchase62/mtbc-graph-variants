@@ -14,8 +14,9 @@
 #
 # The five steps between p5vcf and an answer, which were run by hand for
 # scale200 and are collected here so a second cohort does not have to
-# rediscover them. Each step skips if its product already exists, so the
-# script is safe to re-run after a failure.
+# rediscover them. Each step skips if its product already exists AND its
+# .prov record names this merged VCF and build, so the script is safe to
+# re-run after a failure; a product from other inputs is refused.
 #
 #   1  alignment from the merged VCF, with the reference as a tip
 #   2  the outgroup read off the panel VCF -- without it the cohort root is
@@ -70,24 +71,77 @@ VCF="${OUT}/p5/merged.vcf.gz"
 [[ -s "$VCF" ]] || { echo "FATAL: no ${VCF}; the cohort chain is not finished" >&2; exit 1; }
 mkdir -p "assoc/${C}"
 
+# EVERY STEP'S PRODUCT CARRIES THE BUILD AND THE VCF IT CAME FROM (audit
+# TP-4). The guards below tested only that a file existed, so after a fix
+# upstream, or a rerun on a new graph, the old alignment, outgroup, tree and
+# event matrix were kept without a word. Each product now has a sidecar
+# <product>.prov recording the merged VCF's build stamp and checksum (and,
+# for the event matrix, the polarity table's); a product whose record differs,
+# or that has none, is refused rather than reused or overwritten. Run the new
+# cohort under a new name, or move the old products aside.
+VCF_BUILD="$(mtb_vcf_build_id "$VCF")"
+[[ -n "$VCF_BUILD" ]] || { echo "FATAL: ${VCF} carries no ##MTB_graph_build stamp" >&2; exit 1; }
+BUILD="${MTB_BUILD_DIR:-${BUILD_ROOT:-refbias/build}/${VCF_BUILD}}"
+[[ "$(mtb_kv "${BUILD}/build_info.tsv" build_id)" == "$VCF_BUILD" ]] || {
+    echo "FATAL: ${VCF} is from build ${VCF_BUILD}, but ${BUILD} is not that build" >&2; exit 1; }
+# The panel assets the chain reads are the build's own: the outgroup's
+# alleles from its collapsed graph VCF, polarity from its panel_polarity.tsv.
+# The scripts' defaults are the CX333 graph's files.
+PANEL_VCF="${BUILD}/assets/graph_collapsed.vcf.gz"
+POLARITY="${BUILD}/assets/panel_polarity.tsv"
+for _f in "$PANEL_VCF" "$POLARITY"; do
+    [[ -s "$_f" ]] || { echo "FATAL: build ${VCF_BUILD} has no ${_f}; run bin/p0_prepare.sh" >&2; exit 1; }
+done
+VCF_SHA="$(sha256sum "$VCF" | cut -c1-16)"
+POL_SHA="$(sha256sum "$POLARITY" | cut -c1-16)"
+_prov() {   # the record a product of this run must carry
+    printf 'build_id\t%s\nvcf_sha\t%s\n' "$VCF_BUILD" "$VCF_SHA"
+    [[ "${1:-}" == events ]] && printf 'polarity_sha\t%s\n' "$POL_SHA"
+    return 0
+}
+# 0: product present and from this run's inputs; 1: absent; else refuse
+_current() {
+    local p="$1" kind="${2:-}"
+    [[ -e "$p" ]] || return 1
+    if [[ -s "${p}.prov" ]] && [[ "$(cat "${p}.prov")" == "$(_prov "$kind")" ]]; then
+        return 0
+    fi
+    echo "FATAL: ${p} exists but was not made from ${VCF} (build ${VCF_BUILD}," \
+         "sha ${VCF_SHA}): its record is '$(tr '\n' ' ' < "${p}.prov" 2>/dev/null || echo none)'." \
+         "Move it aside, or run this cohort under a new name." >&2
+    exit 1
+}
+_record() { _prov "${2:-}" > "${1}.prov"; }
+
 echo "=== 1. alignment"
-if [[ ! -s "data/trees/${C}.snps.fasta" ]]; then
+if ! _current "data/trees/${C}.snps.fasta"; then
     "$MTB_PY" "${REPO}/bin/vcf_to_alignment.py" --vcf "$VCF" \
         --out "data/trees/${C}.snps.fasta" \
         --sites-out "data/trees/${C}.sites.tsv" \
         --ref-sample H37Rv --max-missing 0.10
+    _record "data/trees/${C}.snps.fasta"
 else echo "  already built"; fi
 
 echo "=== 2. outgroup"
-if [[ ! -s "data/trees/${C}.og.fasta" ]]; then
+if ! _current "data/trees/${C}.og.fasta"; then
     "$MTB_PY" "${HERE}/add_outgroup.py" \
         --alignment "data/trees/${C}.snps.fasta" \
         --sites "data/trees/${C}.sites.tsv" \
+        --panel-vcf "$PANEL_VCF" \
         --out "data/trees/${C}.og.fasta"
+    _record "data/trees/${C}.og.fasta"
 else echo "  already built"; fi
 
 echo "=== 3. tree"
-if [[ ! -s "data/trees/${C}.rooted.nwk" ]]; then
+# The tree is made by a job, so its record is written at submission as
+# .prov.pending and promoted when the tree is found on the next run.
+_tree="data/trees/${C}.rooted.nwk"
+if [[ -e "$_tree" && ! -e "${_tree}.prov" && -s "${_tree}.prov.pending" ]] \
+        && [[ "$(cat "${_tree}.prov.pending")" == "$(_prov)" ]]; then
+    mv -f "${_tree}.prov.pending" "${_tree}.prov"
+fi
+if ! _current "$_tree"; then
+    _record "${_tree}"; mv -f "${_tree}.prov" "${_tree}.prov.pending"
     J=$(sbatch --parsable "${REPO}/bin/build_snp_tree.sh" "data/trees/${C}.og.fasta" \
             GCF_035581225 "data/trees/${C}")
     echo "  submitted ${J}; re-run this script when it finishes"
@@ -101,14 +155,16 @@ echo "=== 4. event matrix"
 # finished. gwas1000 did exactly that -- the writer refused a duplicate key,
 # left labelled.nwk behind, and the next attempt skipped step 4 and failed in
 # step 5 on a missing variants.tsv.
-if [[ ! -s "assoc/${C}/events/summary.txt" ]]; then
+if ! _current "assoc/${C}/events/summary.txt" events; then
     "$MTB_PY_VT" "${HERE}/write_event_matrix.py" --vcf "$VCF" \
         --tree "data/trees/${C}.rooted.nwk" --out "assoc/${C}/events" \
         --ref-sample H37Rv --outgroup-name GCF_035581225 \
         --outgroup-fasta "data/trees/${C}.og.fasta" \
         --outgroup-sites "data/trees/${C}.sites.tsv" \
+        --panel-polarity "$POLARITY" \
         ${ACCPRES:+--accessory-presence "$ACCPRES"} \
         --dedupe suffix
+    _record "assoc/${C}/events/summary.txt" events
 else echo "  already built"; fi
 
 [[ -n "$PHENO" ]] || { echo "no phenotype given; stopping before the tests"; exit 0; }

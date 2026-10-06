@@ -69,9 +69,14 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--min-carriers", type=int, default=1)
     ap.add_argument("--graph-vcf",
-                    default="graphs/CX333.s10k.k23.K15/all_variants.nolab.vcf.gz",
+                    default=(os.path.join(os.environ["MTB_BUILD_DIR"], "assets",
+                                          "graph_collapsed.vcf.gz")
+                             if os.environ.get("MTB_BUILD_DIR") else ""),
                     help="source of panel allele frequency, for the "
-                         "reference-artefact flag")
+                         "reference-artefact flag. Default: the build's "
+                         "collapsed graph VCF, <MTB_BUILD_DIR>/assets/"
+                         "graph_collapsed.vcf.gz (it was the CX333 graph's "
+                         "file whatever the build, audit P4P5-7)")
     ap.add_argument("--no-dense", action="store_true",
                     help="skip writing matrix.tsv. The dense text form is "
                          "keys x samples: 783 MB at 997 isolates and 26.5 GB "

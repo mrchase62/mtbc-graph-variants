@@ -53,12 +53,8 @@ done
 source "$_mtb_env"
 
 BUILD_ROOT="${BUILD_ROOT:-refbias/build}"
-BUILD="${MTB_BUILD_DIR:-}"
-if [[ -z "$BUILD" ]]; then
-    mapfile -t _c < <(find "$BUILD_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
-    [[ "${#_c[@]}" -eq 1 ]] || { echo "FATAL: set MTB_BUILD_DIR" >&2; exit 1; }
-    BUILD="${_c[0]}"
-fi
+# MTB_BUILD_DIR, else the single COMPLETED build (audit P0P2-13)
+BUILD="$(mtb_resolve_build)" || exit 1
 export MTB_BUILD_DIR="$BUILD"
 
 REFMAP="${REFMAP:-refbias/p1/refmap.tsv}"
@@ -66,7 +62,19 @@ P4DIR="${P4DIR:-refbias/p4}"
 P2DIR="${P2DIR:-refbias/p2}"
 OUTDIR="${OUTDIR:-refbias/p5}"
 WORK="${WORK:-refbias/work/p5}"
-OG="${OG:-$(ls graphs/CX333.s10k.k23.K15/*.smooth.final.og 2>/dev/null | head -1)}"
+# THE GRAPH, NODE TABLES AND PANEL VARIANT FILE ARE THE BUILD'S (audit
+# P4P5-7). The graph came from a glob over graphs/CX333..., the node tables
+# from p5_states.py's relative default accessory/assets/, and the panel
+# allele frequencies from p5_matrix.py's CX333 default; on a new graph all
+# three would have been the old graph's, with no error. Each is now taken
+# from the build and refused when absent.
+OG_BUILD="$(awk -F'\t' '$1=="graph"{print $2; exit}' "${BUILD}/build_info.tsv")"
+OG="${OG:-$OG_BUILD}"
+[[ -s "$OG" && "$(cd "$(dirname "$OG")" && pwd -P)/$(basename "$OG")" == "$OG_BUILD" ]] || {
+    echo "FATAL: graph ${OG:-<none>} is not the graph of build ${BUILD} (${OG_BUILD})" >&2; exit 1; }
+NODE_PATHS="${BUILD}/assets/node_paths.tsv"
+NODE_POSITIONS="${BUILD}/assets/node_positions.tsv"
+GRAPH_VCF="${BUILD}/assets/graph_collapsed.vcf.gz"
 ODGI="${MTB_ODGI:?MTB_ODGI is unset; see config/project_env.sh}"
 H37RV_PATH="${H37RV_PATH:-GCF_000195955#1#NC_000962.3}"
 H37RV_FA="${BUILD}/refs/GCF_000195955.fasta"
@@ -110,7 +118,9 @@ case "$STEP" in
     # it, for anything outside this repository that reads matrix.tsv.
     _dense=(--no-dense)
     [[ "${P5_DENSE_MATRIX:-0}" == 1 ]] && _dense=()
+    [[ -s "$GRAPH_VCF" ]] || { echo "FATAL: no ${GRAPH_VCF}; run bin/p0_prepare.sh --step assets" >&2; exit 1; }
     exec "$MTB_PY" bin/p5_matrix.py --refmap "$REFMAP" --keys "$KEYS" \
+        --graph-vcf "$GRAPH_VCF" \
         --dir "$OUTDIR" --out "${OUTDIR}/matrix.tsv" \
         --sites-out "${OUTDIR}/sites.tsv" "${_dense[@]}"
     ;;
@@ -119,6 +129,9 @@ case "$STEP" in
 esac
 
 [[ -s "$KEYS" ]] || { echo "FATAL: run --keys first" >&2; exit 1; }
+for f in "$NODE_PATHS" "$NODE_POSITIONS"; do
+    [[ -s "$f" ]] || { echo "FATAL: no ${f}; run bin/p0_prepare.sh --step nodes" >&2; exit 1; }
+done
 if [[ $# -ge 2 ]]; then
     SAMPLE="$2"
 else
@@ -285,6 +298,7 @@ fi
 "$MTB_PY" bin/p5_states.py --sample "$SAMPLE" --reference "$REFID" \
     --keys "$KEYS" --placed "$PLACED" --gvcf "$GVCF" --h37rv "$H37RV_FA" \
     --projected "$PROJ_USE" \
+    --node-paths "$NODE_PATHS" --node-positions "$NODE_POSITIONS" \
     --out "${OUTDIR}/${SAMPLE}.states.tsv.tmp"
 # renamed only once complete: the skip above trusts any states file whose
 # checksum matches, so a task killed mid-write must not leave one behind

@@ -88,10 +88,22 @@ def main():
     ap.add_argument("--dir", default="refbias/p1")
     ap.add_argument("--lineages", default="data/tbprof_lineages.csv",
                     help="panel genome lineage labels, to place the chosen reference")
-    ap.add_argument("--crossmap-dir", default="is6110/assets/isclean_matched",
+    ap.add_argument("--intervals", default="",
+                    help="the build's per-reference IS6110 interval counts "
+                         "(<build>/assets/is6110_intervals.tsv, P0 step "
+                         "is6110_intervals): reference, intervals. Required "
+                         "unless --crossmap-dir is given or --tie-margin is 0")
+    ap.add_argument("--crossmap-dir", default="",
                     help="per-reference crossmaps, to count each candidate's "
-                         "element intervals. A reference with no crossmap "
-                         "leaves the count blank, which is not zero.")
+                         "element intervals. Used only without --intervals. "
+                         "It used to default to is6110/assets/isclean_matched, "
+                         "a directory outside the build, and a missing "
+                         "crossmap silently skipped the tie-break (audit "
+                         "P0P2-4)")
+    ap.add_argument("--build-id", default="",
+                    help="the P0 build this refmap is for. Each sample's "
+                         "<s>.p1.done must name it, and <out>.build records "
+                         "it for P2 to check")
     ap.add_argument("--tie-margin", type=int, default=5,
                     help="two candidates within this many SNPs are a tie, and "
                          "the one carrying more element intervals is chosen. "
@@ -115,25 +127,54 @@ def main():
     # interval the build removed. Defined before the selection loop because
     # the tie-break needs it while choosing, not only when reporting.
     iv_cache = {}
+    # AN ABSENT COUNT IS AN ERROR, NOT A SKIPPED TIE-BREAK (audit P0P2-4). The
+    # counts are a property of the panel, so they come from the build; a
+    # candidate the build has no count for means the asset does not belong to
+    # this panel, and choosing by distance alone for it would make the rule
+    # apply to some isolates and not others without a word.
+    if a.tie_margin > 0 and not a.intervals and not a.crossmap_dir:
+        sys.exit("FATAL: the tie-break needs --intervals "
+                 "(<build>/assets/is6110_intervals.tsv) or --crossmap-dir; "
+                 "pass --tie-margin 0 to select by distance alone")
+    if a.intervals:
+        if not os.path.exists(a.intervals):
+            sys.exit(f"FATAL: no interval table at {a.intervals}; run "
+                     f"bin/p0_prepare.sh --step is6110_intervals")
+        for r in csv.DictReader(open(a.intervals, newline=""), delimiter="\t"):
+            iv_cache[r["reference"]] = int(r["intervals"])
+    absent = set()
 
     def n_intervals(ref):
         if not ref:
             return ""
         if ref not in iv_cache:
-            q = os.path.join(a.crossmap_dir, f"{ref}.crossmap.tsv")
-            if os.path.exists(q):
+            q = (os.path.join(a.crossmap_dir, f"{ref}.crossmap.tsv")
+                 if a.crossmap_dir and not a.intervals else "")
+            if q and os.path.exists(q):
                 with open(q) as fh:
                     iv_cache[ref] = max(sum(1 for _ in fh) - 1, 0)
             else:
                 iv_cache[ref] = ""
+                absent.add(ref)
         return iv_cache[ref]
 
-    rows, missing = [], []
+    rows, missing, stale = [], [], []
     for c in csv.DictReader(open(a.cohort), delimiter="\t"):
         s = c["sample"]
         p = os.path.join(a.dir, f"{s}.candidates.tsv")
         if not os.path.exists(p):
             missing.append(s); continue
+        # a candidates file from another build is not this build's selection
+        if a.build_id:
+            mk = os.path.join(a.dir, f"{s}.p1.done")
+            got = ""
+            if os.path.exists(mk):
+                for line in open(mk):
+                    f = line.rstrip("\n").split("\t")
+                    if f[0] == "build_id" and len(f) > 1:
+                        got = f[1]
+            if got != a.build_id:
+                stale.append(f"{s} ({got or 'no marker'})"); continue
         cand = list(csv.DictReader(open(p), delimiter="\t"))
         if not cand:
             missing.append(s); continue
@@ -189,12 +230,30 @@ def main():
         r["interval_delta"] = (abs(a_iv - b_iv) if a_iv != "" and b_iv != ""
                                else "")
 
+    if stale:
+        print(f"FATAL: {len(stale)} samples have P1 output from another build "
+              f"than {a.build_id}: {', '.join(stale[:10])}"
+              f"{' ...' if len(stale) > 10 else ''}; rerun P1 into a new "
+              f"output folder", file=sys.stderr)
+        return 2
+    # Fatal for the build's table. An explicit --crossmap-dir keeps its old
+    # meaning (blank, rule not applied) for hand-run comparisons.
+    if a.tie_margin > 0 and absent and a.intervals:
+        print(f"FATAL: no IS6110 interval count for {len(absent)} candidate "
+              f"reference(s): {', '.join(sorted(absent)[:10])}; the "
+              f"tie-break cannot be applied to them. Rebuild "
+              f"{a.intervals or a.crossmap_dir} for this panel, or pass "
+              f"--tie-margin 0", file=sys.stderr)
+        return 2
     if not rows:
         print("no candidates found", file=sys.stderr); return 1
     with open(a.out, "w") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t",
                            lineterminator="\n")
         w.writeheader(); w.writerows(rows)
+    if a.build_id:
+        with open(a.out + ".build", "w") as fh:
+            fh.write(f"build_id\t{a.build_id}\n")
 
     print(f"  {len(rows)} isolates with a reference"
           f"{'; MISSING: ' + ', '.join(missing) if missing else ''}\n")
