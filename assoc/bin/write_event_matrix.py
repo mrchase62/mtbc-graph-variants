@@ -329,9 +329,11 @@ def main():
                          "header before using it")
     ap.add_argument("--chunk", type=int, default=20000,
                     help="variants per Fitch block")
-    ap.add_argument("--panel-polarity",
-                    default="refbias/assets/panel_polarity.tsv",
-                    help="ancestral allele read off the outgroup's own "
+    # NO DEFAULT. It was refbias/assets/panel_polarity.tsv, CX333's hand-made
+    # table; the chain passes the build's (P0 step panel_polarity).
+    ap.add_argument("--panel-polarity", required=True,
+                    help="<build>/assets/panel_polarity.tsv: "
+                         "ancestral allele read off the outgroup's own "
                          "genotype in the panel VCF, from bin/panel_polarity.py. "
                          "Consumed ONLY where AA did not resolve, because Fitch "
                          "over 333 genomes and a tree is the stronger "
@@ -376,8 +378,10 @@ def main():
                          "INAPPLICABLE -- not reference, not unknown -- so its "
                          "leaf is made uninformative and the reconstruction is "
                          "confined to the carrier clades. Needs --node-locus.")
-    ap.add_argument("--node-locus",
-                    default="accessory/assets/node_locus.tsv",
+    # NO DEFAULT: accessory/assets/node_locus.tsv was made by hand from CX333
+    # cohorts, and node ids belong to one graph. Required with
+    # --accessory-presence (checked below).
+    ap.add_argument("--node-locus", default="",
                     help="node -> accessory locus, from "
                          "accessory/bin/node_locus_from_p4.py. This is p4's own "
                          "coordinate anchor, not sequence containment.")
@@ -761,9 +765,10 @@ def main():
     node_locus = {}
     n_l2 = 0
     if a.accessory_presence:
-        if not os.path.exists(a.node_locus):
-            sys.exit(f"FATAL: --accessory-presence needs --node-locus; "
-                     f"{a.node_locus} does not exist")
+        if not a.node_locus or not os.path.exists(a.node_locus):
+            sys.exit(f"FATAL: --accessory-presence needs --node-locus (this "
+                     f"cohort's, from accessory/bin/node_locus_from_p4.py); "
+                     f"'{a.node_locus}' does not exist")
         with open(a.node_locus, newline="") as fh:
             for r in csv.DictReader(fh, delimiter="\t"):
                 if r.get("locus"):

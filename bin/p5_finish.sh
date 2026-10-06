@@ -161,6 +161,7 @@ echo
 echo "=== sanity checks ==="
 "$MTB_PY" bin/p5_sanity.py "${ARR[@]}" \
     --refmap "$REFMAP" --cohort "$COHORT" \
+    --graph-vcf "${BUILD}/assets/graph_collapsed.vcf.gz" \
     --p2-summary "${P2DIR}/p2_summary.tsv" --out "${OUTDIR}/sanity.tsv"
 echo
 echo "=== SV matrix (the structural-variant arm) ==="
@@ -282,7 +283,12 @@ IS6110_STATES="${IS6110_STATES:-}"
 ACCPRES="${ACCPRES:-accessory/${COHORT_NAME}}"
 ACC_ARGS=()
 if compgen -G "${ACCPRES}/*.presence.tsv" >/dev/null; then
-    ACC_ARGS=(--accessory-presence "$ACCPRES")
+    # the build's catalogue, which the presence tables were made against
+    # (locus_presence_array.sh); the merge's default is accessory/assets/,
+    # CX333's hand-placed copy
+    _acccat="${BUILD}/assets/accessory_catalogue.tsv"
+    [[ -s "$_acccat" ]] || { echo "FATAL: presence tables but no ${_acccat}; run bin/p0_prepare.sh --step catalogue" >&2; exit 1; }
+    ACC_ARGS=(--accessory-presence "$ACCPRES" --accessory-catalogue "$_acccat")
     echo "  level-1 accessory presence from ${ACCPRES}" \
          "($(ls "${ACCPRES}"/*.presence.tsv | wc -l) tables)"
 else

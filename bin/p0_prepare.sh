@@ -71,9 +71,8 @@ PANEL_SNPS="${PANEL_SNPS:-${GRAPH_DIR}/snps.vcf.gz}"
 # (panel_polarity). Copied into the build like every other asset.
 GRAPH_VCF="${GRAPH_VCF:-${GRAPH_DIR}/all_variants.collapsed.vcf.gz}"
 OUTGROUP="${OUTGROUP-GCF_035581225}"
-# The accessory catalogue locus_presence.py reads, and the IS6110-clean builds
-# whose crossmaps give P1's tie-break its interval counts.
-ACC_CATALOGUE_DIR="${ACC_CATALOGUE_DIR:-accessory/assets}"
+# The IS6110-clean builds whose crossmaps give P1's tie-break its interval
+# counts. (The accessory catalogue is made by step 'catalogue'.)
 ISCLEAN_DIR="${ISCLEAN_DIR:-is6110/assets/isclean_matched}"
 H37RV_PATH="${H37RV_PATH:-GCF_000195955#1#NC_000962.3}"
 H37RV_ACC="${H37RV_ACC:-GCF_000195955}"
@@ -178,7 +177,7 @@ if [[ "$LIST" == 1 ]]; then
     echo "graph    : $OG"
     echo "build id : $BUILD_ID"
     echo "build dir: $BUILD"
-    for s in stamp paths accessions gff refs frames assets nodes is6110_intervals \
+    for s in stamp paths accessions gff refs frames assets catalogue nodes is6110_intervals \
              panel_polarity ancestral manifest; do
         if [[ -s "${BUILD}/logs/$s.done" ]]; then
             printf "  %-16s done   %s\n" "$s" "$(head -1 "${BUILD}/logs/$s.done")"
@@ -405,8 +404,6 @@ step_assets() {
     _inputs panel_snps_sha256 "$PANEL_SNPS" graph_vcf_sha256 "$GRAPH_VCF" \
             mask_sha256 "$MASK" \
             accessory_loci_sha256 "${ACCESSORY_DIR}/panel_manifest.tsv" \
-            catalogue_tsv_sha256 "${ACC_CATALOGUE_DIR}/accessory_catalogue.tsv" \
-            catalogue_fasta_sha256 "${ACC_CATALOGUE_DIR}/accessory_catalogue.fasta" \
             is6110_loci_sha256 "${IS6110_LOCI:-refbias/t11/loci_clean.tsv}" \
             is6110_anchors_sha256 "${IS6110_ANCHORS:-refbias/t11/anchor_sets.tsv}" \
             is6110_gff_sha256 "${IS6110_GFF:-data/annotation/H37Rv_IS6110.pansn.gff}"
@@ -434,18 +431,8 @@ step_assets() {
     # linked only the FASTAs, which carry sequence but no anchors.
     [[ -s "${ACCESSORY_DIR}/panel_manifest.tsv" ]] && \
         _copy "${ACCESSORY_DIR}/panel_manifest.tsv" "${BUILD}/assets/accessory_loci.tsv"
-    # The accessory catalogue locus_presence.py genotypes against. Its
-    # producer is not in this repository, so it is copied here with its
-    # carriers checked against the panel; locus_presence_array.sh refuses a
-    # catalogue that differs from this copy.
-    local cat="${ACC_CATALOGUE_DIR}/accessory_catalogue"
-    if [[ -s "${cat}.tsv" && -s "${cat}.fasta" ]]; then
-        "$MTB_PY" bin/p0_check.py catalogue --tsv "${cat}.tsv" --accessions "$acc" || return 1
-        _copy "${cat}.tsv" "${BUILD}/assets/accessory_catalogue.tsv"
-        _copy "${cat}.fasta" "${BUILD}/assets/accessory_catalogue.fasta"
-    else
-        echo "[P0] assets: no accessory catalogue at ${cat}.{tsv,fasta}; p3acc will refuse to run" >&2
-    fi
+    # The accessory catalogue is no longer copied from accessory/assets/: it
+    # is made from this build's own files by step 'catalogue' below.
     # IS6110 catalogue. These currently live under refbias/t11/, a test
     # directory: the extraction audit flagged the pipeline depending on test
     # artefacts, and the IS6110 locus list and anchor sets are per-graph inputs
@@ -462,6 +449,51 @@ step_assets() {
     done
     _say "assets: $(ls -1 "${BUILD}/assets" | wc -l) entries, none of them links"
     _mark assets
+}
+
+# --- step: catalogue ---------------------------------------------------------
+# The accessory catalogue locus_presence.py genotypes against (level 1) and
+# the merge reads for level-1 records. It had no producer in the repository:
+# accessory/assets/accessory_catalogue.{tsv,fasta} were copied into the build
+# from a file made by hand. Its producer is accessory/bin/merge_catalogues.py
+# -- run on CX333's decomposed VCF with insgt's clusters and routing and
+# gwas1000's census, it reproduces both files byte for byte -- so it is made
+# here from the build's own accessory locus table and collapsed graph VCF
+# (the collapsed file, audit PGB-9: on CX333, 157 of 802 rows differ from
+# the decomposed file's catalogue, 23 of them in the representative allele's
+# length, the rest in carrier sets).
+#
+# The census (one cohort's call counts) is not a property of the build and
+# is not passed; its three columns are empty. The insgt clusters and routing
+# (graph-specific, hand-made) are passed only when INSGT_CLUSTERS and
+# INSGT_ROUTING name this graph's; otherwise the route columns are empty and
+# the merge writes no ACCROUTE.
+step_catalogue() {
+    _inputs loci_sha256 "${BUILD}/assets/accessory_loci.tsv" \
+            graph_vcf_sha256 "${BUILD}/assets/graph_collapsed.vcf.gz" \
+            clusters_sha256 "${INSGT_CLUSTERS:-}" routing_sha256 "${INSGT_ROUTING:-}" \
+            code_sha256 accessory/bin/merge_catalogues.py
+    _done catalogue && { _say "catalogue: already done"; return 0; }
+    _have assets || { echo "FATAL: step 'catalogue' needs step 'assets' done first" >&2; return 1; }
+    mtb_require_file "${BUILD}/assets/accessory_loci.tsv" \
+        "${BUILD}/assets/graph_collapsed.vcf.gz" || return 1
+    local out="${BUILD}/assets/accessory_catalogue"
+    rm -f "${out}".fasta.*          # an index of an earlier catalogue
+    "$MTB_PY" accessory/bin/merge_catalogues.py \
+        --loci "${BUILD}/assets/accessory_loci.tsv" \
+        --graph-vcf "${BUILD}/assets/graph_collapsed.vcf.gz" \
+        --clusters "${INSGT_CLUSTERS:-}" --routing "${INSGT_ROUTING:-}" \
+        --census "" --out "${out}.tsv.tmp" --out-fasta "${out}.fasta.tmp" \
+        || { rm -f "${out}".*.tmp; return 1; }
+    "$MTB_PY" bin/p0_check.py catalogue --tsv "${out}.tsv.tmp" \
+        --accessions "${BUILD}/assets/accessions.txt" || { rm -f "${out}".*.tmp; return 1; }
+    mv -f "${out}.tsv.tmp" "${out}.tsv"
+    mv -f "${out}.fasta.tmp" "${out}.fasta"
+    # indexed once here: locus_presence.py indexes a FASTA without one, and
+    # an array of tasks would each write the index into the build at once
+    "$BWA" index "${out}.fasta" 2>/dev/null
+    _say "catalogue: $(( $(wc -l < "${out}.tsv") - 1 )) loci -> ${out}.{tsv,fasta}"
+    _mark catalogue
 }
 
 # --- step: nodes -------------------------------------------------------------
@@ -539,18 +571,35 @@ step_panel_polarity() {
 # data/trees that nothing regenerated; p5_finish.sh now reads it from here and
 # refuses a build without it. Seconds to compute.
 #
-# Its inputs are a tree and alignment made outside P0 (data/trees/cx333.* by
-# default), so they are checked against the panel -- the alignment's taxa must
-# be exactly the build's genomes -- copied into the build, and recorded in the
-# marker with the code's checksum (audit TP-4: after the polarity fixes the
-# old marker kept the faulty table).
+# Its inputs are a tree and alignment made outside P0 by the panel-tree step
+# (docs/PANEL_TREE.md: vcf_to_alignment.py on this build's
+# assets/graph_collapsed.vcf.gz, then build_snp_tree.sh), so they are checked
+# against the panel -- the alignment's taxa must be exactly the build's
+# genomes -- copied into the build, and recorded in the marker with the
+# code's checksum (audit TP-4: after the polarity fixes the old marker kept
+# the faulty table).
+#
+# THERE ARE NO DEFAULT INPUTS. They were data/trees/cx333.*, CX333's tree,
+# which the taxa check refuses on any other panel but which a rebuild of a
+# panel with the same genomes would have taken silently. ANC_TREE, ANC_ALN
+# and ANC_SITES must name this build's panel-tree products.
 step_ancestral() {
-    local t="${ANC_TREE:-data/trees/cx333.rooted.nwk}"
-    local al="${ANC_ALN:-data/trees/cx333.snps.fasta}"
-    local st="${ANC_SITES:-data/trees/cx333.sites.tsv}"
+    local t="${ANC_TREE:-}" al="${ANC_ALN:-}" st="${ANC_SITES:-}"
+    if [[ -z "$t" || -z "$al" || -z "$st" ]]; then
+        echo "FATAL: step 'ancestral' needs ANC_TREE, ANC_ALN and ANC_SITES: this build's" >&2
+        echo "       panel tree, alignment and sites table (docs/PANEL_TREE.md)" >&2
+        return 1
+    fi
     mtb_require_file "$t"; mtb_require_file "$al"; mtb_require_file "$st"
     _inputs tree_sha256 "$t" alignment_sha256 "$al" sites_sha256 "$st" \
             code_sha256 bin/ancestral_alleles.py
+    # the tree's outgroup leaves; unset, ancestral_alleles.py's default (the
+    # two CX333 canettii), which it refuses if they are not leaves of the tree
+    local -a og_args=()
+    if [[ -n "${ANC_OUTGROUPS:-}" ]]; then
+        og_args=(--outgroups "$ANC_OUTGROUPS")
+        _STEP_KEYS+=("outgroups	${ANC_OUTGROUPS}")
+    fi
     _done ancestral && { _say "ancestral: already done"; return 0; }
     _have accessions || { echo "FATAL: step 'ancestral' needs step 'accessions' done first" >&2; return 1; }
     "$MTB_PY" bin/p0_check.py taxa --fasta "$al" \
@@ -562,7 +611,8 @@ step_ancestral() {
     local out="${BUILD}/assets/ancestral.tsv"
     "$MTB_PY" bin/ancestral_alleles.py --tree "${BUILD}/assets/ancestral_inputs/tree.nwk" \
         --alignment "${BUILD}/assets/ancestral_inputs/alignment.fasta" \
-        --sites "${BUILD}/assets/ancestral_inputs/sites.tsv" --out "${out}.tmp"
+        --sites "${BUILD}/assets/ancestral_inputs/sites.tsv" "${og_args[@]}" \
+        --out "${out}.tmp"
     mv -f "${out}.tmp" "$out"
     _say "ancestral: $(( $(wc -l < "$out") - 1 )) sites -> ${out}"
     _mark ancestral
@@ -599,7 +649,7 @@ step_manifest() {
     # partial build cannot be mistaken for a finished one later.
     local incomplete=""
     local s2
-    for s2 in stamp paths accessions gff refs frames assets nodes \
+    for s2 in stamp paths accessions gff refs frames assets catalogue nodes \
               is6110_intervals panel_polarity; do
         _have "$s2" || incomplete="${incomplete} ${s2}"
     done
@@ -620,12 +670,13 @@ _run() { _STEP_KEYS=(); "step_$1"; }
 if [[ -n "$STEP" ]]; then
     _run "$STEP"
 else
-    _run stamp; _run paths; _run accessions; _run assets; _run nodes; _run panel_polarity
+    _run stamp; _run paths; _run accessions; _run assets; _run catalogue; _run nodes; _run panel_polarity
     _say "cheap steps complete. Remaining, run explicitly:"
     _say "  bash bin/p0_prepare.sh --step gff"
     _say "  sbatch --array=1-\$(wc -l < ${BUILD}/assets/accessions.txt) bin/p0_prepare.sh --step refs"
     _say "  bash bin/p0_prepare.sh --step frames"
-    _say "  bash bin/p0_prepare.sh --step is6110_intervals   # crossmaps for every panel genome first"
-    _say "  bash bin/p0_prepare.sh --step ancestral"
+    _say "  bash bin/p0_prepare.sh --step is6110_intervals   # crossmaps for every panel genome first:"
+    _say "      MTB_BUILD_DIR=${BUILD} bash is6110/bin/p1i_build_matched.sh"
+    _say "  ANC_TREE=.. ANC_ALN=.. ANC_SITES=.. bash bin/p0_prepare.sh --step ancestral   # docs/PANEL_TREE.md"
     _say "  bash bin/p0_prepare.sh --step manifest"
 fi

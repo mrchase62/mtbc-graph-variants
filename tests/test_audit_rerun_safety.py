@@ -507,10 +507,10 @@ class PresenceGuard(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.d)
 
-    def arr(self):
+    def arr(self, **kw):
         return run(["bash", os.path.join(ROOT, "accessory/bin/locus_presence_array.sh")],
                    SLURM_SUBMIT_DIR=self.d, SLURM_ARRAY_TASK_ID=1, COHORT_TAG="coh",
-                   REFMAP=self.refmap, MTB_BUILD_DIR=self.b)
+                   REFMAP=self.refmap, MTB_BUILD_DIR=self.b, **kw)
 
     def test_table_older_than_catalogue_refused(self):
         write(self.out, "locus_id\tcall\n")
@@ -530,7 +530,10 @@ class PresenceGuard(unittest.TestCase):
     def test_catalogue_not_the_builds_refused(self):
         write(os.path.join(self.d, "accessory", "assets", "accessory_catalogue.tsv"),
               "locus_id\nACC_2\n")
-        r = self.arr()
+        # the step reads the build's copy now (audit cleanup); a catalogue
+        # named explicitly must still be the build's
+        r = self.arr(ACC_CATALOGUE=os.path.join(self.d, "accessory", "assets",
+                                                "accessory_catalogue"))
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("differs from build", r.stderr)
 

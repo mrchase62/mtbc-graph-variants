@@ -61,7 +61,41 @@ def h37rv_key(pos, ref, alt):
 
 
 def node_key(node, offset, ref, alt):
+    """`offset` must be the node's FORWARD offset (forward_offset below)."""
     return f"node:{node}:{offset}:{ref}>{alt}"
+
+
+def forward_offset(offset, strand, length):
+    """A base's offset in the node's own (forward, GFA S-line) orientation.
+
+    `odgi position -v` counts the offset along the WALKING direction of the
+    path it was asked about, so where two references walk a node in opposite
+    directions one base gets two offsets, off and L-1-off: R 201016,83,+ and
+    H37Rv 201016,46,- are the same base of a 130 bp node. Every node key is
+    therefore written with the forward offset, and every reader that needs a
+    path position converts back with this same function (it is its own
+    inverse). A `-` walk with no node length cannot be converted: None.
+    """
+    off = int(offset)
+    if strand != "-":
+        return off
+    if length is None or length == "":
+        return None
+    return int(length) - 1 - off
+
+
+def load_node_lengths(path, want=None):
+    """{node id (str): length} from the build's node table
+    (assets/node_positions.tsv, columns node and length; P0 step nodes).
+    `want`, a set of node ids, restricts what is kept."""
+    import csv
+    out = {}
+    with open(path, newline="") as fh:
+        for r in csv.DictReader(fh, delimiter="\t"):
+            n = r["node"]
+            if (want is None or n in want) and r.get("length"):
+                out[n] = int(r["length"])
+    return out
 
 
 def _selftest():

@@ -65,7 +65,11 @@ import argparse, bisect, collections, csv, os, subprocess, sys
 # minimal key. The rule above still tolerates duplicate keys, so the decomposed
 # file gives the same answer at every site it holds (CX333: identical outgroup
 # rows for scale200 and gwas1000).
-PANEL_VCF = "graphs/CX333.s10k.k23.K15/all_variants.collapsed.vcf.gz"
+#
+# NO DEFAULT FILE: it was CX333's, so a new build's chain that omitted the
+# argument read the old graph's outgroup genotypes. The chain passes
+# <build>/assets/graph_collapsed.vcf.gz, P0's copy of the graph's
+# all_variants.collapsed.vcf.gz (step assets).
 PANEL_CONTIG = "GCF_000195955#1#NC_000962.3"
 
 
@@ -144,7 +148,8 @@ def main():
     ap.add_argument("--alignment", required=True)
     ap.add_argument("--sites", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--panel-vcf", default=PANEL_VCF)
+    ap.add_argument("--panel-vcf", required=True,
+                    help="the build's collapsed graph VCF")
     ap.add_argument("--panel-contig", default=PANEL_CONTIG)
     ap.add_argument("--outgroup", default="GCF_035581225",
                     help="the panel sample to emit (default M. canettii)")

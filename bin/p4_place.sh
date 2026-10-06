@@ -62,15 +62,19 @@ P1WORK="${P1WORK:-refbias/work/p1}"
 P2DIR="${P2DIR:-refbias/p2}"
 OUTDIR="${OUTDIR:-refbias/p4}"
 WORK="${WORK:-refbias/work/p4}"
-OG="${OG:-$(ls graphs/CX333.s10k.k23.K15/*.smooth.final.og 2>/dev/null | head -1)}"
+# The build's own graph, as its stamp records it. The default was a glob over
+# graphs/CX333..., which on a new build projected against the old graph.
+OG="${OG:-$(awk -F'\t' '$1=="graph"{print $2}' "${BUILD}/build_info.tsv")}"
 ODGI="${MTB_ODGI:?MTB_ODGI is unset; see config/project_env.sh}"
 H37RV_PATH="${H37RV_PATH:-GCF_000195955#1#NC_000962.3}"
 PATHS="${BUILD}/assets/paths.txt"
 MASK="${BUILD}/assets/repeat_mask.bed"
 LOCI="${BUILD}/assets/accessory_loci.tsv"
+# node lengths, for node keys in the node's forward orientation (P0 step nodes)
+NODES="${BUILD}/assets/node_positions.tsv"
 NT="${SLURM_CPUS_PER_TASK:-4}"
 
-for f in "$REFMAP" "$OG" "$ODGI" "$PATHS" "$MASK" "$LOCI"; do
+for f in "$REFMAP" "$OG" "$ODGI" "$PATHS" "$MASK" "$LOCI" "$NODES"; do
     [[ -e "$f" ]] || { echo "FATAL: missing: $f" >&2; exit 1; }
 done
 mkdir -p "$OUTDIR" "$WORK" slurm
@@ -181,7 +185,11 @@ fi
 # The inherited half's source, passed explicitly. p4_place.py's default is a
 # path relative to the working directory, which resolved only when run from the
 # original working tree and otherwise dropped the half without a word.
-GRAPH_VCF="${GRAPH_VCF:-$(dirname "$OG")/all_variants.nolab.vcf.gz}"
+# THE BUILD'S COLLAPSED GRAPH VCF (P0 step assets). It was all_variants.nolab
+# beside the graph, which a new build does not produce, and whose duplicate
+# records (one per allele path, from the decompose step) emitted the same
+# inherited allele more than once.
+GRAPH_VCF="${GRAPH_VCF:-${BUILD}/assets/graph_collapsed.vcf.gz}"
 [[ -s "$GRAPH_VCF" ]] || { echo "FATAL: no graph VCF at ${GRAPH_VCF}" >&2; exit 1; }
 "$MTB_PY" bin/p4_place.py \
     --sample "$SAMPLE" --reference "$REFID" --build-id "$BUILD_ID" \
@@ -190,7 +198,7 @@ GRAPH_VCF="${GRAPH_VCF:-$(dirname "$OG")/all_variants.nolab.vcf.gz}"
     --ref-fasta "${BUILD}/refs/${REFID}.fasta" \
     --direct "$DIRECT" --matched "$MATCHED" \
     --h37rv-pos "${WORK}/${SAMPLE}.h37rv.pos" \
-    --node-pos "${WORK}/${SAMPLE}.node.pos" \
+    --node-pos "${WORK}/${SAMPLE}.node.pos" --node-lengths "$NODES" \
     --mask "$MASK" --loci "$LOCI" \
     --out "${OUTDIR}/${SAMPLE}.placed.tsv"
 rm -f "${WORK}/${SAMPLE}.rpos.txt" "${WORK}/${SAMPLE}.rpos.panel.txt"
