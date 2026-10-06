@@ -12,11 +12,15 @@ import argparse, csv, glob, gzip, os, statistics, sys
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--hits", default="refbias/t2/hits")
-    ap.add_argument("--meta", default="refbias/t2/candidates.tsv")
+    # no defaults: refbias/t2/ and refbias/T2.accessory_validation.tsv are
+    # the pilot's, CX333's
+    ap.add_argument("--hits", required=True,
+                    help="t2_validate_accessory.sh's OUT")
+    ap.add_argument("--meta", required=True,
+                    help="t2_extract_candidates.py's --out-meta")
     ap.add_argument("--min-ident", type=float, default=99.0)
     ap.add_argument("--min-cov", type=float, default=0.95)
-    ap.add_argument("--out", default="refbias/T2.accessory_validation.tsv")
+    ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
     meta, carriers = {}, {}

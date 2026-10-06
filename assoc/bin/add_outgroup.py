@@ -151,8 +151,10 @@ def main():
     ap.add_argument("--panel-vcf", required=True,
                     help="the build's collapsed graph VCF")
     ap.add_argument("--panel-contig", default=PANEL_CONTIG)
-    ap.add_argument("--outgroup", default="GCF_035581225",
-                    help="the panel sample to emit (default M. canettii)")
+    # no default: the outgroup is the build's (build_info.tsv `outgroup`,
+    # from config MTB_OUTGROUP), which cohort_assoc_tail.sh passes
+    ap.add_argument("--outgroup", required=True,
+                    help="the panel sample to emit: the build's outgroup")
     ap.add_argument("--cohort-contig", default="NC_000962.3",
                     help="the cohort VCF's name for the reference contig; "
                          "sites on any other contig get N")

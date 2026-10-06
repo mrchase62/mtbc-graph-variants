@@ -26,7 +26,10 @@ _s = importlib.util.spec_from_file_location(
     "graph_frame", os.path.join(os.path.dirname(os.path.abspath(__file__)), "graph_frame.py"))
 gf = importlib.util.module_from_spec(_s); _s.loader.exec_module(gf)
 
-DEFAULT_REFS = "refbias/build/7713a8d71d8e/refs"
+# The build's refs, from MTB_BUILD_DIR; it was build 7713a8d71d8e's (CX333)
+# whatever the build. Every caller passes --refs.
+DEFAULT_REFS = (os.path.join(os.environ["MTB_BUILD_DIR"], "refs")
+                if os.environ.get("MTB_BUILD_DIR") else "")
 
 
 def _open(p):
@@ -90,7 +93,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--vcf", required=True)
     ap.add_argument("--accession", required=True)
-    ap.add_argument("--refs", default=DEFAULT_REFS)
+    ap.add_argument("--refs", default=DEFAULT_REFS,
+                    required=not DEFAULT_REFS,
+                    help="<build>/refs; default from MTB_BUILD_DIR")
     ap.add_argument("--table", default=None)
     ap.add_argument("--limit", type=int, default=2000)
     a = ap.parse_args()

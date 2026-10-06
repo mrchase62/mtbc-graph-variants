@@ -178,6 +178,19 @@ mtb_require_cram_root() {
 # Plain H37Rv (non-PanSN header) for nucmer/MUMmer QC.
 : "${MTB_H37RV:=${MTB_REFDIR}/H37Rv.fasta}"
 
+# --- Outgroup ---------------------------------------------------------------
+# THE PANEL GENOME THAT ROOTS EVERY TREE AND POLARISES EVERY VARIANT, named in
+# one place. It was GCF_035581225 (M. canettii) written into P0, the
+# association tail's tree and event steps, add_outgroup.py, panel_polarity.py
+# and build_snp_tree.sh separately, so a graph without that genome could not
+# be run without editing five files. P0 records the value it used in the
+# build's build_info.tsv (key `outgroup`), and the association tail reads it
+# from there, so a cohort is always rooted on its own build's outgroup.
+# Set it EMPTY for a graph with no outgroup (P0 then makes no polarity table).
+# The panel tree's own outgroup leaves for the AA tag are separate: P0 step
+# ancestral, ANC_OUTGROUPS (decision D44).
+: "${MTB_OUTGROUP=GCF_035581225}"
+
 # --- Container bind convention ---------------------------------------------
 #
 # All containerised steps bind  ${MTB_DATA} -> /data  and  ${MTB_GRAPHS} -> /graphs.
@@ -337,7 +350,7 @@ mtb_show_config() {
     local v
     for v in MTB_WORK MTB_PERSIST MTB_ARCHIVE MTB_DATA MTB_GRAPHS \
              MTB_CONTAINERS MTB_PGGB_SIF MTB_VG_SIF MTB_GRAPHALIGNER_SIF \
-             MTB_REF_FASTA MTB_REF_PATH MTB_H37RV \
+             MTB_REF_FASTA MTB_REF_PATH MTB_H37RV MTB_OUTGROUP \
              MTB_SNPEFF_JAR MTB_JAVA MTB_SNPEFF_DB MTB_PY MTB_PY_VT MTB_ODGI MTB_MINIMAP2 \
              MTB_SAMTOOLS MTB_BGZIP MTB_TABIX MTB_BEDTOOLS MTB_BCFTOOLS MTB_K8 MTB_PAFTOOLS \
              MTB_BWA MTB_WGSIM MTB_GATK_SIF MTB_DELLY_ENV \

@@ -33,9 +33,16 @@ for _c in "${MTB_ENV_FILE:-}" \
 done
 source "$_mtb_env"
 
-SAMPLES="${SAMPLES:-loci/hely_tatc/samples.txt}"
-QUERY="${QUERY:-refbias/t2/candidates.fasta}"
-OUT="${OUT:-refbias/t2/hits}"
+# NO DEFAULTS. They were the pilot's: CX333's 332 genomes
+# (loci/hely_tatc/samples.txt), its candidates and its hits folder, where a
+# sample's existing hits file is kept -- so a new graph's run into it would
+# have reused CX333's results. docs/PANEL_TREE.md section 4 gives the commands.
+#   SAMPLES  the graph VCF's samples, one per line (bcftools query -l)
+#   QUERY    t2_extract_candidates.py's --out-fasta
+#   OUT      a hits folder for this graph alone
+SAMPLES="${SAMPLES:?SAMPLES is unset: the graph VCF's samples (docs/PANEL_TREE.md section 4)}"
+QUERY="${QUERY:?QUERY is unset: t2_extract_candidates.py's --out-fasta}"
+OUT="${OUT:?OUT is unset: a hits folder for this graph}"
 mkdir -p "$OUT"
 
 # An explicit argument WINS over SLURM_ARRAY_TASK_ID. The other order

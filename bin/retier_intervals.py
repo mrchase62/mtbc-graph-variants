@@ -94,7 +94,9 @@ def overlapper(spans):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--intervals", default="refbias/assets/sv_intervals.tsv")
+    # no default: refbias/assets/sv_intervals.tsv was the pilot's stale
+    # catalogue; cohort_assoc_tail.sh passes the cohort's own
+    ap.add_argument("--intervals", required=True)
     ap.add_argument("--iv-states", required=True,
                     help="svgt_iv_states.tsv for the cohort supplying evidence")
     ap.add_argument("--refmap", required=True)

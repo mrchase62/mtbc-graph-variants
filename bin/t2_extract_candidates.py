@@ -15,8 +15,10 @@ def main():
     ap.add_argument("--vcf", required=True)
     ap.add_argument("--bcftools", required=True)
     ap.add_argument("--min-len", type=int, default=500)
-    ap.add_argument("--out-fasta", default="refbias/t2/candidates.fasta")
-    ap.add_argument("--out-meta", default="refbias/t2/candidates.tsv")
+    # no default outputs: they were the pilot's refbias/t2/, CX333's
+    # candidates, which t2_validate_accessory.sh would then have blasted
+    ap.add_argument("--out-fasta", required=True)
+    ap.add_argument("--out-meta", required=True)
     a = ap.parse_args()
 
     hdr = subprocess.run([a.bcftools, "view", "-h", a.vcf],

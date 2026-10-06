@@ -38,7 +38,10 @@ the genomes with a call in any copy. Taking one record's genotype and its own
 AC/AN, as this did, let the last copy decide the outgroup's allele (audit
 GRAPHVCF-3) and understated the panel frequency of a split allele.
 
-    $MTB_PY bin/panel_polarity.py --out refbias/assets/panel_polarity.tsv
+    $MTB_PY bin/panel_polarity.py --panel-vcf <build>/assets/graph_collapsed.vcf.gz \
+        --outgroup <outgroup> --out <build>/assets/panel_polarity.tsv
+
+P0 step panel_polarity runs it; the outgroup is config MTB_OUTGROUP.
 """
 import argparse, collections, itertools, os, subprocess, sys
 
@@ -48,9 +51,11 @@ MISSING = {".", "./.", ".|."}
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--panel-vcf",
-                    default="graphs/CX333.s10k.k23.K15/all_variants.collapsed.vcf.gz")
-    ap.add_argument("--outgroup", default="GCF_035581225")
+    # no defaults: they were CX333's collapsed VCF and its canettii; P0 step
+    # panel_polarity passes the build's VCF and its outgroup
+    ap.add_argument("--panel-vcf", required=True,
+                    help="<build>/assets/graph_collapsed.vcf.gz")
+    ap.add_argument("--outgroup", required=True)
     ap.add_argument("--bcftools",
                     default=os.environ.get("MTB_BCFTOOLS", "bcftools"))
     ap.add_argument("--out", required=True)

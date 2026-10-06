@@ -388,8 +388,10 @@ def main():
                          "accessory/bin/locus_presence.py. Emits LEVEL 1: one "
                          "biallelic record per accessory locus, every sample "
                          "stated. Needs --accessory-catalogue.")
-    ap.add_argument("--accessory-catalogue",
-                    default="accessory/assets/accessory_catalogue.tsv")
+    # no default: accessory/assets/ held CX333's hand-placed catalogue;
+    # p5_finish.sh passes the build's. Required with --accessory-presence.
+    ap.add_argument("--accessory-catalogue", default="",
+                    help="<build>/assets/accessory_catalogue.tsv")
     ap.add_argument("--sv-intervals", default="",
                     help="the interval catalogue from bin/sv_intervals.py. With "
                          "it the DELETION block is built from catalogued "
@@ -424,7 +426,9 @@ def main():
                          "(SV, IS6110, accessory). Without it those records "
                          "carry REF=N, which does not match the reference")
     ap.add_argument("--cohort-name", required=True)
-    ap.add_argument("--build-id", default="7713a8d71d8e")
+    # no default: it was 7713a8d71d8e (CX333), so a caller that omitted it
+    # stamped another build's VCF with CX333's id
+    ap.add_argument("--build-id", required=True)
     ap.add_argument("--bgzip", default=os.environ.get("MTB_BGZIP", "bgzip"))
     # MTB_TABIX is not defined in config/project_env.sh although MTB_BGZIP is,
     # so fall back to tabix beside bgzip rather than to bare `tabix`, which is
@@ -435,6 +439,9 @@ def main():
     ap.add_argument("--tabix", default=os.environ.get("MTB_TABIX", _tbx))
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
+    if a.accessory_presence and not a.accessory_catalogue:
+        sys.exit("FATAL: --accessory-presence needs --accessory-catalogue "
+                 "(<build>/assets/accessory_catalogue.tsv)")
     if a.assemble:
         if not a.part_prefix:
             sys.exit("FATAL: --assemble needs --part-prefix")

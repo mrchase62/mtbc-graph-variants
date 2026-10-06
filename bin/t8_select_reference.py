@@ -52,7 +52,9 @@ def trim(pos, ref, alt):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--vcf", required=True, help="isolate calls in H37Rv coordinates")
-    ap.add_argument("--panel-snps", default="graphs/CX333.s10k.k23.K15/snps.vcf.gz")
+    # no default: it was CX333's; p1_select_reference.sh passes the build's
+    ap.add_argument("--panel-snps", required=True,
+                    help="<build>/assets/panel_snps.vcf.gz")
     ap.add_argument("--top", type=int, default=5)
     ap.add_argument("--out", required=True)
     a = ap.parse_args()

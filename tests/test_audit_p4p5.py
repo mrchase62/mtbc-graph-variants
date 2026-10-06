@@ -449,7 +449,7 @@ class MergeInsertionsAndPresence(unittest.TestCase):
             r = subprocess.run(
                 [sys.executable, "bin/merge_cohort_vcf.py", "--states-dir", d,
                  "--refmap", f"{d}/refmap.tsv", "--keys", f"{d}/keys.tsv",
-                 "--cohort-name", "t", "--ancestral", "",
+                 "--cohort-name", "t", "--build-id", "b", "--ancestral", "",
                  "--sv-matrix", f"{d}/sv.tsv",
                  "--accessory-presence", f"{d}/acc",
                  "--accessory-catalogue", f"{d}/cat.tsv",

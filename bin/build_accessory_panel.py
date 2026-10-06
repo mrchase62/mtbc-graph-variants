@@ -47,9 +47,23 @@ def read_fasta(path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--validation", default="refbias/T2.accessory_validation.tsv")
-    ap.add_argument("--candidates", default="refbias/t2/candidates.tsv")
-    ap.add_argument("--fasta", default="refbias/t2/candidates.fasta")
+    # NO DEFAULT INPUTS OR OUTPUT. They were the pilot's refbias/t2/ and
+    # refbias/panel/, CX333's, which a new graph's run would have read and
+    # overwritten. docs/PANEL_TREE.md section 4 gives the commands for a build.
+    ap.add_argument("--validation", required=True,
+                    help="bin/t2_summary.py's table")
+    ap.add_argument("--candidates", required=True,
+                    help="bin/t2_extract_candidates.py's --out-meta")
+    ap.add_argument("--fasta", required=True,
+                    help="bin/t2_extract_candidates.py's --out-fasta")
+    ap.add_argument("--genomes", required=True,
+                    help="one genome per line: the samples of the graph VCF the "
+                         "candidates were extracted from (bcftools query -l), "
+                         "the genomes t2_validate_accessory.sh blasted. "
+                         "carrier_frac is over them (it was over a fixed 332, "
+                         "CX333's), and they are written beside the table as "
+                         "panel_manifest.genomes.txt, which P0 checks against "
+                         "the build's genomes")
     ap.add_argument("--h37rv", required=True)
     ap.add_argument("--blastn", required=True)
     ap.add_argument("--min-sep", type=float, default=0.50)
@@ -60,13 +74,21 @@ def main():
                     help="H37Rv coverage above this is copy-number, not new sequence")
     ap.add_argument("--min-carriers", type=int, default=17,
                     help="carriers needed to call a locus common (~5%% of 332)")
-    ap.add_argument("--outdir", default="refbias/panel")
+    ap.add_argument("--outdir", required=True)
     a = ap.parse_args()
     os.makedirs(a.outdir, exist_ok=True)
 
+    genomes = sorted({l.strip() for l in open(a.genomes) if l.strip()})
+    if not genomes:
+        sys.exit(f"FATAL: no genomes in {a.genomes}")
     seqs = read_fasta(a.fasta)
     carriers = {r["allele_id"]: r["carriers"].split(",")
                 for r in csv.DictReader(open(a.candidates), delimiter="\t")}
+    stray = sorted({c for v in carriers.values() for c in v} - set(genomes))
+    if stray:
+        sys.exit(f"FATAL: {a.candidates} names {len(stray)} carriers not in "
+                 f"{a.genomes} ({', '.join(stray[:5])}): another graph's "
+                 f"candidates, or another genome list")
 
     by_locus = collections.defaultdict(list)
     for r in csv.DictReader(open(a.validation), delimiter="\t"):
@@ -89,7 +111,7 @@ def main():
                          rep_allele=rep["allele_id"], rep_len=int(rep["len"]),
                          n_alleles=len(alleles), n_confirmed=len(confirmed),
                          carriers_any=len(allc),
-                         carrier_frac=round(len(allc) / 332, 4),
+                         carrier_frac=round(len(allc) / len(genomes), 4),
                          rep_separation=float(rep["separation"])))
 
     # Homology to H37Rv decides whether an entry can be a clean ALT contig at all.
@@ -142,6 +164,9 @@ def main():
     with open(os.path.join(a.outdir, "panel_manifest.tsv"), "w") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t")
         w.writeheader(); w.writerows(rows)
+    # the genome record P0 step assets checks against the build's genomes
+    with open(os.path.join(a.outdir, "panel_manifest.genomes.txt"), "w") as fh:
+        fh.write("".join(f"{g}\n" for g in genomes))
     for cls, fn in (("novel", "accessory_novel.fasta"),
                     ("mosaic", "accessory_mosaic.fasta")):
         with open(os.path.join(a.outdir, fn), "w") as fh:

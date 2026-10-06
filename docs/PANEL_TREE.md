@@ -1,14 +1,26 @@
 # The panel tree, and the other P0 inputs made outside P0
 
 P0 (`bin/p0_prepare.sh`) builds every per-build asset from the graph and its
-own files, except for three things that need a cluster job or a choice. This file says how to make each one for a
-new graph. Every command is run from the repository root after
-`source config/project_env.sh`, with `B=refbias/build/<build id>` (the build
-P0 made; `bash bin/p0_prepare.sh --list` prints it).
+own files, except for four things that need a cluster job or a choice: the
+panel tree, the IS6110 crossmaps, the accessory panel, and the outgroup. This
+file says how to make each one for a new graph. Every command is run from the
+repository root after `source config/project_env.sh`, with
+`B=refbias/build/<build id>` (the build P0 made; `OG=<graph.og> bash
+bin/p0_prepare.sh --list` prints it).
 
 No step has a CX333 default any more. A step whose input is missing stops
-with an error. It does not fall back to `data/trees/cx333.*`,
-`accessory/assets/` or `refbias/build/7713a8d71d8e`.
+with an error. It does not fall back to `graphs/CX333.*`, `data/trees/cx333.*`,
+`accessory/assets/`, `refbias/panel/`, `refbias/t11/` or
+`refbias/build/7713a8d71d8e`. P0 needs `OG` (or `GRAPH_DIR`) and, for step
+`assets`, `ACCESSORY_DIR` (section 4).
+
+**The outgroup** is set in one place, `MTB_OUTGROUP` in
+`config/project_env.sh` (default `GCF_035581225`, CX333's canettii; empty for
+a graph with none). P0 writes it into `$B/build_info.tsv` as `outgroup`, step
+`panel_polarity` polarises the panel with it (and refuses another), and
+`assoc/bin/cohort_assoc_tail.sh` roots each cohort tree and names the event
+writer's outgroup from that record. The panel tree's own outgroup leaves for
+step `ancestral` are `ANC_OUTGROUPS` (below; decision D44).
 
 ## 1. The panel tree, for step `ancestral`
 
@@ -117,9 +129,8 @@ P0 differs from that run in three ways:
 - `bin/p5_finish.sh`, which passes `--accessory-catalogue` to
   `merge_cohort_vcf.py`.
 
-**Not yet produced by P0:** `$B/assets/accessory_loci.tsv` is still copied
-from `ACCESSORY_DIR/panel_manifest.tsv` (`refbias/panel/`). Its producer is
-outside this repository.
+**Its input,** `$B/assets/accessory_loci.tsv`, is copied by step `assets`
+from `ACCESSORY_DIR/panel_manifest.tsv`, made from this graph as in section 4.
 
 ## 3. IS6110 crossmaps for every panel genome: step `is6110_intervals`
 
@@ -129,21 +140,81 @@ and, without `REFMAP`, builds every genome in `$B/assets/accessions.txt`.
 Each genome needs its stage-1 GFF first.
 
 ```bash
-MTB_BUILD_DIR=$B REFS=$B/refs <stage 1 over every panel genome>   # see below
-MTB_BUILD_DIR=$B sbatch is6110/bin/p1i_build_matched.sh
-bash bin/p0_prepare.sh --step is6110_intervals
+MTB_BUILD_DIR=$B sbatch is6110/bin/p1i_discover_matched.sh   # stage 1, every panel genome
+MTB_BUILD_DIR=$B sbatch is6110/bin/p1i_build_matched.sh      # stage 2, after stage 1
+OG=<graph.og> bash bin/p0_prepare.sh --step is6110_intervals
 ```
 
-**Known gap: stage 1** (`is6110/bin/p1i_discover_matched.sh`):
+Both scripts take the build from `MTB_BUILD_DIR` (or the one completed
+build), read `$B/refs`, and without `REFMAP` cover every genome in
+`$B/assets/accessions.txt`. Both record the sha256 of the reference each
+product was made from (`<R>.ref.sha256` in `is6110/assets/matched_gff/` and
+`is6110/assets/isclean_matched/`) and redo any reference whose bytes differ,
+or that has no record, so a GFF or crossmap made from another build's
+sequence is not kept. (The first run after this change re-discovers every
+CX333 GFF once, because none has a record; minimap2, seconds each.)
 
-- It still reads the refmap's references.
-- It defaults to the CX333 build's `refs/`.
-- It skips any GFF that already exists, even one made from an older build's
-  sequence.
+## 4. The accessory panel, for step `assets`
 
-Until it is changed to match `p1i_build_matched.sh`, run its loop by hand over
-`$B/assets/accessions.txt` with `REFS=$B/refs`, into an empty `OUTDIR`.
+Step `assets` copies `ACCESSORY_DIR/panel_manifest.tsv` into the build as
+`assets/accessory_loci.tsv`, the accessory locus table that P3, P4, P5 and
+step `catalogue` read, and `ACCESSORY_DIR/accessory_{novel,mosaic}.fasta`,
+the panel P3 aligns to. CX333's were `refbias/panel/`, made on 2026-09-14 by
+four scripts that lived only in the working tree; they are now in `bin/`:
 
-`p1i_build_matched.sh` records the sha256 of the reference each clean build
-was made from (`<R>.ref.sha256`). It rebuilds any reference whose bytes
-differ, so a crossmap made from another build's sequence is not kept.
+| step | script | what it does |
+|---|---|---|
+| a | `bin/t2_extract_candidates.py` | every pure insertion of 500 bp or more in the graph VCF, with its carriers |
+| b | `bin/t2_validate_accessory.sh` | blasts every candidate against each panel assembly (one task per genome) |
+| c | `bin/t2_summary.py` | carrier vs non-carrier identity and full-length rate per allele |
+| d | `bin/build_accessory_panel.py` | one locus per position, representative allele, novelty against H37Rv |
+
+None of them has a default input or output any more (they were the pilot's
+`refbias/t2/`, `refbias/T2.accessory_validation.tsv`, `refbias/panel/` and
+`loci/hely_tatc/samples.txt`). With `G=<graph dir>` and `P=<panel dir>`, a
+new folder:
+
+```bash
+mkdir -p $P/t2
+"$MTB_BCFTOOLS" query -l $G/all_variants.collapsed.vcf.gz > $P/t2/genomes.txt
+"$MTB_PY" bin/t2_extract_candidates.py --vcf $G/all_variants.collapsed.vcf.gz \
+    --bcftools "$MTB_BCFTOOLS" --out-fasta $P/t2/candidates.fasta --out-meta $P/t2/candidates.tsv
+SAMPLES=$P/t2/genomes.txt QUERY=$P/t2/candidates.fasta OUT=$P/t2/hits \
+    sbatch --array=1-$(wc -l < $P/t2/genomes.txt)%40 bin/t2_validate_accessory.sh
+"$MTB_PY" bin/t2_summary.py --hits $P/t2/hits --meta $P/t2/candidates.tsv \
+    --out $P/t2/accessory_validation.tsv
+"$MTB_PY" bin/build_accessory_panel.py --validation $P/t2/accessory_validation.tsv \
+    --candidates $P/t2/candidates.tsv --fasta $P/t2/candidates.fasta \
+    --genomes $P/t2/genomes.txt --h37rv "$MTB_H37RV" --blastn "$MTB_QC_BIN/blastn" \
+    --outdir $P
+OG=<graph.og> ACCESSORY_DIR=$P bash bin/p0_prepare.sh --step assets
+```
+
+- **The VCF** is the graph's collapsed file, the one step `assets` copies
+  into the build. On CX333 the collapsed and the `nolab` file give the same
+  1,643 candidates, byte for byte; the decomposed file gives 2,757 (its
+  duplicate records).
+- **The assemblies** step b blasts are `data/rotated/<genome>.dnaA_rotated.fasta`
+  (run from the run root); one task is a few seconds.
+- **`--genomes`** is the graph VCF's samples, the genomes step b blasted
+  (H37Rv, the VCF's reference, is not one). `carrier_frac` is over them (it
+  was over a fixed 332). `build_accessory_panel.py` refuses candidates whose
+  carriers are not all in it, and writes it as `$P/panel_manifest.genomes.txt`.
+- **P0 checks that record.** Step `assets` refuses an `ACCESSORY_DIR` with no
+  `panel_manifest.genomes.txt`, or one whose genomes plus H37Rv are not
+  exactly the build's (`bin/p0_check.py accessory-panel`). CX333's
+  `refbias/panel/` has no record and is refused; remake it as above.
+
+**CX333 reproduced.** On 2026-10-06 the four steps above, on
+`graphs/CX333.s10k.k23.K15/all_variants.collapsed.vcf.gz`, reproduced
+`refbias/t2/candidates.{tsv,fasta}`, every `refbias/t2/hits` table,
+`refbias/T2.accessory_validation.tsv`, and `refbias/panel/panel_manifest.tsv`,
+`accessory_novel.fasta` and `accessory_mosaic.fasta` byte for byte (hits
+compared sorted; blastn's row order is not fixed).
+
+**The IS6110 locus list and anchor sets** (`IS6110_LOCI`, `IS6110_ANCHORS`)
+are no longer copied by default. They were `refbias/t11/loci_clean.tsv` and
+`anchor_sets.tsv`, a pilot test's files; no pass of the chain reads them
+(only the working tree's `p1b`/`p1c` benchmarks), and nothing in this
+repository makes the locus list (`is6110/bin/is6110_anchor_sets.py` makes the
+anchor sets from it). Step `assets` copies them only when both are named.

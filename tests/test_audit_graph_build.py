@@ -206,7 +206,11 @@ class ReadersTakeCollapsed(unittest.TestCase):
             s = open(p).read()
             self.assertNotRegex(s, r'(default=|= ?"|:-)[^\n]*all_variants\.decomposed',
                                 p)
-            self.assertIn("all_variants.collapsed.vcf.gz", s, p)
+            # the graph's collapsed file, or the build's copy of it
+            # (cleanup2: production readers have no CX333 default and are
+            # passed <build>/assets/graph_collapsed.vcf.gz)
+            self.assertTrue("all_variants.collapsed.vcf.gz" in s
+                            or "graph_collapsed.vcf.gz" in s, p)
 
     @staticmethod
     def graph(d, records, samples=("S1", "S2", "S3")):
@@ -228,6 +232,7 @@ class ReadersTakeCollapsed(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             self.graph(d, recs)
             r = subprocess.run([py(), os.path.join(ROOT, "bin/sv_intervals.py"),
+                                "--graph-vcf", COLLAPSED,
                                 "--is6110-gff", "", "--out", "iv.tsv"],
                                cwd=d, capture_output=True, text=True)
             self.assertEqual(r.returncode, 0, r.stderr)
@@ -245,8 +250,8 @@ class ReadersTakeCollapsed(unittest.TestCase):
                   "carriers_any\tcarrier_frac\th37rv_cov\tnovelty\n"
                   "ACC_5000\t5000\tpolymorphic\t400\t1\t2\t0.6\t0\tnovel\n")
             r = subprocess.run([py(), os.path.join(ROOT, "accessory/bin/merge_catalogues.py"),
-                                "--loci", "loci.tsv", "--out", "c.tsv",
-                                "--out-fasta", "c.fa"],
+                                "--loci", "loci.tsv", "--graph-vcf", COLLAPSED,
+                                "--out", "c.tsv", "--out-fasta", "c.fa"],
                                cwd=d, capture_output=True, text=True)
             self.assertEqual(r.returncode, 0, r.stderr)
             c = list(csv.DictReader(open(f"{d}/c.tsv"), delimiter="\t"))
@@ -275,8 +280,8 @@ class ReadersTakeCollapsed(unittest.TestCase):
                       "carriers_any\tcarrier_frac\th37rv_cov\tnovelty\n"
                       "ACC_5000\t5000\tpolymorphic\t400\t2\t5\t1\t0\tnovel\n")
                 subprocess.run([py(), os.path.join(ROOT, "accessory/bin/merge_catalogues.py"),
-                                "--loci", "loci.tsv", "--out", "c.tsv",
-                                "--out-fasta", "c.fa"],
+                                "--loci", "loci.tsv", "--graph-vcf", COLLAPSED,
+                                "--out", "c.tsv", "--out-fasta", "c.fa"],
                                cwd=d, capture_output=True, text=True, check=True)
                 got[name] = list(csv.DictReader(open(f"{d}/c.tsv"),
                                                 delimiter="\t"))[0]["graph_len"]
