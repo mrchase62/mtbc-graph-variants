@@ -84,6 +84,56 @@ def forward_offset(offset, strand, length):
     return int(length) - 1 - off
 
 
+_COMP = str.maketrans("ACGTNacgtn", "TGCANtgcan")
+
+
+def node_forward_alleles(off, strand, ref, alt, rseq="", r_pos=0):
+    """A node-frame record restated on the node's FORWARD strand (D41).
+
+    `off` is the forward offset (forward_offset above) of the record's first
+    base as the sample's reference R reads it; `strand` is `-` when R's
+    sequence reads the node reverse complemented (odgi's walk flag combined
+    with R being stored flipped in the panel: graph_frame.complement_needed);
+    `ref`/`alt` are R's alleles; `rseq` is R's sequence (refs frame) and
+    `r_pos` the record's 1-based position in it.
+
+    Without this, one event read by references walking the node in opposite
+    directions became two keys, C>T and G>A (scale200: 11 bases).
+
+    Returns (offset, ref, alt, status). On `+` nothing changes. On `-`:
+    - a SNP or MNP is reverse complemented and starts at off-(len-1);
+    - a left-anchored indel, D the deleted and I the inserted bases, keeps
+      its anchor on the left of the FORWARD strand: that is the base after
+      R's span, complemented, at off-len(D)-1;
+    - any other shape is reverse complemented as a block at off-(len(ref)-1).
+    Status `off_node` (the restated record would start before the node) or
+    `no_anchor_sequence` returns the record unchanged, for the caller to
+    count; the key then stays in R's orientation.
+    """
+    if strand != "-":
+        return off, ref, alt, "forward"
+    rc = lambda x: x.translate(_COMP)[::-1]   # noqa: E731
+    if len(ref) == len(alt):
+        new = off - (len(ref) - 1)
+        if new < 0:
+            return off, ref, alt, "off_node"
+        return new, rc(ref), rc(alt), "reversed"
+    if ref[:1] == alt[:1] and (len(ref) == 1 or len(alt) == 1):
+        D, I = ref[1:], alt[1:]
+        new = off - len(D) - 1
+        if new < 0:
+            return off, ref, alt, "off_node"
+        i = r_pos + len(D)            # 0-based index of the base after R's span
+        if not rseq or not (0 <= i < len(rseq)):
+            return off, ref, alt, "no_anchor_sequence"
+        anc = rseq[i].translate(_COMP).upper()
+        return new, anc + rc(D), anc + rc(I), "reanchored"
+    new = off - (len(ref) - 1)
+    if new < 0:
+        return off, ref, alt, "off_node"
+    return new, rc(ref), rc(alt), "reversed_block"
+
+
 def load_node_lengths(path, want=None):
     """{node id (str): length} from the build's node table
     (assets/node_positions.tsv, columns node and length; P0 step nodes).

@@ -34,6 +34,11 @@ import argparse, bisect, collections, csv, gzip, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mtb_norm  # noqa: E402
+import importlib.util as _ilu  # noqa: E402
+_gfs = _ilu.spec_from_file_location(
+    "graph_frame", os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "graphframe", "bin", "graph_frame.py"))
+graph_frame = _ilu.module_from_spec(_gfs); _gfs.loader.exec_module(graph_frame)
 
 
 def op(p):
@@ -215,6 +220,12 @@ def main():
                          "walks the node in reverse that is L-1-offset; "
                          "without the length such a record cannot be keyed "
                          "and is dropped, counted")
+    ap.add_argument("--frames", default="",
+                    help="the build's graph frame table (default: "
+                         "MTB_GRAPH_FRAMES or MTB_BUILD_DIR's), to tell whether "
+                         "R is stored reverse complemented in the panel; needed "
+                         "to write node-frame alleles on the node's forward "
+                         "strand")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
@@ -325,6 +336,11 @@ def main():
     rows = []
     n_near = 0
     n_anchor = collections.Counter()
+    n_nodestrand = collections.Counter()
+    # D41: R's alleles read the node reverse complemented when R walks it `-`
+    # in the panel, or when R itself is stored flipped in the panel (22 of 333
+    # accessions), but not both. Asked once, and only if R has node rows.
+    r_flipped = None
 
     # --- direct arm: core sequence only ---------------------------------------
     for pos, ref, alt, qual in load_vcf(a.direct):
@@ -361,6 +377,7 @@ def main():
             continue
         if off is None:
             off = ""          # on-path: the column is informational; unknown
+        r_ref, r_alt = ref, alt          # as R reads them, for the node frame
         h, ref, alt, anchor_status = on_strand(h, r_pos, ref, alt, strand,
                                                dist == 0)
         n_anchor[anchor_status] += 1
@@ -381,6 +398,18 @@ def main():
             else:
                 reg_off = "off_path_accessory"
                 nm = acc_name(h)
+            # ONE KEY PER EVENT, NOT ONE PER WALK DIRECTION (D41). The
+            # alleles were H37Rv-strand (on_strand above), which says nothing
+            # about the node: references walking the node in opposite
+            # directions wrote one event as C>T and G>A, two keys. They are
+            # restated from R's own alleles on the node's forward strand.
+            if r_flipped is None:
+                r_flipped = graph_frame.Frames(a.frames or None).flipped(
+                    a.reference)
+            rs = "-" if (np_[2] == "-") != r_flipped else "+"
+            off, ref, alt, nst = mtb_norm.node_forward_alleles(
+                off, rs, r_ref, r_alt, rseq, r_pos)
+            n_nodestrand[nst] += 1
             rows.append(dict(
                 sample=a.sample, reference=a.reference, build_id=a.build_id,
                 arm="composed", component="called", region=reg_off,
@@ -491,6 +520,9 @@ def main():
         print(f"  matched-arm records dropped, {why}: {n}")
     for k in sorted(c):
         print(f"    {k[0]:<9s}{k[1]:<10s}{k[2]:<9s}{c[k]:>7d}")
+    if n_nodestrand:
+        print("  node-frame alleles on the node's forward strand (D41): "
+              + ", ".join(f"{k} {v}" for k, v in sorted(n_nodestrand.items())))
     n_acc = n_off - n_near
     # count names among accessory-scale records only: counting them across all
     # off-path rows produced "11 of 5 carry a name", which is the kind of ratio

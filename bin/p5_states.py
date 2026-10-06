@@ -783,7 +783,15 @@ def main():
                         start = hit[0]
                         pp = start + mtb_norm.forward_offset(off, hit[1], hit[3])
                         p = frames.to_refs(a.reference, pp - 1) + 1
-                        st = ref_state(p, canon)
+                        # The key's alleles are on the node's FORWARD strand
+                        # (P4, D41); the gVCF reads this reference's strand,
+                        # which is the reverse where it walks the node `-` or
+                        # is stored flipped in the panel, but not both. The
+                        # reversion test compares the called base with the
+                        # key's REF, so it has to complement there.
+                        rs = ("-" if frames.complement_needed(a.reference,
+                                                              hit[1]) else "+")
+                        st = ref_state(p, canon, rs)
                         state, allele = (st, canon if st == "REF" else "")
             elif pr is None:
                 # odgi returned nothing for this position: unmeasured, not

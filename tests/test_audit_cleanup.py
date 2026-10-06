@@ -111,13 +111,16 @@ class P4NodeKey(unittest.TestCase):
         write(f"{d}/graph.vcf", "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\t"
               "QUAL\tFILTER\tINFO\tFORMAT\tOTHER\n")
         write(f"{d}/nodes.tsv", NODEHDR + "201016\tR\t1\t+\t1\t130\n")
+        write(f"{d}/frames.tsv", "accession\tstrand\toffset\tpanel_len\n"
+              "R\t+\t0\t1000\n")
         r = subprocess.run(
             [sys.executable, "bin/p4_place.py", "--sample", tag,
              "--reference", "R", "--build-id", "b",
              "--direct", f"{d}/{tag}/direct.vcf", "--matched", f"{d}/{tag}/matched.vcf",
              "--h37rv-pos", f"{d}/{tag}/hpos.tsv", "--node-pos", f"{d}/{tag}/npos.tsv",
              "--mask", f"{d}/mask.bed", "--loci", f"{d}/loci.tsv",
-             "--graph-vcf", f"{d}/graph.vcf", "--out", f"{d}/{tag}/placed.tsv"]
+             "--graph-vcf", f"{d}/graph.vcf", "--out", f"{d}/{tag}/placed.tsv",
+             "--frames", f"{d}/frames.tsv"]
             + (["--node-lengths", f"{d}/nodes.tsv"] if lengths else []),
             capture_output=True, text=True)
         return r
@@ -280,6 +283,160 @@ class P5ReadsForwardOffset(unittest.TestCase):
                         "--node-positions", f"{self.d}/none.tsv")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("no node table", r.stderr)            # was only a note
+
+
+def _rc(x):
+    return x.translate(str.maketrans("ACGT", "TGCA"))[::-1]
+
+
+class NodeForwardAlleles(unittest.TestCase):
+    """D41: node-frame alleles were written in the reading reference's
+    orientation, so one event read by references walking the node in
+    opposite directions was two keys (C>T and G>A). They are now written on
+    the node's forward strand."""
+
+    def setUp(self):
+        self.n = load("mtb_norm_d41", "bin/mtb_norm.py")
+
+    def test_forward_unchanged(self):
+        self.assertEqual(self.n.node_forward_alleles(83, "+", "C", "T"),
+                         (83, "C", "T", "forward"))
+
+    def test_snp_and_mnp_reversed(self):
+        f = self.n.node_forward_alleles
+        self.assertEqual(f(83, "-", "G", "A"), (83, "C", "T", "reversed"))
+        # an MNP's first base as R reads it is its LAST on the forward strand
+        self.assertEqual(f(84, "-", "GA", "TC"), (83, "TC", "GA", "reversed"))
+
+    def test_indels_reanchored_on_the_forward_left(self):
+        fwd = "ACGTACCGTAGGCTAACGTT"         # the node, forward
+        rseq = "NNNNN" + _rc(fwd) + "NNNNN"  # R walks it `-`, from R pos 6
+        L = len(fwd)
+        def rpos(o):                        # R position of forward offset o
+            return 6 + (L - 1 - o)
+        # deletion of fwd[9] (forward: fwd[8] anchors, REF fwd[8:10])
+        # R left-anchors it on fwd[10], complemented, at R pos rpos(10)
+        ref, alt = _rc(fwd[9:11]), _rc(fwd[10])
+        self.assertEqual(
+            self.n.node_forward_alleles(10, "-", ref, alt, rseq, rpos(10)),
+            (8, fwd[8:10], fwd[8], "reanchored"))
+        # insertion of "GG" between fwd[8] and fwd[9]
+        ref, alt = _rc(fwd[9]), _rc(fwd[9]) + "CC"
+        self.assertEqual(
+            self.n.node_forward_alleles(9, "-", ref, alt, rseq, rpos(9)),
+            (8, fwd[8], fwd[8] + "GG", "reanchored"))
+
+    def test_record_that_would_leave_the_node_is_unchanged(self):
+        f = self.n.node_forward_alleles
+        self.assertEqual(f(0, "-", "GT", "G", "ACGT", 1)[3], "off_node")
+        self.assertEqual(f(5, "-", "GT", "G", "", 1), (5, "GT", "G",
+                                                       "no_anchor_sequence"))
+
+
+class P4NodeAllelesOneKey(unittest.TestCase):
+    """End to end through bin/p4_place.py: the same SNP and the same deletion
+    read by a reference walking the node + and one walking it - (or stored
+    flipped in the panel) give one key and one allele."""
+
+    FWD = "ACGTACCGTAGGCTAACGTTGCAT"          # node 9, forward
+
+    def place(self, d, tag, ref_seq, rec_pos, ref, alt, walk_off, walk,
+              flipped=False):
+        write(f"{d}/{tag}/direct.vcf", VCFHDR + "c\t50\t.\tA\tG\t50\t.\t.\tGT\t1\n")
+        write(f"{d}/{tag}/matched.vcf",
+              VCFHDR + f"c\t{rec_pos}\t.\t{ref}\t{alt}\t50\t.\t.\tGT\t1\n")
+        write(f"{d}/{tag}/hpos.tsv",
+              f"#src\ttgt\tdist\nR#1#c,{rec_pos - 1},+\t{H},599,+\t100\t+\t+\n")
+        write(f"{d}/{tag}/npos.tsv",
+              f"#src\tnode\nR#1#c,{rec_pos - 1},+\t9,{walk_off},{walk}\n")
+        write(f"{d}/{tag}/r.fasta", f">c\n{ref_seq}\n")
+        write(f"{d}/{tag}/frames.tsv", "accession\tstrand\toffset\tpanel_len\n"
+              f"R\t{'-' if flipped else '+'}\t0\t{len(ref_seq)}\n")
+        write(f"{d}/mask.bed", "c\t1\t2\tx\n")
+        write(f"{d}/loci.tsv", "pos\tlocus_id\n")
+        write(f"{d}/graph.vcf", "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\t"
+              "QUAL\tFILTER\tINFO\tFORMAT\tOTHER\n")
+        write(f"{d}/nodes.tsv", NODEHDR + f"9\tR\t1\t+\t1\t{len(self.FWD)}\n")
+        r = subprocess.run(
+            [sys.executable, "bin/p4_place.py", "--sample", tag,
+             "--reference", "R", "--build-id", "b",
+             "--direct", f"{d}/{tag}/direct.vcf", "--matched", f"{d}/{tag}/matched.vcf",
+             "--h37rv-pos", f"{d}/{tag}/hpos.tsv", "--node-pos", f"{d}/{tag}/npos.tsv",
+             "--mask", f"{d}/mask.bed", "--loci", f"{d}/loci.tsv",
+             "--graph-vcf", f"{d}/graph.vcf", "--out", f"{d}/{tag}/placed.tsv",
+             "--ref-fasta", f"{d}/{tag}/r.fasta", "--node-lengths", f"{d}/nodes.tsv",
+             "--frames", f"{d}/{tag}/frames.tsv"],
+            capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        return [(q["key"], q["ref"], q["alt"]) for q in rows(f"{d}/{tag}/placed.tsv")
+                if q["frame"] == "node"]
+
+    def both(self, o_fwd, ref_f, alt_f, o_rev, ref_r, alt_r, flipped=False):
+        F, L = self.FWD, len(self.FWD)
+        plus = "N" * 10 + F + "N" * 10           # R walks `+` from pos 11
+        minus = "N" * 10 + _rc(F) + "N" * 10     # R walks `-` from pos 11
+        with tempfile.TemporaryDirectory() as d:
+            a = self.place(d, "fwd", plus, 11 + o_fwd, ref_f, alt_f, o_fwd, "+")
+            if flipped:
+                # stored flipped in the panel, walked `+` there: R's own
+                # sequence still reads the node reverse complemented
+                b = self.place(d, "rev", minus, 11 + o_rev, ref_r, alt_r,
+                               L - 1 - o_rev, "+", flipped=True)
+            else:
+                b = self.place(d, "rev", minus, 11 + o_rev, ref_r, alt_r,
+                               o_rev, "-")
+        return a, b
+
+    def test_snp(self):
+        F, L = self.FWD, len(self.FWD)
+        o = 7                                     # forward offset of the SNP
+        a, b = self.both(o, F[o], "T", L - 1 - o, _rc(F[o]), _rc("T"))
+        self.assertEqual(a, [(f"node:9:{o}", F[o], "T")])
+        self.assertEqual(b, a)                    # was ("node:9:7", "C", "A")
+
+    def test_snp_flipped_reference(self):
+        F, L = self.FWD, len(self.FWD)
+        o = 7
+        a, b = self.both(o, F[o], "T", L - 1 - o, _rc(F[o]), _rc("T"),
+                         flipped=True)
+        self.assertEqual(b, a)
+
+    def test_deletion(self):
+        F, L = self.FWD, len(self.FWD)
+        # forward: anchor F[8], F[9] deleted. Reverse: anchored on F[10].
+        w = L - 1 - 10                            # R's walk offset of F[10]
+        a, b = self.both(8, F[8:10], F[8], w, _rc(F[9:11]), _rc(F[10]))
+        self.assertEqual(a, [("node:9:8", F[8:10], F[8])])
+        self.assertEqual(b, a)
+
+
+class P5NodeKeyOnForwardStrand(P5ReadsForwardOffset):
+    """D41 in P5: a node key's REF is on the node's forward strand, and a
+    reference walking the node `-` reads its complement. The sample's own
+    call at the key's base equals the key's REF there only after
+    complementing: a reversion, so REF, not NOCALL."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        d = cls.d
+        # the key's base is path position 108 (see the parent); the sample
+        # calls T there, the complement of the key's forward REF A
+        write(f"{d}/s.g.vcf", VCFHDR
+              + "c\t1\t.\tA\t<NON_REF>\t.\t.\tEND=107\tGT:DP\t0:30\n"
+              + "c\t108\t.\tA\tT,<NON_REF>\t.\t.\t.\tGT:DP\t1:30\n"
+              + "c\t109\t.\tA\t<NON_REF>\t.\t.\tEND=4000100\tGT:DP\t0:30\n")
+
+    def test_reverse_walk_read_at_forward_offset(self):
+        pass                                      # the parent's gVCF only
+
+    def test_reversion_compared_on_the_reference_strand(self):
+        r = self.states("--node-paths", f"{self.d}/node_paths.tsv",
+                        "--node-positions", f"{self.d}/node_positions.tsv")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        cells = [l.split("\t")[1] for l in open(f"{self.d}/s.states.tsv")
+                 if l[:1].isdigit()]
+        self.assertEqual(cells, [])               # REF; was NOCALL
 
 
 # ==========================================================================
