@@ -1813,6 +1813,33 @@ beside it.
 
 There are also about 20 LOW items in the reports.
 
+### Progress on the 12 items (on `audit-fixes`)
+
+- **Item 1, done (88b27a9). Panel polarity keys are left-aligned like the
+  cohort VCF.**
+  - `panel_polarity.py` normalises keys with `mtb_norm.normalise` against the
+    build's H37Rv and pools collisions.
+  - Indels that find a key: scale200 1,553 → 4,452, gwas1000 1,953 → 5,690.
+    159 / 161 of the newly matched have ALT ancestral; none is lost or
+    changed.
+  - P0 step `panel_polarity` needs `refs`, and records the H37Rv and
+    `mtb_norm` checksums.
+- **Item 2, done (2554f71). The chain builds the cohort + panel tree** (the
+  user chose to move it into the chain).
+  - **New steps:**
+    - 2, `assoc/bin/combined_alignment.py`: every panel genome's row via
+      `add_outgroup.outgroup_allele`, with the outgroup as one of them, plus
+      panel-only SNP columns only where no cohort record covers the position;
+    - 3, IQ-TREE rooted on the outgroup;
+    - 3b, `assoc/bin/prune_for_cohort.py`.
+  - The event writer reads the outgroup from the combined alignment.
+  - **scale200 (scratch):** 533 taxa × 90,812 columns in 31 s. Panel rows
+    against direct alignment: 648 discordant cells (0.002%), against 68,935
+    (0.25%) in the old combined alignment.
+  - **Not yet run:** IQ-TREE on the combined alignment (a job; part of the
+    rerun).
+- **261 tests pass.** Next: item 3 (false ABSENT calls).
+
 ### Working mode (the user's preference, 2026-10-06)
 
 - Fewer agents, one bug at a time, so the user can respond as bugs emerge.
