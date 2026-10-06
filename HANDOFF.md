@@ -1857,8 +1857,22 @@ There are also about 20 LOW items in the reports.
     reconstruction are ancestral reconstructions. The panel polarity table
     (one outgroup's allele), presence-is-derived and ALT-is-derived are
     readings or assumptions.
-- **264 tests pass.** Next: item 4 (accessory loci wrongly marked
-  unmeasurable).
+- **Item 4, done (eaaa255). Accessory read-route blindness is judged at 95%
+  identity.**
+  - `merge_catalogues.py` writes `h37rv_cov95` (BLAST; minimap2's assembly
+    presets miss the 30 sequences under 200 bp), and
+    `locus_presence.read_route_blind` uses it: blind if ≥0.9 at ≥95%
+    identity. A catalogue without the column keeps the old rule.
+  - P0 step `catalogue` needs `refs`, and uses `MTB_BLASTN` (default
+    `$MTB_QC_BIN/blastn`).
+  - **CX333:** blind loci 674 → 604, including measurable ACC_2867346,
+    ACC_2165937 and ACC_0334653. The FASTA and every other column are
+    unchanged.
+  - **Not changed:** contiguous H37Rv copies with mixed old PRESENT/ABSENT
+    calls stay blind. Their pool coverage comes from homologous copies
+    elsewhere, because the pool is aligned to the whole catalogue.
+- **266 tests pass.** Next: item 5 (variants conditioned on unmeasurable
+  loci leave the scan).
 
 ### Working mode (the user's preference, 2026-10-06)
 
