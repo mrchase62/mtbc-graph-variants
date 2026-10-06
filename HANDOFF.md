@@ -1882,8 +1882,18 @@ There are also about 20 LOW items in the reports.
   - **Production event matrices with item 4's rule:** 167 of 254 (scale200)
     and 862 of 1,251 (gwas1000) conditional variants are now kept,
     unconditional; 87 / 389 remain conditioned.
-- **267 tests pass.** Next: item 6 (reciprocal overlap when caller deletions
-  are matched to intervals).
+- **Item 6, done (33aff55). One same-deletion rule.**
+  - `sv_intervals.same_deletion`: near in position and length, and at least
+    half of the longer deletion's bases shared.
+  - It is now used for the graph clustering, for adding caller deletions to
+    the catalogue, and for the merge's "the catalogue supersedes this caller
+    row". The caller's first deleted base (h37rv_pos + 1) is compared with
+    the catalogue's start.
+  - Caller deletions no longer wrongly dropped: 98 (scale200), 312 (gwas1000).
+- **270 tests pass.** Next: item 7 (chain provenance: code, tree, outgroup,
+  node-locus).
+- **A running chat log** for the user is at `analysis/CHAT_LOG.md`
+  (untracked), updated each turn.
 
 ### Working mode (the user's preference, 2026-10-06)
 
