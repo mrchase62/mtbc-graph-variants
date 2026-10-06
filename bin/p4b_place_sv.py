@@ -174,6 +174,14 @@ def main():
         # restated by frame_convert.py from-panel; `-` means R runs reverse to
         # H37Rv here, so an event's breakpoints swap sides (see below)
         strand = f[3].strip() if len(f) > 3 and f[3].strip() in "+-" else "+"
+        # odgi's own flag, column 5 `-`: R walks the node opposite to H37Rv
+        # and the reported target is one base high, R reading complemented
+        # to column 4 (measured in bin/p4_place.py's parse_pos_file: 8,684 of
+        # 8,694 GCF_000193185 positions). The target is H37Rv, stored
+        # forward, so the homolog is tgt-1.
+        if len(f) > 4 and f[4].strip() == "-":
+            tgt -= 1
+            strand = "-" if strand == "+" else "+"
         proj.setdefault(src, (tgt, dist, strand))
 
     pe_iv = []

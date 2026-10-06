@@ -151,11 +151,27 @@ def parse_pos_file(path, want_node=False):
                 # frame_convert.py: the relation between the two refs
                 # sequences, which is `-` only when the panel stores one of the
                 # two accessions reverse complemented. odgi's own flag is
-                # carried in f[4] and is deliberately not used here -- it
-                # already accounts for locally inverted steps, and folding it
-                # in again complements the allele at exactly those sites.
-                val = (int(tgt[-2]) + 1, int(f[2]) if len(f) > 2 else 0,
-                       f[3] if len(f) > 3 and f[3] in ("+", "-") else "+")
+                # carried in f[4].
+                t = int(tgt[-2]) + 1
+                st = f[3] if len(f) > 3 and f[3] in ("+", "-") else "+"
+                # WHERE f[4] IS `-` (R and H37Rv walk the node in opposite
+                # directions) THE TARGET IS ONE BASE HIGH AND R READS
+                # COMPLEMENTED to what f[3] says. The earlier note here, that
+                # odgi already accounts for the inverted step, rested on 4
+                # pilot SNPs. Measured instead by reading R's 31-mer around the
+                # source against H37Rv's around the target:
+                #   f[3] f[4]  homolog            GCF_000193185  scale200 P4
+                #   +    -     t-1, complemented  8,684 / 8,694   167 / 228
+                #   -    -     t-1, same strand        -              7 / 7
+                #   +    +     t, same strand    34,298 / 34,465
+                # (bin/p5_states.py corrects the H37Rv -> R direction the same
+                # way.) The shift is -1 because the target here is always
+                # H37Rv, which the panel stores forward; for a target stored
+                # reverse complemented it would be +1.
+                if len(f) > 4 and f[4].strip() == "-":
+                    t -= 1
+                    st = "-" if st == "+" else "+"
+                val = (t, int(f[2]) if len(f) > 2 else 0, st)
         except (ValueError, IndexError):
             continue
         out.setdefault(src, val)
@@ -460,8 +476,9 @@ def main():
     if rev:
         nre = sum(1 for r in rev if r["kind"] != "SNP")
         print(f"  opposite strand: {len(rev)} records project onto H37Rv's other "
-              f"strand because the panel stores {a.reference} reverse "
-              f"complemented; {nre} of them are indels")
+              f"strand, because the panel stores {a.reference} reverse "
+              f"complemented or the step is locally inverted; {nre} of them "
+              f"are indels")
         for k in sorted(n_anchor):
             if k != "same_strand":
                 print(f"    {k}: {n_anchor[k]}")

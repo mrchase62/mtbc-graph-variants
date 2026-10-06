@@ -204,12 +204,25 @@ def main():
 
     say(3, "matrix ALT count against pass one's H37Rv burden (same frame)")
     print(f"      {'sample':<17s}{'matrix ALT':>11s}{'H37Rv':>10s}{'ratio':>8s}")
-    ratios = []
+    # A SAMPLE WITH NO H37Rv COUNT IS NA, NOT 0. It used to print 0 and enter
+    # the median as a ratio of 0, which reads as "the merge lost every call"
+    # and drags the median down by however many summaries are missing.
+    ratios, n_na = [], 0
     for s in samples:
-        m, p = st[s]["ALT"], p2.get(s, 0)
-        r_ = m / p if p else 0
+        m, p = st[s]["ALT"], p2.get(s)
+        if not p:
+            n_na += 1
+            print(f"      {s:<17s}{m:>11d}{'NA':>10s}{'NA':>8s}")
+            continue
+        r_ = m / p
         ratios.append(r_)
         print(f"      {s:<17s}{m:>11d}{p:>10d}{r_:>8.2f}")
+    if n_na:
+        print(f"      {n_na} of {len(samples)} samples have no H37Rv count in "
+              f"{a.p2_summary} (or a count of 0): NA, left out of the median")
+    if not ratios:
+        findings.append(dict(check="alt_vs_p2", value="NA",
+                             detail=f"no H37Rv counts for {n_na} samples"))
     if ratios:
         med = statistics.median(ratios)
         print(f"      ratio median {med:.2f}")
@@ -219,7 +232,9 @@ def main():
         print(f"      either direction means the merge lost or duplicated calls.")
         findings.append(dict(check="alt_vs_p2",
                              value=round(statistics.median(ratios), 3),
-                             detail="median matrix/P2 ratio"))
+                             detail="median matrix/P2 ratio"
+                             + (f"; {n_na} samples NA (no H37Rv count)"
+                                if n_na else "")))
 
     say(4, "state balance across samples (outliers indicate one sample behaving differently)")
     for stt in ("ALT", "REF", "ABSENT", "NOCALL"):

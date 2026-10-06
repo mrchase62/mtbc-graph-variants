@@ -110,12 +110,20 @@ def parse_position(text, want_node):
             else:
                 tp = f[1].rsplit(",", 2)
                 tacc = tp[0].split("#")[0]
-                # the refs-to-refs relation, which is the storage flip alone:
-                # odgi already accounts for a locally inverted step when it
-                # reports the target position. Measured in
-                # graphframe/bin/frame_convert.py.
+                # the refs-to-refs relation from the storage flip, and then
+                # odgi's own flag (f[3] here: this output has not been
+                # through frame_convert.py). Where it is `-` the source walks
+                # the node opposite to the target, and odgi reports a target
+                # one PANEL base high and complemented: measured at 8,684 of
+                # 8,694 such GCF_000193185 positions (bin/p4_place.py's
+                # parse_pos_file). The earlier note here, that odgi already
+                # accounts for the inverted step, rested on 4 pilot SNPs.
                 st = "-" if FRAMES.flipped(sacc) != FRAMES.flipped(tacc) else "+"
-                val = (FRAMES.to_refs(tacc, int(tp[1])) + 1,
+                tpos = int(tp[1])
+                if len(f) > 3 and f[3].strip() == "-":
+                    tpos -= 1
+                    st = "-" if st == "+" else "+"
+                val = (FRAMES.to_refs(tacc, tpos) + 1,
                        int(f[2]) if len(f) > 2 else 0, st)
         except (ValueError, IndexError):
             continue
@@ -160,7 +168,15 @@ def main():
     ap.add_argument("--graph", default=None)
     ap.add_argument("--odgi", default=os.environ.get("MTB_ODGI", "odgi"))
     ap.add_argument("--h37rv-path", default="GCF_000195955#1#NC_000962.3")
-    ap.add_argument("--ismapper-dir", default="refbias/p1f")
+    # NO DEFAULT DIRECTORY. The default was the PILOT's refbias/p1f, so a
+    # cohort run that did not pass this joined against the pilot isolates'
+    # tables and wrote 0 ("no ISMapper region near") for every other isolate,
+    # which is "not compared" written as "compared and disagreed". Empty turns
+    # the join off; an isolate without a table in the given directory is blank.
+    ap.add_argument("--ismapper-dir", default="",
+                    help="this cohort's ISMapper output directory "
+                         "(<dir>/<sample>/<sample>/IS6110/...); empty, the "
+                         "default, turns the ISMapper join off")
     ap.add_argument("--ism-window", type=int, default=50)
     ap.add_argument("--near-tol", type=int, default=50,
                     help="dist.to.ref at or below this is a small-insertion "
@@ -227,10 +243,12 @@ def main():
                            a.threads)
 
     ism = collections.defaultdict(list)
-    for s in {x["sample"] for x in sites}:
+    ism_ran = set()
+    for s in ({x["sample"] for x in sites} if a.ismapper_dir else ()):
         tp = os.path.join(a.ismapper_dir, s, s, "IS6110",
                           f"{s}__NC_000962.3_table.txt")
         if os.path.exists(tp):
+            ism_ran.add(s)
             for r in csv.DictReader(open(tp), delimiter="\t"):
                 try:
                     ism[s].append((int(r["x"]), int(r["y"]), r.get("call", "")))
@@ -257,7 +275,7 @@ def main():
             place = "off_path_accessory"; key = f"node:{nid}:{noff}"
         tally[place] += 1
         hit, call = "", ""
-        if place == "on_path":
+        if place == "on_path" and s["sample"] in ism_ran:
             for x, y, c in ism.get(s["sample"], []):
                 if abs(h - x) <= a.ism_window or abs(h - y) <= a.ism_window:
                     hit, call = 1, c; break
@@ -283,7 +301,15 @@ def main():
     print("  " + "-" * 28)
     print(f"  {'total':22s} {len(rows):5d}")
 
-    onp = [r for r in rows if r["placement"] == "on_path"]
+    onp = [r for r in rows if r["placement"] == "on_path"
+           and r["ismapper"] != ""]
+    if not a.ismapper_dir:
+        print("\n  ISMapper join off (no --ismapper-dir): the ismapper column "
+              "is blank")
+    elif len(ism_ran) < len({r["sample"] for r in rows}):
+        print(f"\n  ISMapper tables for {len(ism_ran)} of "
+              f"{len({r['sample'] for r in rows})} isolates in "
+              f"{a.ismapper_dir}; the others are blank, not 0")
     if onp:
         m = sum(1 for r in onp if r["ismapper"] == 1)
         print(f"\n  ISMapper join, on-path sites only: {m}/{len(onp)} = "
