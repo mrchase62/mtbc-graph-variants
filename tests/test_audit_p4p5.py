@@ -159,7 +159,12 @@ class ProjectionAndReferenceAllele(unittest.TestCase):
              "--placed", f"{d}/placed.tsv", "--gvcf", f"{d}/s.g.vcf",
              "--projected", f"{d}/proj.pos",
              "--h37rv", f"{d}/refs/GCF_000195955.fasta",
-             "--node-paths", f"{d}/none", "--node-positions", f"{d}/none",
+             # the node tables are required now (audit cleanup); this fixture
+             # has no node-frame keys, so header-only tables
+             "--node-paths", write(f"{d}/node_paths.tsv", "node\tpaths\n"),
+             "--node-positions", write(f"{d}/node_positions.tsv",
+                                       "node\taccession\tstart\tstrand\t"
+                                       "n_occurrences\tlength\n"),
              "--out", f"{d}/s.states.tsv"],
             capture_output=True, text=True, env=env)
         cls.st = (sparse_states(f"{d}/s.states.tsv", cls.keys)
