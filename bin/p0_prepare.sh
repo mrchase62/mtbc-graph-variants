@@ -487,8 +487,25 @@ step_assets() {
         _copy "${IS6110_GFF:-data/annotation/H37Rv_IS6110.pansn.gff}" "${BUILD}/assets/is6110_elements.gff"
     local f
     for f in "${ACCESSORY_DIR}"/accessory_*.fasta; do
+        [[ "$(basename "$f")" == accessory_panel.fasta ]] && continue
         [[ -s "$f" ]] && _copy "$f" "${BUILD}/assets/$(basename "$f")"
     done
+    # THE COMBINED ACCESSORY PANEL P3 ALIGNS TO, made and indexed here (review
+    # 2, R2-BUILD-1). P3's first task used to build it inside the build, so the
+    # build changed after its manifest and the pre-submission contract check
+    # (refbias/io_contract.tsv) refused every fresh build for lacking it.
+    local pnl="${BUILD}/assets/accessory_panel.fasta"
+    if [[ -s "${BUILD}/assets/accessory_novel.fasta" || -s "${BUILD}/assets/accessory_mosaic.fasta" ]]; then
+        cat "${BUILD}/assets/accessory_novel.fasta" "${BUILD}/assets/accessory_mosaic.fasta" \
+            > "${pnl}.tmp" 2>/dev/null || true
+        "$BWA" index "${pnl}.tmp" > /dev/null 2>&1 \
+            || { echo "FATAL: bwa index of the accessory panel failed" >&2; return 1; }
+        "$MTB_SAMTOOLS" faidx "${pnl}.tmp" \
+            || { echo "FATAL: samtools faidx of the accessory panel failed" >&2; return 1; }
+        local e
+        for e in amb ann pac sa fai bwt; do mv -f "${pnl}.tmp.${e}" "${pnl}.${e}"; done
+        mv -f "${pnl}.tmp" "$pnl"
+    fi
     _say "assets: $(ls -1 "${BUILD}/assets" | wc -l) entries, none of them links"
     _mark assets
 }

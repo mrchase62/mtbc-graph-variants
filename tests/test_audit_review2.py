@@ -460,5 +460,34 @@ class BuildManifestCompleteness(unittest.TestCase):
         self.assertIn("build_info.tsv", bad.stderr)
 
 
+class ContractAcceptsFreshBuild(unittest.TestCase):
+    """R2-BUILD-1: refbias/io_contract.tsv refused every fresh build. P0 now
+    makes the accessory panel, and the two outputs later passes read (p1g's
+    IS-clean BAM, p1iv's cohort key table) are declared."""
+
+    def test_fresh_cohort_is_not_refused_on_these_three(self):
+        with tempfile.TemporaryDirectory() as d:
+            b = os.path.join(d, "build")
+            os.makedirs(os.path.join(b, "assets"))
+            for e in ("", ".amb", ".ann", ".pac", ".sa", ".fai", ".bwt"):
+                write(os.path.join(b, "assets", "accessory_panel.fasta" + e), "x\n")
+            write(f"{d}/cohort.tsv", "sample\tx\nS1\t.\nS2\t.\n")
+            passes = "p1,p2,p3,p4,p4b,p5,p1g,p1i,p1iv,p1is,p5svgt,p5vcf"
+            write(f"{d}/cohorts.tsv",
+                  f"fresh\t{d}/cohort.tsv\t{d}/crams.tsv\t{d}/out\t{passes}\t\n")
+            r = run([sys.executable, os.path.join(ROOT, "refbias/bin/io_contract.py"),
+                     "fresh", "--contract", os.path.join(ROOT, "refbias/io_contract.tsv"),
+                     "--registry", f"{d}/cohorts.tsv", "--build", b,
+                     "--will-run", passes], cwd=d)
+        missing = r.stdout.split("do not submit:")[-1] if "do not submit" in r.stdout else ""
+        for path in ("accessory_panel.fasta", "_p1i_cohort_keys.tsv", "isclean.bam"):
+            self.assertNotIn(path, missing, r.stdout)
+
+    def test_p3_never_writes_the_panel(self):
+        txt = open(os.path.join(ROOT, "bin/p3_accessory.sh")).read()
+        self.assertNotIn('cp -f "$lock" "$PANEL"', txt)
+        self.assertIn("bin/p0_prepare.sh --step assets", txt)
+
+
 if __name__ == "__main__":
     unittest.main(warnings="ignore")

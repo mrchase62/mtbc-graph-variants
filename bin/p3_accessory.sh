@@ -94,33 +94,19 @@ if [[ "${1:-${P3STEP:-}}" == "--summary" ]]; then
         --loci "$LOCI" --out "${OUTDIR}/p3_summary.tsv"
 fi
 
-# --- the combined accessory panel, indexed once per build --------------------
-# Build-scoped, so it belongs beside P0's other assets rather than in a sample
-# work dir. Race-guarded the same way P0 indexes references, since array tasks
-# start together.
+# --- the combined accessory panel: a build asset ------------------------------
+# P0's assets step makes and indexes it (review 2, R2-BUILD-1). It used to be
+# built here by the first array task, inside the build, which changed the build
+# after its manifest and made the pre-submission contract check refuse every
+# fresh build. Now it is required, and never written from here.
 PANEL="${BUILD}/assets/accessory_panel.fasta"
-# COMPLETE MEANS EVERY FILE, and .bwt is moved into place LAST. Other tasks
-# used to take .bwt alone as "indexed", and it was moved before .pac and .sa,
-# so a task starting in that window ran bwa mem on a half-installed index and
-# failed -- and one failed task cancels everything downstream under afterok.
 _panel_ready() {
     local e
     [[ -s "$PANEL" ]] || return 1
     for e in amb ann pac sa fai bwt; do [[ -s "${PANEL}.${e}" ]] || return 1; done
 }
-if ! _panel_ready; then
-    lock="${PANEL}.build.$$"
-    cat "${BUILD}/assets/accessory_novel.fasta" \
-        "${BUILD}/assets/accessory_mosaic.fasta" > "$lock"
-    "$BWA" index "$lock" > "${WORK}/panel_index.log" 2>&1
-    "$MTB_SAMTOOLS" faidx "$lock"
-    [[ -s "$PANEL" ]] || cp -f "$lock" "$PANEL"
-    for ext in amb ann pac sa fai bwt; do       # bwt last: it is the signal
-        [[ -f "${lock}.${ext}" ]] && mv -f "${lock}.${ext}" "${PANEL}.${ext}"
-    done
-    rm -f "$lock"
-fi
-_panel_ready || { echo "FATAL: accessory panel index incomplete at ${PANEL}" >&2; exit 1; }
+_panel_ready || { echo "FATAL: no indexed accessory panel at ${PANEL}; run" \
+    "bin/p0_prepare.sh --step assets (delete logs/assets.done first)" >&2; exit 1; }
 
 if [[ $# -ge 1 ]]; then
     SAMPLE="$1"
