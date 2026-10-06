@@ -237,6 +237,7 @@ class PanelPolarityTable(unittest.TestCase):
                 """, samples=("O", "X", "Y", "Z"))
             r = run([sys.executable, "bin/panel_polarity.py", "--panel-vcf",
                      vcf, "--outgroup", "O", "--bcftools", bcftools(),
+                     "--h37rv", self.h37rv(d, "T" * 10000),
                      "--out", f"{d}/p.tsv"])
             self.assertEqual(r.returncode, 0, r.stderr)
             got = [(x["chrom"], x["pos"], x["ancestral"], x["panel_af"])
@@ -245,6 +246,49 @@ class PanelPolarityTable(unittest.TestCase):
         # carriers O and X of the four genomes, Z called in the second copy
         self.assertEqual(got, [(PANSN, "100", "ALT", "0.5000"),
                                (PANSN, "200", "REF", "0.2500")])
+
+    @staticmethod
+    def h37rv(d, seq):
+        return write(os.path.join(d, "h37rv.fasta"), f">NC_000962.3\n{seq}\n")
+
+    def test_keys_left_aligned_like_the_cohort_vcf(self):
+        """Review 2, R2-INT-1. The collapsed VCF trims but does not left-align;
+        the cohort VCF's keys go through mtb_norm.normalise. An insertion in a
+        homopolymer written at the run's right end must be keyed where the
+        cohort VCF keys it, and two right-shifted copies of the one event must
+        pool into a single row (the outgroup is ALT in the second copy)."""
+        sys.path.insert(0, os.path.join(ROOT, "bin"))
+        import mtb_norm
+        # 1-based: 299 C, 300-305 AAAAAA, 306 G, T elsewhere
+        seq = list("T" * 1000)
+        seq[298] = "C"
+        for i in range(299, 305):
+            seq[i] = "A"
+        seq[305] = "G"
+        seq = "".join(seq)
+        with tempfile.TemporaryDirectory() as d:
+            vcf = panel_vcf(d, """
+                302 . A AA . . AC=1;AN=4 GT 0 1 0 0
+                305 . A AA . . AC=1;AN=4 GT 1 0 1 0
+                """, samples=("O", "X", "Y", "Z"))
+            r = run([sys.executable, "bin/panel_polarity.py", "--panel-vcf",
+                     vcf, "--outgroup", "O", "--bcftools", bcftools(),
+                     "--h37rv", self.h37rv(d, seq), "--out", f"{d}/p.tsv"])
+            self.assertEqual(r.returncode, 0, r.stderr)
+            got = rows_of(f"{d}/p.tsv")
+        cohort_key = mtb_norm.normalise(seq, 305, "A", "AA")
+        self.assertEqual(cohort_key, (299, "C", "CA"))
+        self.assertEqual(len(got), 1, got)
+        x = got[0]
+        self.assertEqual((int(x["pos"]), x["ref"], x["alt"]), cohort_key)
+        self.assertEqual((x["ancestral"], x["n_records"], x["panel_af"]),
+                         ("ALT", "2", "0.7500"))
+
+    def test_h37rv_required(self):
+        r = run([sys.executable, "bin/panel_polarity.py", "--panel-vcf", "x",
+                 "--outgroup", "O", "--out", "o"])
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("--h37rv", r.stderr)
 
 
 _VT = []

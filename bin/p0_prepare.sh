@@ -585,8 +585,13 @@ step_is6110_intervals() {
 # made here from the build's own collapsed VCF. OUTGROUP= (empty) records that
 # the graph has no outgroup, and the step writes nothing.
 step_panel_polarity() {
+    # keys are left-aligned against the build's own H37Rv, exactly as the
+    # cohort VCF's are (review 2, R2-INT-1), so that sequence is an input too
+    local h37fa="${BUILD}/refs/${H37RV_ACC}.fasta"
     _inputs graph_vcf_sha256 "${BUILD}/assets/graph_collapsed.vcf.gz" \
-            code_sha256 bin/panel_polarity.py
+            h37rv_sha256 "$h37fa" \
+            code_sha256 bin/panel_polarity.py \
+            norm_code_sha256 bin/mtb_norm.py
     _STEP_KEYS+=("outgroup	${OUTGROUP:-none}")
     _done panel_polarity && { _say "panel_polarity: already done"; return 0; }
     _have assets || { echo "FATAL: step 'panel_polarity' needs step 'assets' done first" >&2; return 1; }
@@ -601,8 +606,10 @@ step_panel_polarity() {
         _say "panel_polarity: OUTGROUP is empty; no table (the event writer needs --panel-polarity '')"
         _mark panel_polarity; return 0
     fi
+    _have refs || { echo "FATAL: step 'panel_polarity' needs step 'refs' done first (it left-aligns against ${h37fa})" >&2; return 1; }
     local out="${BUILD}/assets/panel_polarity.tsv"
     "$MTB_PY" bin/panel_polarity.py --panel-vcf "${BUILD}/assets/graph_collapsed.vcf.gz" \
+        --h37rv "$h37fa" --h37rv-contig "${H37RV_PATH##*#}" \
         --outgroup "$OUTGROUP" --bcftools "$MTB_BCFTOOLS" --out "${out}.tmp" \
         || { rm -f "${out}.tmp"; return 1; }
     mv -f "${out}.tmp" "$out"
