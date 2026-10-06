@@ -60,6 +60,7 @@ import argparse, bisect, collections, csv, gzip, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mtb_norm import normalise, h37rv_key, node_key
+import mtb_norm
 
 import importlib.util as _ilu
 _gfs = _ilu.spec_from_file_location(
@@ -405,19 +406,22 @@ def r_allele(h37, rseq, p, t, strand, canon, kalt, flank=10, ext=1000):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sample", required=True)
-    ap.add_argument("--node-positions",
-                    default="accessory/assets/node_positions.tsv",
-                    help="node offsets along each panel accession, from the "
-                         "same GFA pass as --node-paths. With it a node-frame "
-                         "key whose reference carries the sequence is read in "
-                         "the sample's own frame and gets REF when covered.")
-    ap.add_argument("--node-paths",
-                    default="accessory/assets/node_paths.tsv",
-                    help="node to panel-path membership from "
-                         "accessory/bin/node_path_membership.py. Without it a "
-                         "node-frame key with no record is NOCALL; with it, one "
-                         "whose sequence is absent from this sample's own "
-                         "reference is ABSENT, which is a measurement.")
+    # BOTH NODE TABLES ARE REQUIRED AND COME FROM THE BUILD (P0 step nodes;
+    # p5_merge.sh passes them). They defaulted to accessory/assets/, tables
+    # made by hand from CX333's GFA, and a missing one was only a note, so on
+    # a new graph P5 read another graph's node ids or quietly wrote NOCALL.
+    ap.add_argument("--node-positions", required=True,
+                    help="<build>/assets/node_positions.tsv: node offsets "
+                         "along each panel accession, with the walk's strand "
+                         "and the node's length. A node-frame key whose "
+                         "reference carries the sequence is read in the "
+                         "sample's own frame and gets REF when covered.")
+    ap.add_argument("--node-paths", required=True,
+                    help="<build>/assets/node_paths.tsv: node to panel-path "
+                         "membership from accessory/bin/node_path_membership.py. "
+                         "A node-frame key with no record whose sequence is "
+                         "absent from this sample's own reference is ABSENT, "
+                         "which is a measurement.")
     ap.add_argument("--reference", required=True)
     ap.add_argument("--keys", required=True)
     ap.add_argument("--placed", required=True)
@@ -626,24 +630,25 @@ def main():
     # node -> the panel accessions whose path traverses it, so a node-frame
     # key can be told "absent from this sample's reference" from "unknown".
     nodepaths = {}
-    if a.node_paths and os.path.exists(a.node_paths):
-        for q in csv.DictReader(open(a.node_paths, newline=""), delimiter="\t"):
-            nodepaths[q["node"]] = set(q["paths"].split(",")) if q["paths"] else set()
-        print(f"  node-path membership for {len(nodepaths):,} nodes from "
-              f"{a.node_paths}")
-    else:
-        print("  NOTE no --node-paths table: every node-frame key without a "
-              "record stays NOCALL, which is 97% of them")
+    for p in (a.node_paths, a.node_positions):
+        if not os.path.exists(p):
+            print(f"  FATAL: no node table at {p}; run bin/p0_prepare.sh "
+                  f"--step nodes", file=sys.stderr)
+            return 1
+    for q in csv.DictReader(open(a.node_paths, newline=""), delimiter="\t"):
+        nodepaths[q["node"]] = set(q["paths"].split(",")) if q["paths"] else set()
+    print(f"  node-path membership for {len(nodepaths):,} nodes from "
+          f"{a.node_paths}")
 
-    # (node, accession) -> (start, strand, occurrences) along that accession's
-    # own sequence, so a node-frame key can be read in the sample's own frame.
+    # (node, accession) -> (start, strand, occurrences, length) along that
+    # accession's own sequence, so a node-frame key can be read in the
+    # sample's own frame.
     nodepos = {}
-    if a.node_positions and os.path.exists(a.node_positions):
-        for q in csv.DictReader(open(a.node_positions, newline=""), delimiter="\t"):
-            nodepos[(q["node"], q["accession"])] = (
-                int(q["start"]), q["strand"], int(q.get("n_occurrences") or 1),
-                int(q["length"]) if q.get("length") else None)
-        print(f"  node positions for {len(nodepos):,} (node, accession) pairs")
+    for q in csv.DictReader(open(a.node_positions, newline=""), delimiter="\t"):
+        nodepos[(q["node"], q["accession"])] = (
+            int(q["start"]), q["strand"], int(q.get("n_occurrences") or 1),
+            int(q["length"]) if q.get("length") else None)
+    print(f"  node positions for {len(nodepos):,} (node, accession) pairs")
 
     counts = {"ALT": 0, "REF": 0, "ABSENT": 0, "NOCALL": 0}
     reversions = 0
@@ -707,11 +712,21 @@ def main():
                         # copies share reads and depth at one of them settles
                         # nothing. 8.8% of pairs.
                         state, allele = "NOCALL", ""
+                    elif mtb_norm.forward_offset(off, hit[1], hit[3]) is None:
+                        # walked in reverse with no node length: the base
+                        # cannot be found, so it is not looked at
+                        state, allele = "NOCALL", ""
                     else:
                         # `start` is 1-based along the PANEL path (the GFA
-                        # walk). The key's node offset, as P4 writes it, is
-                        # already counted along the path's direction, so the
-                        # base is start + off on EITHER strand. Measured on the
+                        # walk). The key's node offset is the node's FORWARD
+                        # offset (P4 and the IS6110 arm restate odgi's
+                        # walking offset so that one base has one key), so
+                        # along a reference that walks the node `-` the base
+                        # is L-1-off into the walk: forward_offset is its own
+                        # inverse. Before that restatement the key's offset
+                        # ran along the CARRIER's walk, and was read here
+                        # along this reference's, which is right only when
+                        # the two walk the node the same way. Measured on the
                         # pilot's references, reading the refs base and
                         # comparing it with the key's reference allele:
                         #
@@ -726,7 +741,7 @@ def main():
                         # offset direction; start - off left the node whenever
                         # off > 0.
                         start = hit[0]
-                        pp = start + off
+                        pp = start + mtb_norm.forward_offset(off, hit[1], hit[3])
                         p = frames.to_refs(a.reference, pp - 1) + 1
                         st = ref_state(p, canon)
                         state, allele = (st, canon if st == "REF" else "")

@@ -32,6 +32,9 @@ build-scoped, which is what the build id in every row is for.
 """
 import argparse, bisect, collections, csv, gzip, os, sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import mtb_norm  # noqa: E402
+
 
 def op(p):
     return gzip.open(p, "rt") if p.endswith(".gz") else open(p)
@@ -143,8 +146,11 @@ def parse_pos_file(path, want_node=False):
         try:
             src = int(f[0].rsplit(",", 2)[-2]) + 1
             if want_node:
-                nid, off, _ = f[1].split(",")
-                val = (int(nid), int(off), None)
+                # odgi's node offset runs along R's WALK of the node; the
+                # strand is kept so main() can restate it as the node's
+                # forward offset (mtb_norm.forward_offset)
+                nid, off, nst = f[1].split(",")
+                val = (int(nid), int(off), nst.strip())
             else:
                 tgt = f[1].rsplit(",", 2)
                 # f[3] is strand.vs.ref as REPLACED by graphframe/bin/
@@ -202,6 +208,13 @@ def main():
     ap.add_argument("--ref-fasta", default="",
                     help="the matched reference's FASTA, for the anchor base of "
                          "an OFF-path record, where H37Rv is not the reference")
+    ap.add_argument("--node-lengths", default="",
+                    help="the build's node table (assets/node_positions.tsv, "
+                         "P0 step nodes), for node lengths. A node key's "
+                         "offset is the node's FORWARD offset, and where R "
+                         "walks the node in reverse that is L-1-offset; "
+                         "without the length such a record cannot be keyed "
+                         "and is dropped, counted")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
@@ -300,6 +313,14 @@ def main():
         return 1
     hpos = [hmap.get(pos) for pos, _, _, _ in matched]
     npos = [nmap.get(pos) for pos, _, _, _ in matched]
+    # ONE KEY PER BASE. odgi counts the node offset along the walking
+    # direction, so two references walking a node in opposite directions gave
+    # one base two keys (scale200: 13 of 11,163 keyed nodes had records from
+    # both directions). Offsets are restated in the node's forward
+    # orientation, which needs the node's length where the walk is `-`.
+    want_len = {str(v[0]) for v in npos if v is not None and v[2] == "-"}
+    nlen = (mtb_norm.load_node_lengths(a.node_lengths, want_len)
+            if a.node_lengths and want_len else {})
 
     rows = []
     n_near = 0
@@ -331,7 +352,15 @@ def main():
             n_noproj["no H37Rv projection" if hp is None else "no node projection"] += 1
             continue
         h, dist, strand = hp[0], hp[1], hp[2] or "+"
-        node, off = np_[0], np_[1]
+        node = np_[0]
+        off = mtb_norm.forward_offset(np_[1], np_[2], nlen.get(str(node)))
+        if off is None and dist != 0:
+            # a node key in the walking direction would be a second key for
+            # the same base, so it is not written
+            n_noproj["no node length for a reverse-walked node"] += 1
+            continue
+        if off is None:
+            off = ""          # on-path: the column is informational; unknown
         h, ref, alt, anchor_status = on_strand(h, r_pos, ref, alt, strand,
                                                dist == 0)
         n_anchor[anchor_status] += 1

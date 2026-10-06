@@ -65,6 +65,9 @@ _gfs = importlib.util.spec_from_file_location(
 graph_frame = importlib.util.module_from_spec(_gfs)
 _gfs.loader.exec_module(graph_frame)
 FRAMES = graph_frame.Frames()
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "..", "bin"))
+import mtb_norm  # noqa: E402
 
 
 def read_paths(og, odgi):
@@ -105,8 +108,10 @@ def parse_position(text, want_node):
             sacc = sp[0].split("#")[0]
             src = (sp[0], FRAMES.to_refs(sacc, int(sp[1])))
             if want_node:
-                nid, off, _ = f[1].split(",")
-                val = (int(nid), int(off))
+                # the offset runs along the source's walk; main() restates
+                # it as the node's forward offset (mtb_norm.forward_offset)
+                nid, off, nst = f[1].split(",")
+                val = (int(nid), int(off), nst.strip())
             else:
                 tp = f[1].rsplit(",", 2)
                 tacc = tp[0].split("#")[0]
@@ -187,13 +192,26 @@ def main():
     ap.add_argument("--workdir", default="refbias/p1i/project")
     ap.add_argument("--out", default="is6110/results/p1i_sites_h37rv.tsv")
     ap.add_argument("--threads", type=int, default=4)
+    # The build's node table, for node lengths: an off-path site's key is
+    # node:<id>:<forward offset>, and for a carrier that walks the node in
+    # reverse the forward offset is L-1-offset. Default from MTB_BUILD_DIR
+    # (refbias_run.sh exports it; P0 step nodes writes the table).
+    _b = os.environ.get("MTB_BUILD_DIR", "")
+    ap.add_argument("--node-lengths",
+                    default=os.path.join(_b, "assets", "node_positions.tsv") if _b else "",
+                    help="<build>/assets/node_positions.tsv; default from "
+                         "MTB_BUILD_DIR")
     a = ap.parse_args()
 
+    # the build's graph, as its stamp records it; the fallback was a glob
+    # over graphs/CX333..., which on a new build projected onto the old graph
     og = a.graph
+    if og is None and _b and os.path.exists(os.path.join(_b, "build_info.tsv")):
+        og = next((l.rstrip("\n").split("\t")[1]
+                   for l in open(os.path.join(_b, "build_info.tsv"))
+                   if l.startswith("graph\t")), None)
     if og is None:
-        import glob
-        g = sorted(glob.glob("graphs/CX333.s10k.k23.K15/*.smooth.final.og"))
-        og = g[0] if g else sys.exit("no graph found; pass --graph")
+        sys.exit("no graph: pass --graph, or set MTB_BUILD_DIR")
     os.makedirs(a.workdir, exist_ok=True)
 
     ref_of = {r["sample"]: r["reference"] for r in
@@ -241,6 +259,18 @@ def main():
     # writer keys on a node only where this is 1 (audit P3IS-3)
     occ = node_occurrences(a.odgi, og, {(k[0], v[0]) for k, v in node.items()},
                            a.threads)
+    # node lengths for the reverse-walked nodes only; a missing table is
+    # refused where one is needed, never read as forward
+    want_len = {str(v[0]) for k, v in node.items()
+                if v[2] == "-" and href.get(k) and href[k][1] != 0}
+    nlen = {}
+    if want_len:
+        if not a.node_lengths or not os.path.exists(a.node_lengths):
+            sys.exit(f"FATAL: {len(want_len)} nodes are walked in reverse and "
+                     f"need their length for a forward offset; no node table "
+                     f"at '{a.node_lengths}' (pass --node-lengths "
+                     f"<build>/assets/node_positions.tsv)")
+        nlen = mtb_norm.load_node_lengths(a.node_lengths, want_len)
 
     ism = collections.defaultdict(list)
     ism_ran = set()
@@ -266,7 +296,21 @@ def main():
                      key="", ismapper="", ism_call="")
             rows.append(s); continue
         h, dist, strand = hp
-        nid, noff = np_
+        nid = np_[0]
+        # ONE KEY PER BASE: the node's forward offset, not odgi's offset along
+        # this carrier's walk, which differs (L-1-off) for a carrier walking
+        # the node in reverse (gwas1000: 71 of 19,990 keyed nodes had sites
+        # from both directions)
+        noff = mtb_norm.forward_offset(np_[1], np_[2], nlen.get(str(nid)))
+        if noff is None and dist != 0:
+            tally["unprojected"] += 1
+            tally["no_node_length"] += 1
+            s.update(placement="unprojected", h37rv_pos="", dist_to_ref="",
+                     node="", node_offset="", node_occ="", frame_strand="",
+                     key="", ismapper="", ism_call="")
+            rows.append(s); continue
+        if noff is None:
+            noff = ""         # on-path: the column is informational; unknown
         if dist == 0:
             place = "on_path"; key = f"h37rv:{h}"
         elif dist <= a.near_tol:
@@ -300,6 +344,9 @@ def main():
             print(f"  {k:22s} {tally[k]:5d}")
     print("  " + "-" * 28)
     print(f"  {'total':22s} {len(rows):5d}")
+    if tally["no_node_length"]:
+        print(f"  {tally['no_node_length']} of the unprojected are off-path "
+              f"sites on a reverse-walked node missing from {a.node_lengths}")
 
     onp = [r for r in rows if r["placement"] == "on_path"
            and r["ismapper"] != ""]
