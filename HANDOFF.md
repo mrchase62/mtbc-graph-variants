@@ -1838,7 +1838,27 @@ There are also about 20 LOW items in the reports.
     (0.25%) in the old combined alignment.
   - **Not yet run:** IQ-TREE on the combined alignment (a job; part of the
     rerun).
-- **261 tests pass.** Next: item 3 (false ABSENT calls).
+- **Item 3, done (31de8ce). No ABSENT where R carries the position.**
+  - `p5_states.deleted_in_ref` first checks whether p's H37Rv context (12
+    bases each side, any base at p) occurs in R within 2,000 bases plus
+    odgi's distance of the target, either strand. If it does, the cell is
+    NOCALL.
+  - **On three scale200 references,** false ABSENT positions go 7/654 →
+    0/624, 59/667 → 0/564 and 7/668 → 0/655. Every removed call had p's
+    context in R; no real deletion was lost.
+  - **Tried and rejected:** unique anchors, which lost about 100 real
+    deletions per sample.
+- **Definitions given to the user (2026-10-06):**
+  - **ABSENT** is a positive claim, inferred from R's sequence, that the
+    position is deleted: GT 2, `*`, and unknown in the tree and event
+    matrix.
+  - **NOCALL** makes no claim.
+  - **Polarity:** only `AA` (Fitch on the panel tree) and the cohort-tree
+    reconstruction are ancestral reconstructions. The panel polarity table
+    (one outgroup's allele), presence-is-derived and ALT-is-derived are
+    readings or assumptions.
+- **264 tests pass.** Next: item 4 (accessory loci wrongly marked
+  unmeasurable).
 
 ### Working mode (the user's preference, 2026-10-06)
 
