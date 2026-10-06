@@ -39,10 +39,15 @@ fixes, with tests) were approved on 2026-10-05.
   - the GenBank scan (0h);
   - the panel checks (0j, `analysis/panel_checks/`).
 
-**In flight (2026-10-05):** the section A fixes in five worktrees, and the
-canettii-isolate before/after comparison (section 0n). The test graphs are
-done (0n). The plan toward a 10K cohort is in
-section 0l and `analysis/strategy/ROAD_TO_10K.md`.
+**State (2026-10-06): section 0o.**
+
+- **Every audit fix is on branch `audit-fixes`** (254 tests), not yet in
+  main. The current association results remain provisional.
+- **Waiting on the user:**
+  - the 44 decisions;
+  - D41;
+  - approval for step 4 (the second review).
+- **Then:** the new panel, graph and build, then scale200 first.
 
 **Before anything else after downtime:**
 
@@ -1604,6 +1609,140 @@ ran), the same seeds and settings. The only change is the isolate, pruned from
 the same tree. Both arms are rerun, so Monte Carlo noise is not mistaken for
 an effect. It covers the scan, all three burdens and the ancestral
 reconstruction at internal nodes.
+
+## 0o. Audit fixes complete on branch `audit-fixes`; canettii comparison (2026-10-06)
+
+### Status
+
+- **Branch `audit-fixes` (ffd7bb9, pushed; NOT yet merged into main)** holds
+  steps 1-3 of 0m:
+  - step 1: code into the repository;
+  - step 2: section A fixes, from 5 groups;
+  - step 3: section B fixes, from 4 groups, plus 2 clean-up passes.
+- **Size:** 95 files changed. 254 tests pass, none skipped: 33 original and
+  221 new regression tests, each failing on the old code. `tests/run_tests.py`
+  also runs `tests/test_audit_*.py`.
+- **Open before main:**
+  - the user's confirmation of the 44 decisions in
+    `analysis/audit/DECISIONS.md`;
+  - the D41 decision;
+  - step 4, the independent second review (not yet approved).
+- **Briefs and reports:** `analysis/audit/FIX_BRIEF.md`,
+  `analysis/audit/CONSOLIDATED.md` and `analysis/audit/DECISIONS.md`.
+
+### What the fixes change (measured on copies of production data)
+
+**IS6110 (P3IS-1):**
+
+- carriers at H37Rv-empty sites: scale200 469 ALT + 1,098 wrongly REF →
+  **1,567 ALT, 0 REF**; gwas1000 2,424 + 5,103 → **7,528 / 0**;
+- insertions on graph nodes their reference visits more than once are no
+  longer merged, so they leave the cohort records (D8): scale200 456 of 772,
+  gwas1000 1,945 of 3,585.
+
+**P5 states:**
+
+- ABSENT is written only where the reference lacks the position (about half
+  of the old ABSENT SNP cells are confirmed deletions);
+- R's own allele decides REF; cells where R carries a third allele are NOCALL
+  (D3, about 600 per sample);
+- clip-only SV confirmations are dropped (scale200 1,918, gwas1000 14,087
+  cells).
+
+**Polarity:**
+
+- fault A: 386 / 323 outgroup cells fixed (about 1,400 per cohort in all,
+  mostly REF → N);
+- fault B: the ancestral node is the MRCA of the non-canettii genomes, and
+  132 lineage 1-4 sites change;
+- `X,*` SNPs enter the alignment: scale200 46,379 → 54,903 columns.
+
+**Association:**
+
+- the region-null leave-one-out works;
+- SV evidence tiers are rebuilt and passed;
+- deletions are credited to every gene they overlap: SV units 179 → 263,
+  small deletions too;
+- the burdens get the 80% floor;
+- the survivor rule needs q_branch (D15). This changes no survivor today.
+- **The DR positive controls hold:** rpoB, rpoC, embB, gyrA, pncA, ethA pass;
+  katG narrowly misses the lineage null.
+
+**Selection:** P1 matches on alleles. Final references change for 4 / 200
+scale200 and 28 / 997 gwas1000 isolates, mostly closer, by about 6 SNPs.
+
+**Graph VCF:**
+
+- the collapsed file has 0 duplicate keys and 0 padded records;
+- every production reader reads it;
+- the duplicate bug had changed 26 of 802 accessory loci (for example
+  ACC_2165937: 216 → 2,078 bp).
+
+**Bugs found during the fixes (not in the audit):**
+
+- **P4 / P4b odgi strand off-by-one at inverted path steps.** The placed REF
+  matched H37Rv at 22 of 59 SNPs before the fix and 59 of 59 after.
+  - Affected: scale200 234 records in 52 samples; gwas1000 about 1,660 in 276
+    samples.
+  - P4b: 1,285 scale200 SV keys move by 1-2 bp.
+- **Node offsets counted along the walk direction.** One base got two keys,
+  and P5 read 536 scale200 and 15,972 gwas1000 cells at the wrong base. Keys
+  now use the node's forward offset.
+
+### Build and rerun safety (now enforced)
+
+- **Guards are keyed on build ID:** outputs from another build are refused,
+  never silently reused or overwritten.
+- **Assets are copied into the build and checksum-verified before every run.**
+- **Every input comes from the build or an explicit argument;** no silent
+  CX333 or pilot defaults remain.
+- **New P0 steps:** nodes, catalogue, is6110_intervals, panel_polarity.
+- **The outgroup is set in one place** (`MTB_OUTGROUP`, recorded in
+  `build_info.tsv`).
+- **`pggb_build.sh` builds clean** with CX333's settings by default, and
+  records every setting plus checksums.
+- **The panel construction is in code and reproduces CX333's 514 → 333**
+  with all 181 reasons. It adds the single-base run rule (it flags exactly
+  GCF_039770655, GCF_045348265 and GCF_050259585), the long-read error checks
+  and the production provenance rule. See `docs/PANEL_BUILD.md` and
+  `docs/PANEL_TREE.md`.
+
+**The current production build 7713a8d71d8e fails the new verification** (its
+assets are links outside the build, and the repeat mask changed). This is moot
+under the plan for a new graph and build.
+
+**Rerun prerequisites (new build):**
+
+1. Regenerate the collapsed graph VCF with the fixed `vcf_collapse.sh`.
+2. Run P0 with all the new steps; build the panel tree (`docs/PANEL_TREE.md`)
+   before the ancestral step.
+3. Run p1iv in full (`node_occ`).
+4. Twoframe and svgt rerun, because interval IDs change.
+5. Write everything into new output folders.
+
+### Canettii isolate: full before/after (`analysis/canettii_effect/README.md`)
+
+**Setup:** the same code (production), seed and inputs, with only the
+`canettii` tip pruned. The rerun with the isolate reproduced production byte
+for byte.
+
+- **Survivors unchanged:** scale200 3 → the same 3; gwas1000 28 → the same
+  28. All are known DR mutations, and all pass q_branch either way.
+- **The isolate inflated only the branch null:** q_branch passes scale200
+  137 → 29, gwas1000 62 → 38; SV units 39 → 8 and 39 → 3. Every change is
+  significant → not.
+- **Rows testable only through it:** 95 / 188. The embA promoter small burden
+  becomes a survivor without it (scale200).
+- **The ancestral reconstruction is unchanged within the MTBC,** except at
+  the MTBC root: 242 / 326 variants there, mostly resolved → unknown (the
+  isolate was breaking ties).
+- **The decision stays with the user** (ASSOC-1).
+
+### Decisions pending (44, `analysis/audit/DECISIONS.md`)
+
+- **Those that change results most:** D3, D8, D9, D15, D16, D37.
+- **D41 (recommended):** write node-frame alleles on the node's forward
+  strand, so the same event from opposite walks gets one key, not two.
 
 ## 1. State before the rerun (2026-09-30)
 
