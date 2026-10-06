@@ -1890,8 +1890,17 @@ There are also about 20 LOW items in the reports.
     row". The caller's first deleted base (h37rv_pos + 1) is compared with
     the catalogue's start.
   - Caller deletions no longer wrongly dropped: 98 (scale200), 312 (gwas1000).
-- **270 tests pass.** Next: item 7 (chain provenance: code, tree, outgroup,
-  node-locus).
+- **Item 7, done (2ac6da3). Chain provenance is a chain of checksums.**
+  - Each `.prov` of the association chain holds the build, the VCF, the code
+    and every input's checksum, upstream products included (`_args_for` in
+    `cohort_assoc_tail.sh`). A change upstream or a code fix makes the
+    downstream products stale, and they are refused, naming the inputs that
+    differ.
+  - `MTB_CHAIN_PRINT_PROV=<product>` prints the expected record.
+  - **After any code change,** move the chain products aside (or use a new
+    cohort name).
+- **271 tests pass.** Next: item 8 (the manifest must require `ancestral`
+  and hash `build_info.tsv`).
 - **A running chat log** for the user is at `analysis/CHAT_LOG.md`
   (untracked), updated each turn.
 
