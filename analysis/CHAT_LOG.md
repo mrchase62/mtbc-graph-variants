@@ -740,3 +740,7 @@ production choices:
 Panel sites covered per isolate: median about 74,100 of 75,587 (minimum
 about 71,600). Most changes are near-ties between closely related
 references, but a few move by more than 10 SNPs. Tests: 324 pass.
+
+**Before/after document:** `analysis/audit/FIX_EFFECTS.md` collects the
+measured stage-level effect of D41, fix 1 and fix 2. Part 2 (end results)
+will be added after the scale200 rerun. Next: fix 3 (D21).
