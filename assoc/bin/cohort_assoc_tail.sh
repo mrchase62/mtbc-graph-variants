@@ -108,6 +108,9 @@ if [[ -z "$OUTGROUP" ]]; then
 fi
 [[ -n "$OUTGROUP" && "$OUTGROUP" != none ]] || {
     echo "FATAL: build ${VCF_BUILD} has no outgroup; the cohort tree cannot be rooted" >&2; exit 1; }
+# The leaves outside the MTBC: the outgroup and any other canettii. Step 4
+# pins the MRCA of everything else to the panel's AA (R2-TREES-6).
+MTBC_EXCLUDE="${OUTGROUP},${MTB_NON_MTBC_TIPS:-}"
 VCF_SHA="$(sha256sum "$VCF" | cut -c1-16)"
 # the node -> locus table exists exactly when presence tables are given
 NODELOCUS=""
@@ -152,6 +155,7 @@ _args_for() {   # the inputs of one product: key=path (checksummed), key==value
             printf '%s\n' "code=${HERE}/write_event_matrix.py" \
                 "tree=${t}.rooted.nwk" "outgroup_aln=${t}.combined.fasta" \
                 "polarity=${POLARITY}" "outgroup==${OUTGROUP}" \
+                "mtbc_exclude==${MTBC_EXCLUDE}" \
                 "presence=${ACCPRES:-}" "node_locus=${NODELOCUS:-}" ;;
         *) echo "FATAL: no provenance inputs defined for $1" >&2; exit 1 ;;
     esac
@@ -270,6 +274,7 @@ if ! _current "assoc/${C}/events/summary.txt"; then
         --outgroup-fasta "data/trees/${C}.combined.fasta" \
         --outgroup-sites "data/trees/${C}.combined.sites.tsv" \
         --panel-polarity "$POLARITY" \
+        --pin-mtbc --mtbc-exclude "$MTBC_EXCLUDE" \
         ${ACCPRES:+--accessory-presence "$ACCPRES" --node-locus "$NODELOCUS"} \
         --dedupe suffix
     _record "assoc/${C}/events/summary.txt"

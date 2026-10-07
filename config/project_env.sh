@@ -194,6 +194,12 @@ mtb_require_cram_root() {
 # Set it EMPTY for a graph with no outgroup (P0 then makes no polarity table).
 # The panel tree's own outgroup leaves for the AA tag are separate: P0 step
 # ancestral, ANC_OUTGROUPS (decision D44).
+#
+# Leaves of a cohort tree that are outside the MTBC besides the outgroup: the
+# panel's second canettii and the read-based canettii isolate. The
+# association tail pins the MRCA of every other leaf -- the MTBC node -- to
+# the panel's AA (R2-TREES-6); names not in a tree are ignored.
+: "${MTB_NON_MTBC_TIPS=GCF_000253375,canettii}"
 : "${MTB_OUTGROUP=GCF_035581225}"
 
 # --- Container bind convention ---------------------------------------------
@@ -355,7 +361,7 @@ mtb_show_config() {
     local v
     for v in MTB_WORK MTB_PERSIST MTB_ARCHIVE MTB_DATA MTB_GRAPHS \
              MTB_CONTAINERS MTB_PGGB_SIF MTB_VG_SIF MTB_GRAPHALIGNER_SIF \
-             MTB_REF_FASTA MTB_REF_PATH MTB_H37RV MTB_OUTGROUP \
+             MTB_REF_FASTA MTB_REF_PATH MTB_H37RV MTB_OUTGROUP MTB_NON_MTBC_TIPS \
              MTB_SNPEFF_JAR MTB_JAVA MTB_SNPEFF_DB MTB_PY MTB_PY_VT MTB_ODGI MTB_MINIMAP2 \
              MTB_SAMTOOLS MTB_BGZIP MTB_TABIX MTB_BEDTOOLS MTB_BCFTOOLS MTB_K8 MTB_PAFTOOLS \
              MTB_BLASTN MTB_MAKEBLASTDB MTB_UNIVEC \

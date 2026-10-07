@@ -57,6 +57,21 @@ synthetic test this turns one true loss into two spurious gains plus a loss.
 The sound fix is not a flag: include an outgroup in the cohort tree, or graft
 the cohort onto the rooted panel tree, so the root state is resolved by data.
 
+THE MTBC NODE IS PINNED, NOT THE ROOT (the user's decision on review 2's
+R2-TREES-6, 2026-10-07). The cohort tree is rooted on the outgroup, so it
+DOES contain the MTBC ancestor, and that is exactly the node the panel's AA
+describes (bin/ancestral_alleles.py: the MRCA of every leaf that is not an
+outgroup). The warning above is about pinning a node the AA does not
+describe; this one it does. Left to the cohort's own parsimony that node was
+derived at 80 AA-polarised variants on scale200, against about 35,000
+consistent, and 26 of the 80 read as two or more losses, which the scan never
+tests. --pin-mtbc pins it to the AA allele wherever AA resolved (polarity
+ref_ancestral or alt_ancestral) and the node has data; the node is the MRCA
+of every leaf not named in --mtbc-exclude (the outgroup and the canettii
+genomes), and the run stops if an excluded leaf sits beneath it.
+<out>/mtbc_pinned.tsv lists each variant whose MTBC state the pin changed and
+what parsimony alone said.
+
 WHY THE INTERNAL LABELS ARE REWRITTEN. Our trees come from IQ-TREE, whose
 internal labels are support values like `100/100` and are therefore neither
 unique nor node identifiers. phyoverlap2 keys every one of its dictionaries on
@@ -262,11 +277,15 @@ def leaf_bits(gt_chars, derived_is_ref, absent):
     return b
 
 
-def fitch(post, pre, children, parent, leaf_index, bits, pin_root=None):
+def fitch(post, pre, children, parent, leaf_index, bits, pin_root=None,
+          pin_node=None, pin_mask=None, pinned_from=None):
     """Vectorised Fitch over a block of variants.
 
     bits is (n_leaves, n_block); returns the resolved per-node state masks as
-    (n_nodes, n_block).
+    (n_nodes, n_block). `pin_node` with `pin_mask` pins that node to the
+    ancestral state where the mask is set and the node has data; if
+    `pinned_from` is a dict, it receives {block column: unpinned mask} for
+    every column the pin changed.
     """
     n_nodes = len(post)
     n_block = bits.shape[1]
@@ -303,6 +322,13 @@ def fitch(post, pre, children, parent, leaf_index, bits, pin_root=None):
             continue
         cand = down[p] & u
         down[node] = np.where(u == UNK, UNK, np.where(cand != UNK, cand, u))
+        if node == pin_node and pin_mask is not None:
+            nat = down[node].copy()            # not a view: overwritten below
+            fix = pin_mask & (u != UNK)
+            down[node] = np.where(fix, A_BIT, nat)
+            if pinned_from is not None:
+                for c in np.flatnonzero(fix & (nat != A_BIT)):
+                    pinned_from[int(c)] = int(nat[c])
     return down
 
 
@@ -327,6 +353,14 @@ def main():
                          "it to the panel-ancestral allele wherever AA "
                          "resolved -- READ THE WARNING in this script's "
                          "header before using it")
+    ap.add_argument("--pin-mtbc", action="store_true",
+                    help="pin the MTBC node (the MRCA of every leaf not in "
+                         "--mtbc-exclude) to the AA allele wherever AA "
+                         "resolved (R2-TREES-6)")
+    ap.add_argument("--mtbc-exclude", default="",
+                    help="comma-separated leaves outside the MTBC: the "
+                         "outgroup and any canettii; names not in the tree "
+                         "are ignored")
     ap.add_argument("--chunk", type=int, default=20000,
                     help="variants per Fitch block")
     # NO DEFAULT. It was refbias/assets/panel_polarity.tsv, CX333's hand-made
@@ -483,6 +517,31 @@ def main():
     pre = list(range(len(nodes)))
     eprint(f"  tree: {len(nodes)} nodes, {len(leaves)} leaves, "
            f"root {labels[root_i]}")
+    mtbc_i = None
+    if a.pin_mtbc:
+        excl = {x for x in a.mtbc_exclude.split(",") if x} & set(leaves)
+        if not excl:
+            sys.exit("FATAL: --pin-mtbc needs --mtbc-exclude to name at least "
+                     "one leaf of this tree (the outgroup)")
+        leaf_set = {i for i in range(len(nodes)) if is_leaf[i]}
+        ing = [i for i in leaf_set if labels[i] not in excl]
+        anc = None
+        for i in ing:                          # MRCA by intersecting paths
+            path, x = [], i
+            while x is not None:
+                path.append(x); x = parent[x]
+            anc = path if anc is None else [x for x in anc if x in set(path)]
+        mtbc_i = anc[0]
+        below, stack = set(), [mtbc_i]
+        while stack:
+            x = stack.pop(); below.add(x); stack.extend(children[x])
+        inside = sorted(labels[i] for i in leaf_set & below if labels[i] in excl)
+        if inside or mtbc_i == root_i:
+            sys.exit(f"FATAL: the MTBC node {labels[mtbc_i]} has excluded "
+                     f"leaves beneath it ({', '.join(inside) or 'it is the root'}); "
+                     f"the tree does not separate the MTBC from {sorted(excl)}")
+        eprint(f"  MTBC node {labels[mtbc_i]}: {len(ing)} leaves; outside it "
+               f"{', '.join(sorted(excl))}")
 
     # ---- VCF
     eprint(f"  reading {a.vcf} ...")
@@ -828,6 +887,7 @@ def main():
            f"{2 * n_n * n_v / 1e9:.2f} GB in memory")
     states = np.empty((n_n, n_v), dtype=np.uint8)
     events = np.empty((n_n, n_v), dtype=np.uint8)
+    pinned = []          # (variant index, unpinned MTBC mask), --pin-mtbc
 
     # ---- reconstruct, in blocks
     for s in range(0, n_v, a.chunk):
@@ -858,7 +918,15 @@ def main():
         if a.root == "ancestral":
             pin = np.asarray(
                 [variants[j]["polarity"] != "unpolarised" for j in range(s, e)])
-        down = fitch(post, pre, children, parent, leaf_index, block, pin)
+        mpin, nat = None, {}
+        if mtbc_i is not None:
+            mpin = np.asarray([variants[j]["polarity"] in
+                               ("ref_ancestral", "alt_ancestral")
+                               for j in range(s, e)])
+        down = fitch(post, pre, children, parent, leaf_index, block, pin,
+                     mtbc_i, mpin, nat)
+        for c, m in nat.items():
+            pinned.append((s + c, m))
         # states: written encoding
         st = np.full(down.shape, ST_UNK, dtype=np.uint8)
         st[down == A_BIT] = ST_ANC
@@ -1005,6 +1073,21 @@ def main():
         eprint(f"  -> {d}/by_variant.kba  ({len(keys)} rows x {len(labels)} cols)")
         eprint(f"  -> {d}/by_node.kba     ({len(labels)} rows x {len(keys)} cols)")
 
+    if mtbc_i is not None:
+        _nm = {D_BIT: "derived", AMB: "tied"}
+        br = np.asarray([i for i in range(n_n) if i != root_i])
+        with open(os.path.join(a.out, "mtbc_pinned.tsv"), "w") as fh:
+            fh.write("id\tpos\tref\talt\tpolarity\tunpinned_mtbc_state\t"
+                     "gains\tlosses\n")
+            for j, m in pinned:
+                v = variants[j]
+                fh.write(f"{v['id']}\t{v['pos']}\t{v['ref']}\t{v['alt']}\t"
+                         f"{v['polarity']}\t{_nm.get(m, str(m))}\t"
+                         f"{int((events[br, j] == EV_GAIN).sum())}\t"
+                         f"{int((events[br, j] == EV_LOSS).sum())}\n")
+        eprint(f"  MTBC node pinned to AA: {len(pinned):,} variants changed "
+               f"-> {a.out}/mtbc_pinned.tsv")
+
     write_pair("ancestor", states)
     write_pair("event", events)
 
@@ -1097,6 +1180,10 @@ def main():
         lines.append(f"  NOTE {pol['root_inferred']:,} had that assumption "
                      f"CONTRADICTED by the reconstruction -- the assumed-derived "
                      f"allele sat at the root -- and were flipped and rebuilt")
+    if mtbc_i is not None:
+        lines.append(f"MTBC node {labels[mtbc_i]} pinned to AA where resolved: "
+                     f"{len(pinned):,} variants changed from parsimony "
+                     f"(mtbc_pinned.tsv)")
     rs = collections.Counter(int(x) for x in states[root_i, :])
     lines.append("state at the tree root")
     for code, name in ((ST_ANC, "ancestral"), (ST_DER, "derived"),

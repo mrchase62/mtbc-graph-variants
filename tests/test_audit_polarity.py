@@ -418,6 +418,67 @@ class EventWriter(unittest.TestCase):
                       open(f"{self.d}/ev/summary.txt").read())
 
 
+class MtbcNodePinned(unittest.TestCase):
+    """Review 2, R2-TREES-6, the user's decision (2026-10-07): the MTBC node
+    of the cohort tree -- the MRCA of every leaf not in --mtbc-exclude -- is
+    pinned to the panel's AA wherever AA resolved."""
+
+    VCF_HDR, TREE = EventWriter.VCF_HDR, EventWriter.TREE
+    setUp, tearDown, writer = EventWriter.setUp, EventWriter.tearDown, EventWriter.writer
+    PIN = ("--pin-mtbc", "--mtbc-exclude", "O,canettii")
+    # 100: AA says A, but every ingroup leaf and the outgroup carry G
+    ALL_DERIVED = ("NC_000962.3 100 h37rv:100:A>G A G . PASS "
+                   "CLASS=small;FRAME=h37rv;AA=A GT 1 1 1 1")
+    # 200: AA says C, and parsimony agrees at the MTBC node
+    AGREES = ("NC_000962.3 200 h37rv:200:C>T C T . PASS "
+              "CLASS=small;FRAME=h37rv;AA=C GT 1 1 0 0")
+    # 300: no AA; never pinned
+    NO_AA = ("NC_000962.3 300 h37rv:300:G>A G A . PASS "
+             "CLASS=small;FRAME=h37rv GT 1 1 1 1")
+    SITES = [("NC_000962.3", 100, "A", "G"), ("NC_000962.3", 200, "C", "T"),
+             ("NC_000962.3", 300, "G", "A")]
+
+    def run3(self, extra=()):
+        return self.writer([self.ALL_DERIVED, self.AGREES, self.NO_AA],
+                           self.SITES, "GCA", extra=extra)
+
+    def test_unpinned_parsimony_puts_the_derived_allele_at_mtbc(self):
+        r, v = self.run3()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(v[0]["n_gain"], "0")
+
+    def test_pinned_mtbc_is_ancestral_and_the_gains_follow(self):
+        r, v = self.run3(self.PIN)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        # a gain on each sister pair, and a loss on the MTBC stem: the
+        # outgroup carries G, so pinning the MTBC node to A puts the change
+        # above it (scale200: 45 stem losses, and 30 stem gains removed)
+        self.assertEqual((v[0]["n_gain"], v[0]["n_loss"]), ("2", "1"))
+        self.assertEqual(v[1]["n_gain"], "1")        # agreed: unchanged
+        self.assertEqual(v[2]["n_gain"], "0")        # no AA: not pinned
+        pinned = rows_of(f"{self.d}/ev/mtbc_pinned.tsv")
+        self.assertEqual([(x["pos"], x["unpinned_mtbc_state"]) for x in pinned],
+                         [("100", "derived")])
+        self.assertIn("MTBC node n00002 pinned to AA where resolved: 1 variants",
+                      open(f"{self.d}/ev/summary.txt").read())
+
+    def test_exclusion_that_does_not_separate_the_mtbc_is_fatal(self):
+        r, _ = self.run3(("--pin-mtbc", "--mtbc-exclude", "S1"))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("does not separate the MTBC", r.stdout + r.stderr)
+
+    def test_no_excluded_leaf_in_the_tree_is_fatal(self):
+        r, _ = self.run3(("--pin-mtbc", "--mtbc-exclude", "canettii"))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("--pin-mtbc needs --mtbc-exclude", r.stdout + r.stderr)
+
+    def test_chain_pins_the_mtbc_node(self):
+        t = open("assoc/bin/cohort_assoc_tail.sh").read()
+        self.assertIn('--pin-mtbc --mtbc-exclude "$MTBC_EXCLUDE"', t)
+        self.assertIn('MTBC_EXCLUDE="${OUTGROUP},${MTB_NON_MTBC_TIPS:-}"', t)
+        self.assertIn('"mtbc_exclude==${MTBC_EXCLUDE}"', t)
+
+
 class MergeHeaderCounts(unittest.TestCase):
     """TP-10: the merged VCF's AA header carries no counts from one table."""
 
