@@ -574,3 +574,21 @@ The code change is queued with any other switched decisions, to be made one
 at a time after the review.
 
 Next is group 5, reference selection and the graph VCF (D20-D24).
+
+---
+
+## 2026-10-07: group 5, reference selection and the graph VCF (D20-D24)
+
+**Confirmed, D23:** `0` wins over `.` in duplicate records.
+
+**Switched, to implement before the new-panel rerun:**
+
+- **D20 + D24:** pick the matched reference by mismatches per site that both
+  sides called. Isolate coverage comes from the P1 BAMs.
+- **D21:** H37Rv becomes a candidate reference, tested through P2-P5.
+- **D22:** left-align the collapsed graph VCF, then re-collapse the 41 events
+  that split.
+
+**Queue so far:** D18, D20/D24, D21, D22.
+
+Next is group 6, the graph build (D25-D27).
