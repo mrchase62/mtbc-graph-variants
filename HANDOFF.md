@@ -1972,13 +1972,21 @@ There are also about 20 LOW items in the reports.
           wrote for the same event; the other 6 are events no other sample
           carries. p4_place.sh now projects the base after every indel
           (6,729 extra positions in scale200).
-        - **Open, needs the user (about 116 records):** R reads along
-          H37Rv's strand, so H37Rv also reads the node in reverse, and R's
-          own H37Rv-strand anchor is off the path. A forward reader's key
-          would go through `on_strand` at t-len(D)-1. That matches other
-          samples' keys for short events in sequence H37Rv has (TGG>T at
-          976,895). For long deletions of off-path sequence it lands about
-          100 bp away (3,740,415 vs 3,740,512). Left as node keys for now.
+        - **The along-strand group, done (16715bb; the user took the
+          recommendation, 2026-10-07):** R reads along H37Rv's strand and
+          the node in reverse, so R's own anchor is off the path. These are
+          keyed with on_strand's t-len(D)-1 only where the REF is H37Rv's
+          own sequence (always true for an insertion). Deletions of
+          off-path sequence keep their node key.
+          - scale200, both groups together: 73 records keyed in H37Rv, 30
+            in core left to the direct arm, 35 kept as node keys
+            (`off_node_not_h37rv_sequence`), 45 still `off_node`
+            (inversion junctions, nodes visited twice, anchors themselves
+            off the path).
+          - Most of the 58 along-strand records have no event of the same
+            size within 15 bp in any other scale200 sample, so there is
+            nothing to compare against. Where there is one, it usually
+            agrees (CCCG>C at 2,802,268).
         - **Existing, not caused by (b):** 407 of 1,702 composed-arm
           h37rv-frame deletions (24%) have a REF that differs from H37Rv.
           These are deletions of R's own sequence that H37Rv lacks. 3 of
@@ -1988,13 +1996,19 @@ There are also about 20 LOW items in the reports.
     - Homopolymer indels read in opposite directions can still sit at
       different anchors: node-frame keys are not left-aligned on the
       forward strand.
-  - The explanation is in `analysis/audit/D41_EXPLAINED.md`. 299 tests pass.
-  - **Homopolymer measurement (scale200, 2026-10-06):** 410 node-frame
-    indel keys, 331 checkable. 42 are not left-aligned on the node (59
-    sample records). Only 3 events get two keys, each from two different
-    references (node 107910: G>GAG at 3 vs T>TGA at 2). 31 more would
-    shift past the node start. Optional fix: left-align node-frame indels
-    against the node sequence.
+  - The explanation is in `analysis/audit/D41_EXPLAINED.md`. 308 tests pass.
+  - **Homopolymer: fixed (16715bb).** Node-frame indels are left-aligned
+    on the node's forward sequence (`mtb_norm.node_left_align`), spelled
+    from R's own sequence via R's node table; the shift stops at the
+    node's first base.
+    - scale200: 59 records shifted. Checked against the GFA's node
+      sequences:
+      - node indel keys not left-aligned: 42 to 0;
+      - events with two keys: 3 to 0.
+    - 31 keys could shift further onto the previous node; that is not
+      followed.
+    - Records whose node R visits twice are left unchanged
+      (`no_node_sequence`).
 - **New item (the user's request, 2026-10-06): an ancestral allele (`AA`)
   for node-frame variants.**
   - `bin/ancestral_alleles.py` writes `AA` only for H37Rv-frame panel SNPs.
