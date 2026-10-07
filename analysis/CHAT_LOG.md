@@ -635,3 +635,20 @@ everything.
 **Queue:** D18, D20/D24, D21, D22, the UniVec check, D32, D38.
 
 Next is group 9, leftovers (D39-D40).
+
+---
+
+## 2026-10-07: group 9, leftovers (D39-D40)
+
+**Switched, D39:** complex and MNP records are credited to every gene their
+REF span touches. The open item about indels credited by their anchor base is
+folded in: indels follow the span rule too. It will be done together with
+D18.
+
+**Confirmed, D40:** small deletions are credited to every overlapping gene.
+This is now the same rule as D18.
+
+**Queue:** D18 with D39 and the indel item, D20/D24, D21, D22, the UniVec
+check, D32, D38.
+
+Next is the last group, D42-D44.

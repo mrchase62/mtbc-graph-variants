@@ -21,6 +21,7 @@ copies of production data.
 | Graph build | D25-D27 | all confirmed as implemented (2026-10-07) |
 | Panel construction | D28-D33 | D28, D30, D31, D33 confirmed; D29 confirmed **plus a UniVec vector check** (download approved by the user); **D32 switched:** the foreign-screen background is chosen by quality with D27's ranking rule. To implement before the panel build (2026-10-07) |
 | Build safety | D34-D38 | D34-D37 confirmed; **D38 switched:** refuse all outputs from before the guards (no evidence-based adoption); the rerun regenerates everything. To implement (2026-10-07) |
+| Leftovers | D39-D40 | **D39 switched:** complex/MNP records credited to every gene their REF span touches; the open item "indels in the small and IS6110 burdens credited by their anchor base" folded in (indels follow the span rule). D40 confirmed (now the same rule as D18). To implement with D18 (2026-10-07) |
 | Node-frame alleles | D41 | option b, done on `audit-fixes` (2026-10-06) |
 
 ## Calling and genotyping (P4-P5)
