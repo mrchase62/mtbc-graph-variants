@@ -592,3 +592,16 @@ Next is group 5, reference selection and the graph VCF (D20-D24).
 **Queue so far:** D18, D20/D24, D21, D22.
 
 Next is group 6, the graph build (D25-D27).
+
+---
+
+## 2026-10-07: group 6, graph build (D25-D27)
+
+**You confirmed all three as implemented.**
+
+- **D25:** sparse mapping is off by default. Revisit only if the new
+  panel's cost estimate is too high.
+- **D26:** keep the decomposed graph VCF.
+- **D27:** `--rank-by` is required.
+
+Next is group 7, panel construction (D28-D33).
