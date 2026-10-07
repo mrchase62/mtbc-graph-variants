@@ -147,8 +147,16 @@ esac
 # strand, so the two conversions below are not optional bookkeeping: without
 # them the projection lands the offset distance away and scores 29.7% against
 # H37Rv's own base instead of 100%. See graphframe/docs/GRAPH_FRAME_RESOLUTION.md.
-zcat "$MATCHED" | awk -v p="$RPATH" '!/^#/ {print p","($2-1)",+"}' \
-    > "${WORK}/${SAMPLE}.rpos.txt"
+# For an indel, also the base AFTER its REF span: read on H37Rv's strand that
+# is the event's anchor, and where it lies on the H37Rv path p4_place.py
+# writes the event in H37Rv coordinates as a reference reading it the other
+# way does (D41).
+zcat "$MATCHED" | awk -v p="$RPATH" '!/^#/ {
+        k = p","($2-1)",+"; if (!(k in s)) { s[k]; print k }
+        n = split($5, al, ","); ind = 0
+        for (i = 1; i <= n; i++) if (length(al[i]) != length($4)) ind = 1
+        if (ind) { k = p","($2-1+length($4))",+"; if (!(k in s)) { s[k]; print k } }
+    }' > "${WORK}/${SAMPLE}.rpos.txt"
 NPOS=$(wc -l < "${WORK}/${SAMPLE}.rpos.txt")
 # AN EMPTY MATCHED VCF IS A LEGITIMATE STATE, NOT A FAILURE. It means the
 # matched reference is so close to the isolate that there is nothing to call

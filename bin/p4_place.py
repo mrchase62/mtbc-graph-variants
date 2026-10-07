@@ -72,6 +72,13 @@ def load_vcf(path):
     return out
 
 
+def is_indel_anchored(ref, alt):
+    """A left-anchored indel: one shared first base, one allele a single
+    base."""
+    return (len(ref) != len(alt) and ref[:1] == alt[:1]
+            and (len(ref) == 1 or len(alt) == 1))
+
+
 def load_intervals(bed):
     """PE/PPE and other masked intervals, each MERGED and sorted.
 
@@ -430,6 +437,45 @@ def main():
             rs = "-" if (np_[2] == "-") != r_flipped else "+"
             node, off, ref, alt, nst = mtb_norm.node_forward_restate(
                 node, off, rs, r_ref, r_alt, rseq, r_pos, locate)
+            # AN EVENT WHOSE H37Rv-STRAND ANCHOR IS ON THE H37Rv PATH (D41,
+            # user's option b). R's anchor is off the path, but read on
+            # H37Rv's strand the anchor is R's base AFTER the span, and where
+            # that base projects onto the path with dist 0 a reference
+            # reading the other way places this same event in H37Rv
+            # coordinates (or leaves it to the direct arm in core). It is
+            # written as that reference writes it. p4_place.sh projects the
+            # base after every indel for this.
+            if nst == "off_node" and is_indel_anchored(r_ref, r_alt):
+                hq = hmap.get(r_pos + len(r_ref))
+                if hq is not None and hq[1] == 0 and hq[2] == "-" and hseq \
+                        and 1 <= hq[0] <= len(hseq):
+                    t = hq[0]
+                    anc = hseq[t - 1].upper()
+                    if rseq and r_pos + len(r_ref) <= len(rseq) and \
+                            rseq[r_pos + len(r_ref) - 1].translate(comp).upper() != anc:
+                        n_nodestrand["to_h37rv_anchor_disagrees"] += 1
+                    reg = region(t)
+                    if reg == "core":
+                        # the direct arm owns core sequence, as it does
+                        # for a reference reading the event forward
+                        n_nodestrand["to_h37rv_core_direct_arm"] += 1
+                        continue
+                    n_nodestrand["to_h37rv"] += 1
+                    hr, ha = anc + rc(r_ref[1:]), anc + rc(r_alt[1:])
+                    rows.append(dict(
+                        sample=a.sample, reference=a.reference,
+                        build_id=a.build_id, arm="composed",
+                        component="called", region=reg, frame="h37rv",
+                        key=f"h37rv:{t}", r_pos=r_pos, h37rv_pos=t,
+                        dist_to_ref=0, node="", node_offset="",
+                        frame_strand="-", ref=hr, alt=ha,
+                        kind=classify(hr, ha),
+                        size=abs(len(strip_gap(ha)) - len(strip_gap(hr))),
+                        acc_locus="", qual=qual))
+                    n_off -= 1
+                    if reg_off == "off_path_near":
+                        n_near -= 1
+                    continue
             n_nodestrand[nst] += 1
             rows.append(dict(
                 sample=a.sample, reference=a.reference, build_id=a.build_id,

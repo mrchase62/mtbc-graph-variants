@@ -485,6 +485,85 @@ class P4NodeEventCrossingNodes(unittest.TestCase):
         self.assertEqual(got, ("5", 0, "TC", "GA", "moved_to_start_node"))
 
 
+class P4NodeEventAnchoredOnH37Rv(unittest.TestCase):
+    """D41, option b: read in reverse, a deletion's H37Rv-strand anchor is on
+    the H37Rv path (node 5 here is H37Rv's base 600) while R's own anchor is
+    off it. A reference reading forward writes h37rv:600; so must this one,
+    and in core neither writes it (the direct arm owns core)."""
+
+    FWD = "ACGTACCGTAGGCTAACGTTGCAT"          # node 9, off the H37Rv path
+
+    def place(self, d, tag, seq, rec_pos, ref, alt, hpos, npos, core):
+        write(f"{d}/{tag}/direct.vcf", VCFHDR + "c\t50\t.\tA\tG\t50\t.\t.\tGT\t1\n")
+        write(f"{d}/{tag}/matched.vcf",
+              VCFHDR + f"c\t{rec_pos}\t.\t{ref}\t{alt}\t50\t.\t.\tGT\t1\n")
+        write(f"{d}/{tag}/hpos.tsv", "#src\ttgt\tdist\n" + hpos)
+        write(f"{d}/{tag}/npos.tsv", "#src\tnode\n" + npos)
+        write(f"{d}/{tag}/r.fasta", f">c\n{seq}\n")
+        write(f"{d}/h.fasta", ">h\n" + "A" * 599 + "G" + "A" * 400 + "\n")
+        write(f"{d}/{tag}/frames.tsv", "accession\tstrand\toffset\tpanel_len\n"
+              f"R\t+\t0\t{len(seq)}\n")
+        write(f"{d}/{tag}/nodes.tsv", NODEHDR + f"9\tR\t11\t-\t1\t{len(self.FWD)}\n")
+        write(f"{d}/mask.bed", "c\t1\t2\tx\n" if core else "c\t590\t610\tother|x\n")
+        write(f"{d}/loci.tsv", "pos\tlocus_id\n")
+        write(f"{d}/graph.vcf", "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\t"
+              "QUAL\tFILTER\tINFO\tFORMAT\tOTHER\n")
+        r = subprocess.run(
+            [sys.executable, "bin/p4_place.py", "--sample", tag,
+             "--reference", "R", "--build-id", "b",
+             "--direct", f"{d}/{tag}/direct.vcf", "--matched", f"{d}/{tag}/matched.vcf",
+             "--h37rv-pos", f"{d}/{tag}/hpos.tsv", "--node-pos", f"{d}/{tag}/npos.tsv",
+             "--mask", f"{d}/mask.bed", "--loci", f"{d}/loci.tsv",
+             "--graph-vcf", f"{d}/graph.vcf", "--out", f"{d}/{tag}/placed.tsv",
+             "--h37rv", f"{d}/h.fasta", "--ref-fasta", f"{d}/{tag}/r.fasta",
+             "--node-lengths", f"{d}/{tag}/nodes.tsv",
+             "--frames", f"{d}/{tag}/frames.tsv"],
+            capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        return r, [(q["key"], q["frame"], q["ref"], q["alt"])
+                   for q in rows(f"{d}/{tag}/placed.tsv")
+                   if q["arm"] == "composed" and q["component"] == "called"]
+
+    def both(self, core):
+        F, L = self.FWD, len(self.FWD)
+        with tempfile.TemporaryDirectory() as d:
+            # forward reader: H37Rv's G (base 600) then node 9; deletes F[0]
+            # anchored on the G, which is on the path (dist 0)
+            _, a = self.place(d, "fwd", "N" * 10 + "G" + F + "N" * 10, 11,
+                              "G" + F[0], "G",
+                              f"R#1#c,10,+\t{H},599,+\t0\t+\t+\n",
+                              "R#1#c,10,+\t5,0,+\n", core)
+            # reverse reader: node 9 read reverse, then H37Rv's base read
+            # reverse (C). R anchors on comp(F[1]), off the path; the base
+            # after its span (R 11+L) is H37Rv's 600, read on the other strand
+            p = 11 + L - 2
+            r, b = self.place(
+                d, "rev", "N" * 10 + _rc(F) + "C" + "N" * 10, p,
+                _rc(F[:2]), _rc(F[1]),
+                f"R#1#c,{p - 1},+\t{H},590,+\t3\t-\t+\n"
+                f"R#1#c,{p + 1},+\t{H},599,+\t0\t-\t+\n",
+                f"R#1#c,{p - 1},+\t9,{L - 2},-\n"
+                f"R#1#c,{p + 1},+\t5,0,-\n", core)
+        return a, b, r
+
+    def test_masked_one_h37rv_key(self):
+        F = self.FWD
+        a, b, r = self.both(core=False)
+        self.assertEqual(a, [("h37rv:600", "h37rv", "G" + F[0], "G")])
+        self.assertEqual(b, a)                    # was a node:9 key
+        self.assertIn("to_h37rv 1", r.stdout)
+
+    def test_core_left_to_the_direct_arm(self):
+        a, b, r = self.both(core=True)
+        self.assertEqual(a, [])
+        self.assertEqual(b, [])
+        self.assertIn("to_h37rv_core_direct_arm 1", r.stdout)
+
+    def test_shell_projects_the_base_after_an_indel(self):
+        s = code("bin/p4_place.sh")
+        self.assertIn('k = p","($2-1+length($4))",+"', s)
+
+
 class P5NodeKeyOnForwardStrand(P5ReadsForwardOffset):
     """D41 in P5: a node key's REF is on the node's forward strand, and a
     reference walking the node `-` reads its complement. The sample's own
