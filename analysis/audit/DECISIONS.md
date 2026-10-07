@@ -44,7 +44,10 @@ copies of production data.
    before the collapse. 8,304 of 93,214 keys move; 49 records fold into 41
    keys. The production graph VCF also predates the GRAPHVCF-5 collapse
    fix (1,461 padded keys); the new build regenerates it.
-5. D29 addition: a UniVec vector check (download approved).
+5. **Done (6dec4b2):** D29 addition: every foreign-screen insert is checked
+   against UniVec_Core (build 10.0) with VecScreen's settings; a strong hit
+   makes it VECTOR. Flags exactly the two known constructs among 2,703
+   inserts.
 6. D32: the foreign-screen background chosen by quality, with D27's ranking.
 7. D38: refuse all outputs from before the guards.
 8. D43: a catalogue input path that is given but missing is fatal.

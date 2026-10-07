@@ -22,6 +22,7 @@ rerunning with that fix off.
 | Fix 2 (D20, D24): reference picked by mismatches per site both sides called | P1 reference | uncovered sites counted as matching; raw counts not normalised | 24 of 200 isolates get a different reference (12%) | 112 of 997 (11%) |
 | Fix 3 (D21): H37Rv as a candidate reference, and a path projected onto itself is the identity | P1 reference; P3-P5 and IS6110 projections | H37Rv could never be chosen; odgi mapped a path onto another copy of itself in repeats | 1 of 200 isolates now maps to H37Rv | 0 of 997; across the build's IS6110 projection store, 22 of 2,707 same-reference lookups were on the wrong copy |
 | Fix 4 (D22): graph VCF left-aligned, then collapsed | graph VCF (panel_af, inherited half) | indels in repeats at vcfwave's position, not the cohort's | build asset: 8,304 of 93,214 keys move; 49 records fold into 41 keys | same asset |
+| Fix 5 (D29): UniVec vector check in the foreign screen | panel QC (which genomes are reviewed) | a construct shared by 2+ genomes could pass as native | — | — (panel: of 2,703 inserts, exactly the 2 known constructs flagged VECTOR) |
 
 ## D41: one event, one key (scale200, P4 rerun on all 199 samples)
 
@@ -209,11 +210,34 @@ build regenerates it.
 - the panel and cohort agree on indel positions;
 - the 41 merged events show their full carrier counts.
 
+## Fix 5: a vector check in the foreign screen (D29)
+
+**Problem.** The foreign screen calls an insert native when other genomes
+carry it. A construct carried by two genomes passes as REVIEW (each vouches
+for the other), and one carried by three would pass as native.
+
+**New rule:** every insert, native or not, is searched against NCBI's
+UniVec_Core with VecScreen's blastn settings. A strong match makes it
+`VECTOR`.
+
+**Measured effect:**
+
+- Of CX333's 449 inserts, exactly two get strong matches: the two known
+  constructs, GCF_044324775 (pJEB, 2,295 bp of vector) and GCF_021535155
+  (attB vector, 2,107 bp).
+- None of the external assemblies' 2,254 inserts matches, not even
+  moderately.
+- End to end on 7 genomes, those two move from `REVIEW_one_homologue` to
+  `VECTOR`; every other verdict is unchanged.
+
+**Expected downstream effect:** none on the current panel, where both
+genomes were already excluded by hand. For the new panel build, a construct
+can no longer pass by being common.
+
 ## Still to come
 
-**Fixes 5-8**, each to be added here as it is done:
+**Fixes 6-8**, each to be added here as it is done:
 
-- UniVec vector check.
 - D32: foreign-screen background chosen by quality.
 - D38: refuse outputs from before the guards.
 - D43: a missing catalogue path stops with an error.

@@ -772,3 +772,20 @@ pick H37Rv now?"; "commit fix 3 when gwas1000 finishes, then start fix 4".
 
 **Tests:** 344 pass. Both fixes are recorded in
 `analysis/audit/FIX_EFFECTS.md`. Next: fix 5 (UniVec).
+
+## 2026-10-07: fix 5 done, UniVec vector check (audit-fixes 6dec4b2)
+
+**User:** "yes, start on fix 5".
+
+- **Download:** UniVec_Core build 10.0 (3,155 sequences), fetched into the
+  repository's `data/univec/` (git-ignored) by the new
+  `bin/fetch_univec.sh`, which records the build and checksum.
+- **The check:** every foreign-screen insert, native or not, is searched
+  with VecScreen's blastn settings. A strong match gives `VECTOR`.
+- **Real data:** of 2,703 inserts (CX333 449, external assemblies 2,254),
+  exactly the two known constructs match: pJEB in GCF_044324775 and the attB
+  vector in GCF_021535155. Nothing else matches, not even moderately.
+- **Also fixed:** a failed minimap2 call was read as "no inserts" and marked
+  done.
+
+**Tests:** 349 pass. Next: fix 6 (D32, the background chosen by quality).
