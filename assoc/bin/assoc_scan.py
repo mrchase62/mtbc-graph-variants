@@ -556,9 +556,20 @@ def main():
         _g.sort()
     _gs = [x[0] for x in _g]
 
-    def _genic(pos):
-        i = _bi.bisect_right(_gs, pos)
-        return any(s <= pos <= e for s, e in _g[max(0, i - 3):i])
+    _gmax = max((e - s for s, e in _g), default=0)
+
+    def _genic(r):
+        """genic when the bases the record changes touch a gene, or, for an
+        insertion, a gene holds both its flanks (variant_span; D18, D39).
+        The anchor base alone called an MNP crossing into a gene intergenic,
+        and an insertion just after a gene's last base genic."""
+        from variant_span import changed_span
+        first, last, inside = changed_span(r, r.get("class") or "small")
+        lo = _bi.bisect_left(_gs, first - _gmax)
+        hi = _bi.bisect_right(_gs, last)
+        if inside:
+            return any(s <= first and last <= e for s, e in _g[lo:hi])
+        return any(s <= last and first <= e for s, e in _g[lo:hi])
 
     # evidence tier per catalogued interval, for the SV region key
     ev_tier = {}
@@ -626,7 +637,7 @@ def main():
             return f"{base}:cond_{b}"
         if not _g or r["frame"] != "h37rv" or not r["pos"].isdigit():
             return base
-        return f"{base}:{'genic' if _genic(int(r['pos'])) else 'intergenic'}"
+        return f"{base}:{'genic' if _genic(r) else 'intergenic'}"
 
     # ---- THE FALLBACK LADDER ----------------------------------------------
     # The fine key above is the right pool when there is enough of it, and on

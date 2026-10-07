@@ -277,12 +277,15 @@ class SmallDeletionSpan(unittest.TestCase):
         self.assertIn("G1", u)
         self.assertIn("G2", u)                           # was G1 only
 
-    def test_insertion_and_snp_stay_at_anchor(self):
+    def test_insertion_between_genes_and_snp(self):
+        # D18/D39: an insertion after G1's last base (1100) changes no base
+        # of G1; it sits before G2's first base, so it is G2's promoter. The
+        # SNP at 1100 is G1's own base. (Under the anchor rule both were G1.)
         u = self.base.units([("1100|A|AT", "h37rv:1100", 1100, "small",
                               "core", ["L01", "L05"], 0),
                              ("1100|A|G", "h37rv:1100s", 1100, "small",
                               "core", ["L02", "L06"], 0)], "small")
-        self.assertEqual(set(u), {"G1"})
+        self.assertEqual(set(u), {"G1", "up:G2"})
 
     def test_span_helper(self):
         bur = self.base.bur

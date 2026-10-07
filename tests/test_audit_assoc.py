@@ -341,6 +341,65 @@ class GeneCoordinates(BurdenBase):
         self.assertEqual(r["1000|A|G"]["region"], "core:intergenic")
 
 
+class ChangedBasesDecideGenes(BurdenBase):
+    """The user's decisions D18 and D39 (2026-10-07): a record is credited to
+    every gene its changed bases touch -- every one where genes overlap --
+    and an insertion to the genes holding both its flanks. The anchor base
+    alone credited the earlier-starting gene only, an MNP crossing a gene
+    boundary to one side, and an insertion after a gene's last base to it."""
+
+    def setUp(self):
+        super().setUp()
+        # G1 1001-1100 (+) overlapping G2 1091-1200 (+); G3 2001-2100 (-)
+        self.genes = os.path.join(self.d, "genes_ov.txt")
+        with open(self.genes, "w") as fh:
+            fh.write("chr\tstart\tend\tstrand\ttype\tid\tgeneName\tgeneId\tn\n")
+            for s, e, st, n in ((1000, 1100, "+1", "G1"), (1090, 1200, "+1", "G2"),
+                                (2000, 2100, "-1", "G3")):
+                fh.write(f"NC_000962\t{s}\t{e}\t{st}\tGene\t{n}\t{n}\t{n}\t1\n")
+
+    def one(self, rk, cls="small"):
+        return set(self.units([(rk, "s", int(rk.split("|")[0]), cls, "core",
+                                ["L01", "L05"], 0)], cls))
+
+    def test_snp_in_overlap_credits_both(self):
+        self.assertEqual(self.one("1095|A|G"), {"G1", "G2"})   # was G1
+
+    def test_mnp_crossing_into_a_gene(self):
+        # 1999-2001: one intergenic base, then G3's first two
+        self.assertEqual(self.one("1999|ACG|TTT"), {"G3"})     # was ig
+
+    def test_complex_shared_first_base_is_not_changed(self):
+        # AC>AT at 2000 changes 2001 only, G3's base
+        self.assertEqual(self.one("2000|AC|AT"), {"G3"})
+
+    def test_insertion_inside_a_gene(self):
+        self.assertEqual(self.one("1050|A|AT"), {"G1"})
+
+    def test_is6110_after_minus_gene_end_is_its_promoter(self):
+        # between 2100 and 2101: beside G3's last base, upstream of a
+        # minus-strand gene, so up:G3, not G3 (the anchor rule's answer)
+        self.assertEqual(self.one("2100|T|<INS:ME:IS6110>", "is6110"), {"up:G3"})
+
+    def test_scan_genic_uses_changed_bases(self):
+        scan = load("assoc_scan", "assoc/bin/assoc_scan.py")
+        d = self.d
+        v = BACKGROUND + [("1999|ACG|TTT", "m", 1999, "small", "core",
+                           ["L01", "L02"], 0),
+                          ("2100|T|TA", "i", 2100, "small", "core",
+                           ["L03", "L04"], 0)]
+        ev = make_events(d, v)
+        out = os.path.join(d, "scan.tsv")
+        run_main(scan, ["--events", ev, "--phenotype",
+                        os.path.join(d, "pheno.txt"), "--genes", self.genes,
+                        "--lineages", os.path.join(d, "lin.tsv"),
+                        "--permutations", "100", "--min-pool", "1",
+                        "--out", out])
+        r = {x["row_key"]: x for x in read_tsv(out)}
+        self.assertEqual(r["1999|ACG|TTT"]["region"], "core:genic")
+        self.assertEqual(r["2100|T|TA"]["region"], "core:intergenic")
+
+
 class BurdenFloor(BurdenBase):
     """ASSOC-8: the burdens admitted records below the scan's callability floor."""
 

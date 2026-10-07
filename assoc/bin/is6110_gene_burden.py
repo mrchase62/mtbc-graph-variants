@@ -31,6 +31,7 @@ from assoc_scan import (needs_refine, refine_branch, refine_region,
                         refine_strat, REFINE_P, REFINE_BELOW)
 from assoc_scan import (descendant_matrix, bh, event_key, leave_one_out,
                         load_lineages, load_carriers)
+from variant_span import deleted_span, small_deleted_span, changed_span  # noqa: F401
 
 
 def load_genes(path):
@@ -46,42 +47,6 @@ def load_genes(path):
                 pass
     g.sort()
     return g, [x[0] for x in g]
-
-
-def deleted_span(r):
-    """(first, last) deleted base, 1-based, for a deletion record; else None.
-
-    VCF POS is the anchor base BEFORE the deletion, so it is never deleted.
-    The span comes from the catalogue ID `svi:DEL:<first>:<len>`, else from a
-    symbolic `<DEL:-len>` ALT."""
-    f = (r.get("id") or "").split("#")[0].split(":")
-    if len(f) == 4 and f[0] == "svi" and f[1] == "DEL" \
-            and f[2].isdigit() and f[3].isdigit():
-        return int(f[2]), int(f[2]) + int(f[3]) - 1
-    alt = r.get("alt") or ""
-    if alt.startswith("<DEL:-") and alt.endswith(">") \
-            and alt[6:-1].isdigit() and r["pos"].isdigit():
-        return int(r["pos"]) + 1, int(r["pos"]) + int(alt[6:-1])
-    return None
-
-
-def small_deleted_span(r):
-    """(first, last) deleted base, 1-based, for a left-anchored small
-    deletion (REF longer than ALT and ALT is REF's first base); else None.
-
-    The same rule as deleted_span: the anchor base at POS is not deleted, so
-    the record removes POS+1 .. POS+len(REF)-1. The `*` allele is not the
-    record's ALT. Insertions have no deleted base and complex replacements no
-    anchor, so both stay on the unit at POS."""
-    ref = (r.get("ref") or "").upper()
-    alts = [x for x in (r.get("alt") or "").upper().split(",") if x != "*"]
-    if len(alts) != 1 or not r["pos"].isdigit():
-        return None
-    alt = alts[0]
-    if len(ref) > 1 and len(alt) == 1 and ref[0] == alt and \
-            not set(ref) - set("ACGTN"):
-        return int(r["pos"]) + 1, int(r["pos"]) + len(ref) - 1
-    return None
 
 
 def main():
@@ -170,27 +135,30 @@ def main():
     genes, gstart = load_genes(a.genes)
 
     def gene_at(p):
-        # ONE GENE PER POSITION: where genes overlap (17,874 bp of H37Rv) a
-        # point record is credited to the earlier-starting gene only. Deletion
-        # spans are credited to every gene they touch (genes_over below).
-        i = bisect.bisect_right(gstart, p)
-        for s, e, st, n in genes[max(0, i - 3):i]:
-            if s <= p <= e:
-                return n
-        return None
+        # the first gene holding p: used only to name the promoter or
+        # intergenic unit's fallback test below; crediting goes through
+        # genes_over, which returns EVERY gene (D18)
+        g = genes_over(p, p, 1)
+        return g[0] if g else None
 
     gmaxlen = max((e - s for s, e, st, n in genes), default=0)
 
-    def genes_over(first, last):
-        """every gene sharing at least --sv-min-overlap bp with [first, last]"""
+    def genes_over(first, last, min_overlap, inside=False):
+        """every gene sharing at least `min_overlap` bp with [first, last];
+        with `inside`, every gene holding both ends (an insertion between
+        them)"""
         lo = bisect.bisect_left(gstart, first - gmaxlen)
         hi = bisect.bisect_right(gstart, last)
+        if inside:
+            return [n for s, e, st, n in genes[lo:hi] if s <= first and last <= e]
         return [n for s, e, st, n in genes[lo:hi]
-                if min(e, last) - max(s, first) + 1 >= a.sv_min_overlap]
+                if min(e, last) - max(s, first) + 1 >= min_overlap]
 
-    def unit_at(p):
-        """gene body, else promoter, else the intergenic gap itself."""
-        g = gene_at(p)
+    def unit_at(p, gene_body=True):
+        """gene body, else promoter, else the intergenic gap itself.
+        `gene_body=False` for a record that changes no gene's bases, so the
+        gene holding its anchor is not credited after all."""
+        g = gene_at(p) if gene_body else None
         if g:
             return g, "gene"
         best = None
@@ -247,15 +215,26 @@ def main():
         # The same holds for a SMALL deletion: crediting its anchor base put
         # 99 of scale200's 3,862 small deletions with an origin (gwas1000: 175
         # of 9,133) on a unit other than the genes whose bases they remove.
-        span = (deleted_span(r) if a.cls == "sv" else
-                small_deleted_span(r) if a.cls == "small" else None)
-        if span:
-            units = [(g, "gene") for g in genes_over(*span)]
-            if not units:
-                units = [unit_at(span[0])]
-            n_multi += len(units) > 1
-        else:
-            units = [unit_at(int(r["pos"]))]
+        # EVERY RECORD NOW FOLLOWS ONE RULE (D18, D39): the genes its changed
+        # bases touch, every one where genes overlap (17,874 bp of H37Rv);
+        # an insertion, the genes holding both its flanking bases.
+        first, last, inside = changed_span(r, a.cls)
+        is_del = (deleted_span(r) if a.cls == "sv" else
+                  small_deleted_span(r) if a.cls == "small" else None)
+        units = [(g, "gene") for g in genes_over(
+            first, last, a.sv_min_overlap if is_del else 1, inside)]
+        if not units:
+            # no gene's bases changed: the promoter or intergenic unit. An
+            # insertion is looked up from both flanks, since upstream of a
+            # plus-strand gene is below its start (the left flank) and
+            # upstream of a minus-strand gene above its end (the right); an
+            # insertion between two genes is in the promoter of whichever
+            # starts there, not in the gene ending there
+            cand = [unit_at(first, gene_body=False)]
+            if inside:
+                cand.append(unit_at(last, gene_body=False))
+            units = [next((u for u in cand if u[1] == "promoter"), cand[0])]
+        n_multi += len(units) > 1
         for kind in {kd for _, kd in units}:
             n_kind[kind] += 1
         try:
@@ -276,8 +255,7 @@ def main():
           f"{n_noframe:,} have no H37Rv coordinate; {n_uncall:,} are below "
           f"the {a.min_determinacy:.0%} callability floor. The rest enter the "
           f"burden over {len(by_gene):,} units"
-          + (f" ({n_multi:,} deletions span two or more genes)"
-             if a.cls in ("sv", "small") else "") + ":")
+          + f" ({n_multi:,} records credited to two or more genes):")
     for k in ("gene", "promoter", "intergenic"):
         if n_kind[k]:
             nu = sum(1 for u, kk in kind_of.items() if kk == k)
