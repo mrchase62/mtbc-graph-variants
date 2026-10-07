@@ -9,6 +9,13 @@ below is implemented as described in the "Implemented" column. Confirm it, or
 pick the alternative.** The figures come from the groups' validation runs on
 copies of production data.
 
+## The user's answers (review started 2026-10-07)
+
+| Group | Items | Answer |
+|---|---|---|
+| Calling and genotyping | D1-D7 | all confirmed as implemented (2026-10-07) |
+| Node-frame alleles | D41 | option b, done on `audit-fixes` (2026-10-06) |
+
 ## Calling and genotyping (P4-P5)
 
 | # | Choice | Implemented | Alternative | Size |

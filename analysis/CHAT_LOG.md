@@ -508,3 +508,21 @@ It is now committed on main (the user asked, 2026-10-07).
 - `analysis/audit/` (19 Markdown files, including DECISIONS.md and
   D41_EXPLAINED.md): committed next.
 - The rest of `analysis/` stays uncommitted.
+
+---
+
+## 2026-10-07: going through DECISIONS.md, group 1 (D1-D7)
+
+**You confirmed all seven as implemented.** Each one writes NOCALL rather
+than guessing:
+
+- D1: no clean junction;
+- D2: no projection;
+- D3: the reference carries a third allele;
+- D4: a reference-only deletion of 50 bp or more;
+- D5: depth plus a clip cluster;
+- D6: no record for accessory loci H37Rv carries;
+- D7: duplicate insertions are dropped.
+
+They are recorded in a new answers table at the top of DECISIONS.md. Next is
+group 2, IS6110 (D8-D10).
