@@ -82,6 +82,21 @@ simulation.
 import argparse, collections, csv, os, sys
 
 
+def snp_gap(best, nxt):
+    """How many SNPs farther the second candidate is than the first.
+
+    Candidates are ranked per compared site (D20, D24); each genome's count is
+    over its own compared sites, so the counts alone can disagree with the
+    ranking. The rate gap is put back into SNPs over the first candidate's
+    compared sites, which keeps --tie-margin in SNPs. A candidates file from
+    before the change (no rate column) uses the counts."""
+    if best.get("distance_per_site") and nxt.get("distance_per_site") \
+            and best.get("n_compared"):
+        return round((float(nxt["distance_per_site"]) -
+                      float(best["distance_per_site"])) * int(best["n_compared"]))
+    return int(nxt["snp_distance"]) - int(best["snp_distance"])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cohort", default="refbias/cohort.pilot.tsv")
@@ -186,8 +201,8 @@ def main():
         # widening it would trade distance for content without a measurement
         # to justify the exchange.
         tie = ""
-        if a.tie_margin > 0 and nxt.get("snp_distance"):
-            gap = int(nxt["snp_distance"]) - int(best["snp_distance"])
+        gap = snp_gap(best, nxt) if nxt.get("snp_distance") else None
+        if a.tie_margin > 0 and gap is not None:
             iv_b, iv_n = n_intervals(best["reference"]), n_intervals(nxt["reference"])
             if (gap <= a.tie_margin and iv_b != "" and iv_n != ""
                     and iv_n > iv_b):
@@ -219,8 +234,7 @@ def main():
             # silently. When `tie_break` is set the chosen reference is the
             # FARTHER of the two by this margin; that direction lives in
             # `tie_break`, not in the sign of this column.
-            margin=(abs(int(nxt["snp_distance"]) - int(best["snp_distance"])))
-                   if nxt.get("snp_distance") else "",
+            margin=abs(gap) if gap is not None else "",
             tie_break=tie))
 
     for r in rows:

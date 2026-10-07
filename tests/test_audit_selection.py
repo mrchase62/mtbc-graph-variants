@@ -66,19 +66,40 @@ def py():
 class SelectionByAllele(unittest.TestCase):
     """t8_select_reference.py keyed the panel by position and ignored the ALT."""
 
-    def select(self, panel_records, isolate_records):
+    SAMPLES = ["gA", "gG"]
+
+    def select(self, panel_records, isolate_records, depth=None, top=2,
+               full=False, check=True):
+        """`depth`: {pos: reads}; default 30 at every panel site.
+        isolate_records: (pos, ref, alt, gt[, filter])."""
         with tempfile.TemporaryDirectory() as d:
-            panel = vcf(os.path.join(d, "panel.vcf"), ["gA", "gG"], panel_records)
+            panel = vcf(os.path.join(d, "panel.vcf"), self.SAMPLES, panel_records)
             iso = os.path.join(d, "iso.vcf")
             with open(iso, "w") as fh:
                 fh.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS\n")
-                for pos, ref, alt, gt in isolate_records:
-                    fh.write(f"c\t{pos}\t.\t{ref}\t{alt}\t50\t.\t.\tGT:DP\t{gt}:30\n")
+                for rec in isolate_records:
+                    pos, ref, alt, gt = rec[:4]
+                    flt = rec[4] if len(rec) > 4 else "."
+                    fh.write(f"c\t{pos}\t.\t{ref}\t{alt}\t50\t{flt}\t.\tGT:DP\t{gt}:30\n")
+            dep = os.path.join(d, "depth.tsv")
+            if depth is None:
+                depth = {r[0]: 30 for r in panel_records}
+            with open(dep, "w") as fh:
+                for p, n in sorted(depth.items()):
+                    fh.write(f"c\t{p}\t{n}\n")
             out = os.path.join(d, "cand.tsv")
-            subprocess.run([py(), "bin/t8_select_reference.py", "--vcf", iso,
-                            "--panel-snps", panel, "--out", out, "--top", "2"],
-                           check=True, capture_output=True, text=True)
-            return {r["reference"]: int(r["snp_distance"]) for r in rows(out)}
+            r = subprocess.run([py(), "bin/t8_select_reference.py", "--vcf", iso,
+                                "--panel-snps", panel, "--depth", dep,
+                                "--out", out, "--top", str(top)],
+                               capture_output=True, text=True)
+            if check:
+                self.assertEqual(r.returncode, 0, r.stderr)
+            else:
+                return r
+            got = rows(out)
+            if full:
+                return got
+            return {x["reference"]: int(x["snp_distance"]) for x in got}
 
     def test_split_multiallelic_site_scored_per_allele(self):
         # C>A and C>G at one position, two rows; the isolate carries C>A.
@@ -99,6 +120,79 @@ class SelectionByAllele(unittest.TestCase):
         d = self.select([(300, "C", "T", "", ["1", "0"])],
                         [(300, "C", "T", "0")])
         self.assertEqual(d, {"gA": 1, "gG": 0})
+
+
+class SelectionOverCalledSites(SelectionByAllele):
+    """The user's decisions D20 and D24 (2026-10-07): compare only sites both
+    sides called, and rank per compared site. An uncovered isolate site
+    counted as REF, and a genome with more missing cells looked closer."""
+
+    def test_uncovered_isolate_site_is_not_ref(self):
+        # gA carries 100 and 200, gG neither; the isolate carries 200 and has
+        # no reads at 100. Counted as REF at 100 it was 1 from both genomes;
+        # over the sites it covers, gA is 0 and nearest.
+        d = self.select([(100, "C", "T", "", ["1", "0"]),
+                         (200, "C", "T", "", ["1", "0"])],
+                        [(200, "C", "T", "1")], depth={100: 0, 200: 30})
+        self.assertEqual(d, {"gA": 0, "gG": 1})
+
+    def test_ranked_per_compared_site(self):
+        # gA: 3 mismatches over 20 sites (0.15); gG: 2 over the 11 it has
+        # genotyped (0.18). The raw count chose gG; per site gA is nearer.
+        recs = []
+        for i in range(20):
+            ga = "1" if i < 3 else "0"
+            gg = "1" if i < 2 else ("." if i >= 11 else "0")
+            recs.append((100 + i, "C", "T", "", [ga, gg]))
+        got = self.select(recs, [], full=True)
+        self.assertEqual([x["reference"] for x in got], ["gA", "gG"])
+        self.assertEqual([x["snp_distance"] for x in got], ["3", "2"])
+        self.assertEqual([x["n_compared"] for x in got], ["20", "11"])
+        self.assertEqual(got[0]["distance_per_site"], "0.15")
+
+    def test_filtered_or_indel_record_is_not_ref_evidence(self):
+        # the isolate has a filtered call at 100 and a deletion over 300;
+        # neither site is REF evidence, so only 200 is compared
+        d = self.select([(100, "C", "T", "", ["1", "0"]),
+                         (200, "C", "T", "", ["1", "0"]),
+                         (301, "C", "T", "", ["1", "0"])],
+                        [(100, "C", "T", "1", "LowQual"), (200, "C", "T", "1"),
+                         (300, "ACG", "A", "1")])
+        self.assertEqual(d, {"gA": 0, "gG": 1})
+
+    def test_sparse_genome_is_not_a_candidate(self):
+        # gG is genotyped at 1 of 10 sites, under half gA's: not ranked, even
+        # though its one site matches
+        recs = [(100 + i, "C", "T", "", ["1" if i else "0", "0" if i == 0 else "."])
+                for i in range(10)]
+        got = self.select(recs, [], full=True)
+        self.assertEqual([x["reference"] for x in got], ["gA"])
+
+    def test_no_coverage_input_is_fatal(self):
+        with tempfile.TemporaryDirectory() as d:
+            panel = vcf(os.path.join(d, "p.vcf"), self.SAMPLES,
+                        [(100, "C", "T", "", ["1", "0"])])
+            iso = vcf(os.path.join(d, "i.vcf"), ["S"], [])
+            r = subprocess.run([py(), "bin/t8_select_reference.py", "--vcf", iso,
+                                "--panel-snps", panel, "--out",
+                                os.path.join(d, "o.tsv")],
+                               capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("--bam or --depth", r.stderr)
+
+    def test_p1_passes_the_bam(self):
+        s = open("bin/p1_select_reference.sh").read()
+        self.assertIn('--bam "$H37BAM"', s)
+
+    def test_summary_gap_is_per_site(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("p1s", "bin/p1_summary.py")
+        m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+        # counts say nxt is 1 CLOSER; per site it is 0.0001 * 10,000 = 1 farther
+        b = dict(snp_distance="100", n_compared="10000", distance_per_site="0.01")
+        n = dict(snp_distance="99", n_compared="9800", distance_per_site="0.0101")
+        self.assertEqual(m.snp_gap(b, n), 1)
+        self.assertEqual(m.snp_gap(dict(snp_distance="3"), dict(snp_distance="5")), 2)
 
 
 # ------------------------------------------------------ GRAPHVCF-5, PGB-9

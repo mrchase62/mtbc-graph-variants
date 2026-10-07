@@ -170,9 +170,13 @@ SIM_REQUIRE_FQ=1 SIM_FQ_PREFIX="${WORK}/${SAMPLE}" SIM_KEEP_FQ=1 SIM_BAM_SUFFIX=
 mv -f "${WORK}/${SAMPLE}.vcf.gz" "${WORK}/${SAMPLE}.h37rv.vcf.gz"
 mv -f "${WORK}/${SAMPLE}.vcf.gz.tbi" "${WORK}/${SAMPLE}.h37rv.vcf.gz.tbi" 2>/dev/null || true
 
-# selection: nearest panel genome by SNP-profile distance
+# selection: nearest panel genome by SNP-profile distance, over the panel
+# sites this isolate covers (its H37Rv BAM; D20, D24)
+H37BAM="${WORK}/${SAMPLE}.h37rv.bam"
+[[ -s "$H37BAM" ]] || { echo "FATAL: ${SAMPLE}: no H37Rv BAM ${H37BAM} for the coverage the selection needs" >&2; exit 1; }
 REFID="$("$MTB_PY" bin/t8_select_reference.py \
     --vcf "${WORK}/${SAMPLE}.h37rv.vcf.gz" \
+    --bam "$H37BAM" --samtools "$MTB_SAMTOOLS" \
     --panel-snps "$PANEL_SNPS" \
     --out "${OUTDIR}/${SAMPLE}.candidates.tsv" | tail -1)"
 [[ -n "$REFID" ]] || { echo "FATAL: ${SAMPLE}: selection produced no reference" >&2; exit 1; }
