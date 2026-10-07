@@ -621,3 +621,17 @@ the same ranking rule as D27.
 **Queue:** D18, D20/D24, D21, D22, the UniVec check, D32.
 
 Next is group 8, build safety (D34-D38).
+
+---
+
+## 2026-10-07: group 8, build safety (D34-D38)
+
+**Confirmed:** D34-D37 (panel_af and add_outgroup from the build's collapsed
+VCF, the off-path node table, deposited references).
+
+**Switched, D38:** refuse all pre-guard outputs. The rerun regenerates
+everything.
+
+**Queue:** D18, D20/D24, D21, D22, the UniVec check, D32, D38.
+
+Next is group 9, leftovers (D39-D40).

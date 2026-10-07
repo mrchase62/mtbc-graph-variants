@@ -20,6 +20,7 @@ copies of production data.
 | Reference selection and graph VCF | D20-D24 | D23 confirmed. **Switched:** D20+D24 score only sites both sides called, as mismatches per compared site, using isolate coverage from the P1 BAMs; D21 adds H37Rv as a candidate reference (with a P2-P5 test for R = H37Rv); D22 left-aligns the collapsed graph VCF (`norm -f`), then re-collapses. To implement before the new-panel rerun (2026-10-07) |
 | Graph build | D25-D27 | all confirmed as implemented (2026-10-07) |
 | Panel construction | D28-D33 | D28, D30, D31, D33 confirmed; D29 confirmed **plus a UniVec vector check** (download approved by the user); **D32 switched:** the foreign-screen background is chosen by quality with D27's ranking rule. To implement before the panel build (2026-10-07) |
+| Build safety | D34-D38 | D34-D37 confirmed; **D38 switched:** refuse all outputs from before the guards (no evidence-based adoption); the rerun regenerates everything. To implement (2026-10-07) |
 | Node-frame alleles | D41 | option b, done on `audit-fixes` (2026-10-06) |
 
 ## Calling and genotyping (P4-P5)
