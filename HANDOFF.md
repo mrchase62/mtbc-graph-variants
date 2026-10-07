@@ -2026,7 +2026,7 @@ There are also about 20 LOW items in the reports.
   - R2-TREES-6: 80 variants derived at the MTBC root. Should they be pinned
     to the `AA` allele?
 - **A running chat log** for the user is at `analysis/CHAT_LOG.md`
-  (untracked), updated each turn.
+  (committed on main), updated each turn.
 
 ### Working mode (the user's preference, 2026-10-06)
 
