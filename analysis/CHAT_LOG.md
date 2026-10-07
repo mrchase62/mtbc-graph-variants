@@ -844,3 +844,34 @@ guards).
 
 **Then:** the new panel and graph build, then the scale200 rerun into new
 output folders, with a cost estimate first.
+
+## 2026-10-07: MTBC node pinned; ASSOC-1 deferred; audit-fixes merged (main 3f0260a)
+
+**User:** "pin the MTBC node, keep ASSOC-1 deferred, then merge".
+
+**R2-TREES-6, the MTBC node pinned to the panel AA** (audit-fixes a4c01e1):
+
+- The cohort tree's MTBC node (the common ancestor of every leaf but the
+  outgroup and the canettii genomes) is pinned to AA wherever AA resolves.
+  `mtbc_pinned.tsv` lists every change.
+- **Checked on review 2's scale200 run:**
+  - 95 variants change: the 80 review 2 found, plus 15 that parsimony
+    left tied. No other variant changes.
+  - Testable variants among them go from 28 to 87.
+  - The scan's survivors are identical (rpoB 761155, embB 4247429, embB
+    4247730); no drug-resistance control changes status.
+- **Along the way:**
+  - My first validation command pointed at the wrong polarity table and
+    stopped with a FATAL; nothing was written.
+  - The rerun was blocked for an unguarded `rm -rf`; it was rewritten to
+    use fresh folders.
+  - A bookkeeping bug (a NumPy view) made the pin report 0 changes; it was
+    fixed and is covered by a test.
+
+**ASSOC-1** stays deferred.
+
+**Merge:** `audit-fixes` was merged into main (3f0260a). There were no
+conflicts, and 369 tests pass on main.
+
+**Next:** the new lineage 1-4 panel and graph build, then the scale200
+rerun into new output folders, with a cost estimate first.

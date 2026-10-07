@@ -41,15 +41,16 @@ fixes, with tests) were approved on 2026-10-05.
 
 **State (2026-10-06): section 0o.**
 
-- **Every audit fix is on branch `audit-fixes`** (283 tests), not yet in
-  main. The current association results remain provisional.
+- **Every audit fix is merged into main (2026-10-07, 3f0260a; 369 tests).**
+  The current association results remain provisional until the rerun.
 - **The 44 decisions are answered (2026-10-07), and all 8 queued decision
   fixes are done on `audit-fixes`** (364 tests; list at the top of
   `analysis/audit/DECISIONS.md`). Each fix's measured effect on current
   outputs is in `analysis/audit/FIX_EFFECTS.md`.
 - **Step 4 is done:** section 0q lists 12 items to fix before any rerun.
-  **All 12 are fixed on `audit-fixes`, and D41 (b).** Before the merge into
-  main: the user's answers on the canettii isolate and R2-TREES-6.
+  **All 12 are fixed, and D41 (b).** R2-TREES-6: the cohort tree's MTBC
+  node is pinned to the panel AA (user, 2026-10-07). ASSOC-1 (the canettii
+  isolate) stays deferred until the new graph's data and costs.
 - **For the rerun (D38):** every production cohort folder lacks a build
   record, so a rerun needs new output folders (a new row in
   `refbias/cohorts.tsv`). The new graph build needs `bin/fetch_univec.sh`

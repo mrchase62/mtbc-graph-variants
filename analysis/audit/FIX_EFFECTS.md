@@ -26,6 +26,7 @@ rerunning with that fix off.
 | Fix 6 (D32): foreign-screen background chosen by quality | panel QC (the screen's background) | each sublineage's background genome was the first accession, not the best | — | — (CX333: 44 of 65 slots have a choice; the effect depends on the new panel's score file) |
 | Fix 7 (D38): no adoption of outputs from before the build records | run safety (P1, P2, accessory presence, the chain runner) | old outputs could be reused when their stamps looked right | — | — (no result changes; all 8 cohort roots lack a record, so reruns go to new folders) |
 | Fix 8 (D43): a named but missing catalogue input is fatal | graph build (accessory catalogue) | a mistyped path was read as none | — | — (real inputs: output identical; a typo used to drop the insgt cluster from 214 of 802 loci silently) |
+| R2-TREES-6: the cohort tree's MTBC node pinned to the panel AA | association events | parsimony put the derived allele at the MTBC node against the panel AA | 95 variants change (80 derived, 15 tied); testable 28 → 87; survivors and DR controls unchanged | not run |
 
 ## D41: one event, one key (scale200, P4 rerun on all 199 samples)
 
@@ -293,9 +294,35 @@ is already done.
 - with a typo in the clusters path, the old code exited successfully and
   dropped the insgt cluster from 214 of 802 loci; now it stops.
 
+## R2-TREES-6: the MTBC node pinned to the panel's ancestral allele
+
+**Problem.** The association reconstructs each variant's ancestral states
+on the cohort tree by parsimony. At 80 variants that reconstruction put the
+derived allele at the MTBC ancestor, although the panel's ancestral allele
+(AA) says that node was ancestral. 26 of them then read as repeated losses,
+which the scan never tests.
+
+**New rule:** the MTBC node, the common ancestor of every leaf except the
+outgroup and the canettii genomes, is pinned to the AA allele wherever AA is
+resolved. Every changed variant is listed in `mtbc_pinned.tsv`.
+
+**Measured effect** (review 2's scale200 run, event matrix and scan rebuilt
+with and without the pin):
+
+- 95 variants change at the MTBC node: the 80 review 2 found, plus 15 where
+  parsimony was tied. No other variant changes.
+- Among them, variants with two or more independent gains (testable)
+  go from 28 to 87.
+- On the stem branch above the MTBC, 30 gains are replaced by 45 losses.
+- **The scan:** the same 3 survivors (rpoB 761155, embB 4247429, embB
+  4247730). No drug-resistance control changes status, and none of the
+  pinned variants passes the branch test. Branch-test passes go from 142 to
+  141.
+
 ## Still to come
 
-All 8 queued fixes are done.
+All 8 queued fixes and the MTBC pin are done and merged into main
+(2026-10-07).
 
 **Part 2 (after the scale200 rerun):** old vs new for:
 
