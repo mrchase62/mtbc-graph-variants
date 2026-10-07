@@ -370,6 +370,34 @@ def main():
         fo = mtb_norm.forward_offset(pp - start, st, ln)
         return nd, fo, "-" if (st == "-") != r_flipped else "+"
 
+    by_node = None
+    n_leftalign = collections.Counter()
+
+    def node_base(nd):
+        """base(i): node nd's forward-strand base at offset i, spelled from
+        R's own sequence (R's path spells the node exactly); None where R's
+        node table cannot say."""
+        nonlocal walk, by_node
+        if not a.node_lengths or not rseq:
+            return lambda i: None
+        if walk is None:
+            walk = mtb_norm.load_path_nodes(a.node_lengths, a.reference)
+        if by_node is None:
+            by_node = {w[2]: w for w in walk if w[4] == 1}
+        w = by_node.get(str(nd))
+        if w is None:
+            return lambda i: None
+        start, ln, _, st, _ = w
+        cmp_ = (st == "-") != r_flipped
+
+        def base(i):
+            if not 0 <= i < ln:
+                return None
+            pp = start + (i if st == "+" else ln - 1 - i)
+            b = rseq[frames.to_refs(a.reference, pp - 1)].upper()
+            return b.translate(comp) if cmp_ else b
+        return base
+
     # --- direct arm: core sequence only ---------------------------------------
     for pos, ref, alt, qual in load_vcf(a.direct):
         reg = region(pos)
@@ -445,15 +473,34 @@ def main():
             # coordinates (or leaves it to the direct arm in core). It is
             # written as that reference writes it. p4_place.sh projects the
             # base after every indel for this.
+            #
+            # Where R reads ALONG H37Rv's strand (the base after projects with
+            # strand +), H37Rv reads the node in reverse too, and the forward
+            # reader's record goes through on_strand: anchor t-len(D)-1. That
+            # assumes the span is H37Rv sequence, so it is used only where the
+            # resulting REF is H37Rv's own (always for an insertion); a
+            # deletion of off-path sequence would land elsewhere (scale200:
+            # ~100 bp from other samples' keys) and stays a node key.
             if nst == "off_node" and is_indel_anchored(r_ref, r_alt):
                 hq = hmap.get(r_pos + len(r_ref))
-                if hq is not None and hq[1] == 0 and hq[2] == "-" and hseq \
+                t = None
+                if hq is not None and hq[1] == 0 and hseq \
                         and 1 <= hq[0] <= len(hseq):
-                    t = hq[0]
+                    D, I = rc(r_ref[1:]), rc(r_alt[1:])      # H37Rv strand
+                    if hq[2] == "-":
+                        t = hq[0]
+                        if rseq and r_pos + len(r_ref) <= len(rseq) and \
+                                rseq[r_pos + len(r_ref) - 1].translate(comp).upper() \
+                                != hseq[t - 1].upper():
+                            n_nodestrand["to_h37rv_anchor_disagrees"] += 1
+                    else:
+                        D, I = r_ref[1:], r_alt[1:]
+                        t = hq[0] - len(D) - 1
+                        if t < 1 or hseq[t:t + len(D)].upper() != D.upper():
+                            n_nodestrand["off_node_not_h37rv_sequence"] += 1
+                            t = None
+                if t is not None:
                     anc = hseq[t - 1].upper()
-                    if rseq and r_pos + len(r_ref) <= len(rseq) and \
-                            rseq[r_pos + len(r_ref) - 1].translate(comp).upper() != anc:
-                        n_nodestrand["to_h37rv_anchor_disagrees"] += 1
                     reg = region(t)
                     if reg == "core":
                         # the direct arm owns core sequence, as it does
@@ -461,14 +508,14 @@ def main():
                         n_nodestrand["to_h37rv_core_direct_arm"] += 1
                         continue
                     n_nodestrand["to_h37rv"] += 1
-                    hr, ha = anc + rc(r_ref[1:]), anc + rc(r_alt[1:])
+                    hr, ha = anc + D, anc + I
                     rows.append(dict(
                         sample=a.sample, reference=a.reference,
                         build_id=a.build_id, arm="composed",
                         component="called", region=reg, frame="h37rv",
                         key=f"h37rv:{t}", r_pos=r_pos, h37rv_pos=t,
                         dist_to_ref=0, node="", node_offset="",
-                        frame_strand="-", ref=hr, alt=ha,
+                        frame_strand=hq[2], ref=hr, alt=ha,
                         kind=classify(hr, ha),
                         size=abs(len(strip_gap(ha)) - len(strip_gap(hr))),
                         acc_locus="", qual=qual))
@@ -477,6 +524,13 @@ def main():
                         n_near -= 1
                     continue
             n_nodestrand[nst] += 1
+            # LEFT-ALIGNED ON THE NODE, as h37rv keys are on H37Rv: readers
+            # walking a homopolymer in opposite directions otherwise keep
+            # different anchors (scale200: 3 events with two keys each)
+            if nst != "off_node" and is_indel_anchored(ref, alt):
+                off, ref, alt, la = mtb_norm.node_left_align(
+                    off, ref, alt, node_base(node))
+                n_leftalign[la] += 1
             rows.append(dict(
                 sample=a.sample, reference=a.reference, build_id=a.build_id,
                 arm="composed", component="called", region=reg_off,
@@ -590,6 +644,9 @@ def main():
     if n_nodestrand:
         print("  node-frame alleles on the node's forward strand (D41): "
               + ", ".join(f"{k} {v}" for k, v in sorted(n_nodestrand.items())))
+    if n_leftalign:
+        print("  node-frame indels left-aligned on the node: "
+              + ", ".join(f"{k} {v}" for k, v in sorted(n_leftalign.items())))
     n_acc = n_off - n_near
     # count names among accessory-scale records only: counting them across all
     # off-path rows produced "11 of 5 carry a name", which is the kind of ratio

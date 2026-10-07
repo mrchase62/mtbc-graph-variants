@@ -172,6 +172,45 @@ def node_forward_restate(node, off, strand, ref, alt, rseq="", r_pos=0,
     return hit[0], hit[1], new_ref, new_alt, "moved_to_start_node"
 
 
+def node_left_align(off, ref, alt, base):
+    """Left-align an anchored node-frame indel on the node's FORWARD strand.
+
+    `off`, `ref`, `alt` are on the forward strand (node_forward_restate);
+    `base(i)` returns the node's forward-strand base at offset i, or None.
+    Returns (offset, ref, alt, status).
+
+    Without this, readers that walk a homopolymer in opposite directions keep
+    different anchors after the restatement: node 107910 in scale200 got
+    G>GAG at 3 and T>TGA at 2 for one event. Normalising against the node's
+    own sequence, which every reference spells the same, gives one key. The
+    shift stops at the node's first base. Status `left_aligned`, `aligned`
+    (already leftmost), `not_indel`, `no_node_sequence` (R's node table
+    cannot spell the node, e.g. one R visits twice) or `ref_mismatch` (REF's
+    anchor is not the node's base); the last two leave the record unchanged."""
+    if len(ref) == len(alt) or ref[:1] != alt[:1] or (
+            len(ref) != 1 and len(alt) != 1):
+        return off, ref, alt, "not_indel"
+    b = base(off)
+    if b is None:
+        return off, ref, alt, "no_node_sequence"
+    if b.upper() != ref[0].upper():
+        return off, ref, alt, "ref_mismatch"
+    anc, D, I = ref[0], ref[1:], alt[1:]
+    moved = False
+    while off > 0:
+        ch = D or I
+        prev = base(off - 1)
+        if prev is None or ch[-1].upper() != anc.upper():
+            break
+        ch = anc + ch[:-1]
+        if D:
+            D = ch
+        else:
+            I = ch
+        anc, off, moved = prev.upper(), off - 1, True
+    return off, anc + D, anc + I, "left_aligned" if moved else "aligned"
+
+
 def load_path_nodes(path, accession):
     """R's walk from the build's node table: a sorted list of
     (start, length, node, strand, n_occurrences), `start` 1-based along the

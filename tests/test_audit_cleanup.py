@@ -341,7 +341,7 @@ class P4NodeAllelesOneKey(unittest.TestCase):
     FWD = "ACGTACCGTAGGCTAACGTTGCAT"          # node 9, forward
 
     def place(self, d, tag, ref_seq, rec_pos, ref, alt, walk_off, walk,
-              flipped=False):
+              flipped=False, nodes=None):
         write(f"{d}/{tag}/direct.vcf", VCFHDR + "c\t50\t.\tA\tG\t50\t.\t.\tGT\t1\n")
         write(f"{d}/{tag}/matched.vcf",
               VCFHDR + f"c\t{rec_pos}\t.\t{ref}\t{alt}\t50\t.\t.\tGT\t1\n")
@@ -357,6 +357,9 @@ class P4NodeAllelesOneKey(unittest.TestCase):
         write(f"{d}/graph.vcf", "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\t"
               "QUAL\tFILTER\tINFO\tFORMAT\tOTHER\n")
         write(f"{d}/nodes.tsv", NODEHDR + f"9\tR\t1\t+\t1\t{len(self.FWD)}\n")
+        if nodes:
+            # R's own walk: node 9 at panel 11 in the stated direction
+            write(f"{d}/{tag}/nodes.tsv", NODEHDR + nodes)
         r = subprocess.run(
             [sys.executable, "bin/p4_place.py", "--sample", tag,
              "--reference", "R", "--build-id", "b",
@@ -364,10 +367,12 @@ class P4NodeAllelesOneKey(unittest.TestCase):
              "--h37rv-pos", f"{d}/{tag}/hpos.tsv", "--node-pos", f"{d}/{tag}/npos.tsv",
              "--mask", f"{d}/mask.bed", "--loci", f"{d}/loci.tsv",
              "--graph-vcf", f"{d}/graph.vcf", "--out", f"{d}/{tag}/placed.tsv",
-             "--ref-fasta", f"{d}/{tag}/r.fasta", "--node-lengths", f"{d}/nodes.tsv",
+             "--ref-fasta", f"{d}/{tag}/r.fasta", "--node-lengths",
+             f"{d}/{tag}/nodes.tsv" if nodes else f"{d}/nodes.tsv",
              "--frames", f"{d}/{tag}/frames.tsv"],
             capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.stdout = r.stdout
         return [(q["key"], q["ref"], q["alt"]) for q in rows(f"{d}/{tag}/placed.tsv")
                 if q["frame"] == "node"]
 
@@ -408,6 +413,48 @@ class P4NodeAllelesOneKey(unittest.TestCase):
         a, b = self.both(8, F[8:10], F[8], w, _rc(F[9:11]), _rc(F[10]))
         self.assertEqual(a, [("node:9:8", F[8:10], F[8])])
         self.assertEqual(b, a)
+
+
+class P4NodeIndelLeftAligned(P4NodeAllelesOneKey):
+    """D41 follow-up: node-frame indels are left-aligned on the node's own
+    forward sequence. One A deleted from a run of four, written by a forward
+    reader at the run's middle and by a reverse reader at its own left
+    anchor, was two keys (scale200: 3 events); both now give the leftmost."""
+
+    FWD = "GCGTAAAACGTTGCAT"                  # A-run at forward offsets 4-7
+
+    def test_homopolymer_deletion_one_key(self):
+        F, L = self.FWD, len(self.FWD)
+        plus = "N" * 10 + F + "N" * 10
+        minus = "N" * 10 + _rc(F) + "N" * 10
+        with tempfile.TemporaryDirectory() as d:
+            # forward: anchor A at offset 5, deletes the A at 6
+            a = self.place(d, "fwd", plus, 11 + 5, "AA", "A", 5, "+",
+                           nodes=f"9\tR\t11\t+\t1\t{L}\n")
+            # reverse: R reads TTTT (offsets 7..4); anchor T at R's
+            # forward offset 6, deleting the T at 5
+            o = L - 1 - 6
+            b = self.place(d, "rev", minus, 11 + o, "TT", "T", o, "-",
+                           nodes=f"9\tR\t11\t-\t1\t{L}\n")
+        self.assertEqual(a, [("node:9:3", "TA", "T")])
+        self.assertEqual(b, a)
+        self.assertIn("left_aligned 1", self.stdout)
+
+    def test_unchanged_without_the_node_sequence(self):
+        # the shared fixture's node table cannot spell R's node: no shift
+        with tempfile.TemporaryDirectory() as d:
+            a = self.place(d, "fwd", "N" * 10 + self.FWD + "N" * 10, 11 + 5,
+                           "AA", "A", 5, "+")
+        self.assertEqual(a, [("node:9:5", "AA", "A")])
+        self.assertIn("ref_mismatch 1", self.stdout)
+
+    def test_unchanged_on_a_node_visited_twice(self):
+        L = len(self.FWD)
+        with tempfile.TemporaryDirectory() as d:
+            a = self.place(d, "fwd", "N" * 10 + self.FWD + "N" * 10, 11 + 5,
+                           "AA", "A", 5, "+", nodes=f"9\tR\t11\t+\t2\t{L}\n")
+        self.assertEqual(a, [("node:9:5", "AA", "A")])
+        self.assertIn("no_node_sequence 1", self.stdout)
 
 
 class P4NodeEventCrossingNodes(unittest.TestCase):
@@ -558,6 +605,42 @@ class P4NodeEventAnchoredOnH37Rv(unittest.TestCase):
         self.assertEqual(a, [])
         self.assertEqual(b, [])
         self.assertIn("to_h37rv_core_direct_arm 1", r.stdout)
+
+    def along(self, fwd, ref_len, alt_tail):
+        """R reads ALONG H37Rv's strand and node 9 in reverse (so H37Rv reads
+        node 9 in reverse too); the base after R's span is H37Rv's 600."""
+        self.FWD = fwd
+        L = len(fwd)
+        seq = "N" * 10 + _rc(fwd) + "G" + "N" * 10
+        p = 11 + L - ref_len                 # the span ends on node 9's last base
+        ref = seq[p - 1:p - 1 + ref_len]
+        alt = ref[0] + alt_tail
+        q = p + ref_len
+        with tempfile.TemporaryDirectory() as d:
+            r, b = self.place(
+                d, "along", seq, p, ref, alt,
+                f"R#1#c,{p - 1},+\t{H},598,+\t3\t+\t+\n"
+                f"R#1#c,{q - 1},+\t{H},599,+\t0\t+\t+\n",
+                f"R#1#c,{p - 1},+\t9,{L - ref_len},-\n"
+                f"R#1#c,{q - 1},+\t5,0,+\n", core=False)
+        return r, b
+
+    def test_along_insertion_keyed_before_the_anchor(self):
+        # inserted after H37Rv's 599, as a reader of node 9 forward writes it
+        r, b = self.along(self.FWD, 1, "T")
+        self.assertEqual(b, [("h37rv:599", "h37rv", "A", "AT")])
+
+    def test_along_deletion_of_h37rv_sequence(self):
+        # R deletes comp(F[0]) = A, which is H37Rv's base 599
+        r, b = self.along("T" + self.FWD[1:], 2, "")
+        self.assertEqual(b, [("h37rv:598", "h37rv", "AA", "A")])
+
+    def test_along_deletion_of_other_sequence_stays_node(self):
+        # comp(F[0]) = T is not H37Rv's base 599: on_strand's position
+        # would be wrong, so the record keeps its node key
+        r, b = self.along(self.FWD, 2, "")
+        self.assertEqual([x[1] for x in b], ["node"])
+        self.assertIn("off_node_not_h37rv_sequence 1", r.stdout)
 
     def test_shell_projects_the_base_after_an_indel(self):
         s = code("bin/p4_place.sh")
