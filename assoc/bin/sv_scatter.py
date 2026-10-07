@@ -33,6 +33,15 @@ def tree_frame(path):
     tree = load_tree(path)
     nodes = list(tree.preorder_node_iter())
     order = {n.label: i for i, n in enumerate(nodes)}
+    # EVERY NODE NEEDS ITS OWN LABEL. The index is keyed on it, so two nodes
+    # sharing a label -- or several with none, as a raw IQ-TREE tree has --
+    # collapse to one entry and silently rewire children and parents.
+    # labelled.nwk is unique by construction; anything else must be refused.
+    if None in order or len(order) != len(nodes):
+        sys.exit(f"FATAL: {path}: node labels are not unique "
+                 f"({len(order)} distinct among {len(nodes)} nodes, "
+                 f"{sum(1 for n in nodes if n.label is None)} unlabelled); "
+                 f"pass the event matrix's labelled.nwk")
     children = [[order[c.label] for c in n.child_nodes()] for n in nodes]
     parent = [None if n.parent_node is None else order[n.parent_node.label]
               for n in nodes]

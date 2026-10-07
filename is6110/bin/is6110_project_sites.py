@@ -65,6 +65,9 @@ _gfs = importlib.util.spec_from_file_location(
 graph_frame = importlib.util.module_from_spec(_gfs)
 _gfs.loader.exec_module(graph_frame)
 FRAMES = graph_frame.Frames()
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "..", "bin"))
+import mtb_norm  # noqa: E402
 
 
 def read_paths(og, odgi):
@@ -105,21 +108,64 @@ def parse_position(text, want_node):
             sacc = sp[0].split("#")[0]
             src = (sp[0], FRAMES.to_refs(sacc, int(sp[1])))
             if want_node:
-                nid, off, _ = f[1].split(",")
-                val = (int(nid), int(off))
+                # the offset runs along the source's walk; main() restates
+                # it as the node's forward offset (mtb_norm.forward_offset)
+                nid, off, nst = f[1].split(",")
+                val = (int(nid), int(off), nst.strip())
             else:
                 tp = f[1].rsplit(",", 2)
                 tacc = tp[0].split("#")[0]
-                # the refs-to-refs relation, which is the storage flip alone:
-                # odgi already accounts for a locally inverted step when it
-                # reports the target position. Measured in
-                # graphframe/bin/frame_convert.py.
+                # the refs-to-refs relation from the storage flip, and then
+                # odgi's own flag (f[3] here: this output has not been
+                # through frame_convert.py). Where it is `-` the source walks
+                # the node opposite to the target, and odgi reports a target
+                # one PANEL base high and complemented: measured at 8,684 of
+                # 8,694 such GCF_000193185 positions (bin/p4_place.py's
+                # parse_pos_file). The earlier note here, that odgi already
+                # accounts for the inverted step, rested on 4 pilot SNPs.
                 st = "-" if FRAMES.flipped(sacc) != FRAMES.flipped(tacc) else "+"
-                val = (FRAMES.to_refs(tacc, int(tp[1])) + 1,
+                tpos = int(tp[1])
+                if len(f) > 3 and f[3].strip() == "-":
+                    tpos -= 1
+                    st = "-" if st == "+" else "+"
+                val = (FRAMES.to_refs(tacc, tpos) + 1,
                        int(f[2]) if len(f) > 2 else 0, st)
+                if tp[0] == sp[0]:
+                    # a path onto itself is the identity (D21); odgi answers
+                    # with one copy where the path passes a node twice
+                    val = (src[1] + 1, 0, "+")
         except (ValueError, IndexError):
             continue
         out.setdefault(src, val)
+    return out
+
+
+def node_occurrences(odgi, og, want, nt):
+    """{(path name, node id): times that path visits the node} for `want`.
+
+    A node key is an identity only where the node occurs once in the path:
+    node 46966 is a 1 bp node every path walks 85 to 453 times, and keying on
+    it merged insertions more than 1 Mb apart into one record (audit P3IS-3).
+    `odgi paths -H` is the path-by-node visit count matrix; only the columns
+    and rows asked for are kept."""
+    p = subprocess.Popen([odgi, "paths", "-i", og, "-H", "-t", str(nt)],
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    by_path = collections.defaultdict(set)
+    for pth, nid in want:
+        by_path[pth].add(nid)
+    cols, out = None, {}
+    for line in p.stdout:
+        f = line.rstrip("\n").split("\t")
+        if cols is None:
+            idx = {h[5:]: i for i, h in enumerate(f) if h.startswith("node.")}
+            cols = {nid: idx[str(nid)] for _, nid in want if str(nid) in idx}
+            continue
+        for nid in by_path.get(f[0], ()):
+            if nid in cols:
+                out[(f[0], nid)] = int(f[cols[nid]])
+    err = p.stderr.read()
+    if p.wait() != 0:
+        sys.exit(f"odgi paths -H failed:\n{err[-2000:]}")
     return out
 
 
@@ -131,7 +177,15 @@ def main():
     ap.add_argument("--graph", default=None)
     ap.add_argument("--odgi", default=os.environ.get("MTB_ODGI", "odgi"))
     ap.add_argument("--h37rv-path", default="GCF_000195955#1#NC_000962.3")
-    ap.add_argument("--ismapper-dir", default="refbias/p1f")
+    # NO DEFAULT DIRECTORY. The default was the PILOT's refbias/p1f, so a
+    # cohort run that did not pass this joined against the pilot isolates'
+    # tables and wrote 0 ("no ISMapper region near") for every other isolate,
+    # which is "not compared" written as "compared and disagreed". Empty turns
+    # the join off; an isolate without a table in the given directory is blank.
+    ap.add_argument("--ismapper-dir", default="",
+                    help="this cohort's ISMapper output directory "
+                         "(<dir>/<sample>/<sample>/IS6110/...); empty, the "
+                         "default, turns the ISMapper join off")
     ap.add_argument("--ism-window", type=int, default=50)
     ap.add_argument("--near-tol", type=int, default=50,
                     help="dist.to.ref at or below this is a small-insertion "
@@ -142,13 +196,26 @@ def main():
     ap.add_argument("--workdir", default="refbias/p1i/project")
     ap.add_argument("--out", default="is6110/results/p1i_sites_h37rv.tsv")
     ap.add_argument("--threads", type=int, default=4)
+    # The build's node table, for node lengths: an off-path site's key is
+    # node:<id>:<forward offset>, and for a carrier that walks the node in
+    # reverse the forward offset is L-1-offset. Default from MTB_BUILD_DIR
+    # (refbias_run.sh exports it; P0 step nodes writes the table).
+    _b = os.environ.get("MTB_BUILD_DIR", "")
+    ap.add_argument("--node-lengths",
+                    default=os.path.join(_b, "assets", "node_positions.tsv") if _b else "",
+                    help="<build>/assets/node_positions.tsv; default from "
+                         "MTB_BUILD_DIR")
     a = ap.parse_args()
 
+    # the build's graph, as its stamp records it; the fallback was a glob
+    # over graphs/CX333..., which on a new build projected onto the old graph
     og = a.graph
+    if og is None and _b and os.path.exists(os.path.join(_b, "build_info.tsv")):
+        og = next((l.rstrip("\n").split("\t")[1]
+                   for l in open(os.path.join(_b, "build_info.tsv"))
+                   if l.startswith("graph\t")), None)
     if og is None:
-        import glob
-        g = sorted(glob.glob("graphs/CX333.s10k.k23.K15/*.smooth.final.og"))
-        og = g[0] if g else sys.exit("no graph found; pass --graph")
+        sys.exit("no graph: pass --graph, or set MTB_BUILD_DIR")
     os.makedirs(a.workdir, exist_ok=True)
 
     ref_of = {r["sample"]: r["reference"] for r in
@@ -192,12 +259,30 @@ def main():
                           want_node=True)
     print(f"  odgi returned {len(href)} H37Rv projections and {len(node)} node "
           f"positions for {len(keys)} queries")
+    # how often the carrier's own path visits each node it landed on; the
+    # writer keys on a node only where this is 1 (audit P3IS-3)
+    occ = node_occurrences(a.odgi, og, {(k[0], v[0]) for k, v in node.items()},
+                           a.threads)
+    # node lengths for the reverse-walked nodes only; a missing table is
+    # refused where one is needed, never read as forward
+    want_len = {str(v[0]) for k, v in node.items()
+                if v[2] == "-" and href.get(k) and href[k][1] != 0}
+    nlen = {}
+    if want_len:
+        if not a.node_lengths or not os.path.exists(a.node_lengths):
+            sys.exit(f"FATAL: {len(want_len)} nodes are walked in reverse and "
+                     f"need their length for a forward offset; no node table "
+                     f"at '{a.node_lengths}' (pass --node-lengths "
+                     f"<build>/assets/node_positions.tsv)")
+        nlen = mtb_norm.load_node_lengths(a.node_lengths, want_len)
 
     ism = collections.defaultdict(list)
-    for s in {x["sample"] for x in sites}:
+    ism_ran = set()
+    for s in ({x["sample"] for x in sites} if a.ismapper_dir else ()):
         tp = os.path.join(a.ismapper_dir, s, s, "IS6110",
                           f"{s}__NC_000962.3_table.txt")
         if os.path.exists(tp):
+            ism_ran.add(s)
             for r in csv.DictReader(open(tp), delimiter="\t"):
                 try:
                     ism[s].append((int(r["x"]), int(r["y"]), r.get("call", "")))
@@ -211,11 +296,25 @@ def main():
         if hp is None or np_ is None:
             tally["unprojected"] += 1
             s.update(placement="unprojected", h37rv_pos="", dist_to_ref="",
-                     node="", node_offset="", frame_strand="", key="",
-                     ismapper="", ism_call="")
+                     node="", node_offset="", node_occ="", frame_strand="",
+                     key="", ismapper="", ism_call="")
             rows.append(s); continue
         h, dist, strand = hp
-        nid, noff = np_
+        nid = np_[0]
+        # ONE KEY PER BASE: the node's forward offset, not odgi's offset along
+        # this carrier's walk, which differs (L-1-off) for a carrier walking
+        # the node in reverse (gwas1000: 71 of 19,990 keyed nodes had sites
+        # from both directions)
+        noff = mtb_norm.forward_offset(np_[1], np_[2], nlen.get(str(nid)))
+        if noff is None and dist != 0:
+            tally["unprojected"] += 1
+            tally["no_node_length"] += 1
+            s.update(placement="unprojected", h37rv_pos="", dist_to_ref="",
+                     node="", node_offset="", node_occ="", frame_strand="",
+                     key="", ismapper="", ism_call="")
+            rows.append(s); continue
+        if noff is None:
+            noff = ""         # on-path: the column is informational; unknown
         if dist == 0:
             place = "on_path"; key = f"h37rv:{h}"
         elif dist <= a.near_tol:
@@ -224,14 +323,16 @@ def main():
             place = "off_path_accessory"; key = f"node:{nid}:{noff}"
         tally[place] += 1
         hit, call = "", ""
-        if place == "on_path":
+        if place == "on_path" and s["sample"] in ism_ran:
             for x, y, c in ism.get(s["sample"], []):
                 if abs(h - x) <= a.ism_window or abs(h - y) <= a.ism_window:
                     hit, call = 1, c; break
             if hit == "":
                 hit = 0
         s.update(placement=place, h37rv_pos=h, dist_to_ref=dist,
-                 node=nid, node_offset=noff, frame_strand=strand, key=key,
+                 node=nid, node_offset=noff,
+                 node_occ=occ.get((s["path"], nid), ""),
+                 frame_strand=strand, key=key,
                  ismapper=hit, ism_call=call)
         rows.append(s)
 
@@ -247,8 +348,19 @@ def main():
             print(f"  {k:22s} {tally[k]:5d}")
     print("  " + "-" * 28)
     print(f"  {'total':22s} {len(rows):5d}")
+    if tally["no_node_length"]:
+        print(f"  {tally['no_node_length']} of the unprojected are off-path "
+              f"sites on a reverse-walked node missing from {a.node_lengths}")
 
-    onp = [r for r in rows if r["placement"] == "on_path"]
+    onp = [r for r in rows if r["placement"] == "on_path"
+           and r["ismapper"] != ""]
+    if not a.ismapper_dir:
+        print("\n  ISMapper join off (no --ismapper-dir): the ismapper column "
+              "is blank")
+    elif len(ism_ran) < len({r["sample"] for r in rows}):
+        print(f"\n  ISMapper tables for {len(ism_ran)} of "
+              f"{len({r['sample'] for r in rows})} isolates in "
+              f"{a.ismapper_dir}; the others are blank, not 0")
     if onp:
         m = sum(1 for r in onp if r["ismapper"] == 1)
         print(f"\n  ISMapper join, on-path sites only: {m}/{len(onp)} = "

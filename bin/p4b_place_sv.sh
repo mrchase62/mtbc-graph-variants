@@ -44,7 +44,8 @@ REFMAP="${REFMAP:-refbias/p1/refmap.tsv}"
 P2DIR="${P2DIR:-refbias/p2}"
 OUTDIR="${OUTDIR:-refbias/p4b}"
 WORK="${WORK:-refbias/work/p4b}"
-OG="${OG:-$(ls graphs/CX333.s10k.k23.K15/*.smooth.final.og 2>/dev/null | head -1)}"
+# the build's own graph, as its stamp records it (was a glob over CX333)
+OG="${OG:-$(awk -F'\t' '$1=="graph"{print $2}' "${BUILD}/build_info.tsv")}"
 ODGI="${MTB_ODGI:?MTB_ODGI is unset; see config/project_env.sh}"
 H37RV_PATH="${H37RV_PATH:-GCF_000195955#1#NC_000962.3}"
 PATHS="${BUILD}/assets/paths.txt"
@@ -125,7 +126,10 @@ else
 fi
 echo "[P4b] ${SAMPLE}: ${NBP} distinct breakpoints projected"
 
-GRAPH_VCF="${GRAPH_VCF:-$(dirname "$OG")/all_variants.nolab.vcf.gz}"
+# the build's collapsed graph VCF (P0 step assets), not all_variants.nolab
+# beside the graph: a new build does not produce that file, and its duplicate
+# records split one allele's carriers over several rows
+GRAPH_VCF="${GRAPH_VCF:-${BUILD}/assets/graph_collapsed.vcf.gz}"
 [[ -s "$GRAPH_VCF" ]] || { echo "FATAL: no graph VCF at ${GRAPH_VCF}" >&2; exit 1; }
 "$MTB_PY" bin/p4b_place_sv.py --sample "$SAMPLE" --reference "$REFID" \
     --build-id "$BUILD_ID" --delly "$DELLY" --dysgu "$DYSGU" \

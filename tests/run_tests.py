@@ -272,7 +272,7 @@ class ShardedMerge(unittest.TestCase):
     def merge(self, d, *extra):
         r = subprocess.run([sys.executable, "bin/merge_cohort_vcf.py",
                             "--states-array", d, "--keys", os.path.join(d, "keys.tsv"),
-                            "--cohort-name", "t", "--ancestral", "",
+                            "--cohort-name", "t", "--ancestral", "", "--build-id", "testbuild",
                             "--bgzip", self.bgzip, "--tabix", self.tabix, *extra],
                            capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
@@ -717,9 +717,13 @@ class RunnerCohortTable(unittest.TestCase):
         og = write(os.path.join(d, "g.og"), "x\n")
         write(os.path.join(b, "logs", "manifest.done"), "done\n")
         write(os.path.join(b, "build_info.tsv"), f"build_id\tb0\ngraph\t{og}\n")
-        frames = write(os.path.join(d, "frames.tsv"), "accession\n")
-        env = dict(os.environ, REGISTRY=reg, BUILD_ROOT=os.path.join(d, "build"),
-                   MTB_GRAPH_FRAMES=frames)
+        # the runner verifies the build against its manifest and takes the
+        # frame table from the build only (audit section B, rerun safety)
+        write(os.path.join(b, "manifest.tsv"), "asset\tpath\tbytes\tsha256\n")
+        os.makedirs(os.path.join(b, "assets"))
+        write(os.path.join(b, "assets", "graph_frame_offsets.tsv"), "accession\n")
+        env = dict(os.environ, REGISTRY=reg, BUILD_ROOT=os.path.join(d, "build"))
+        env.pop("MTB_GRAPH_FRAMES", None)
         return subprocess.run(["bash", "bin/refbias_run.sh", "--cohort", "t",
                                "--dry-run", *extra], capture_output=True,
                               text=True, env=env)
@@ -754,6 +758,17 @@ class ConfigSiteFile(unittest.TestCase):
              f"cd / && source {cfg}/project_env.sh && echo $MTB_DATA"],
             capture_output=True, text=True)
         self.assertEqual(r.stdout.strip(), "/elsewhere/data")
+
+
+def load_tests(loader, standard_tests, pattern):
+    """Also run the audit regression tests (tests/test_audit_*.py), so one
+    command covers every pinned defect."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for fn in sorted(os.listdir(here)):
+        if fn.startswith("test_audit_") and fn.endswith(".py"):
+            mod = load(fn[:-3], os.path.join("tests", fn))
+            standard_tests.addTests(loader.loadTestsFromModule(mod))
+    return standard_tests
 
 
 if __name__ == "__main__":

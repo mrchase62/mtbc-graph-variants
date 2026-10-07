@@ -162,6 +162,11 @@ mtb_require_cram_root() {
 # an undefined variable became an empty argument.
 : "${MTB_K8:=${HOME}/bin/k8}"
 : "${MTB_PAFTOOLS:=${HOME}/bin/paftools.js}"
+# BLAST+ for the foreign screen's UniVec check (D29); not in the QC env
+: "${MTB_BLASTN:=/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/autocycler/bin/blastn}"
+: "${MTB_MAKEBLASTDB:=/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/autocycler/bin/makeblastdb}"
+# NCBI UniVec_Core, fetched into the repository's data/ by bin/fetch_univec.sh
+: "${MTB_UNIVEC:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/data/univec/UniVec_Core}"
 
 : "${MTB_SNPEFF_JAR:=/n/boslfs02/LABS/sfortune_lab/Lab/mchase/snpEff/snpEff.jar}"
 : "${MTB_JAVA:=/n/boslfs02/LABS/sfortune_lab/Lab/software/jdk-20.0.1/bin/java}"
@@ -177,6 +182,25 @@ mtb_require_cram_root() {
 : "${MTB_REF_PATH:=GCF_000195955#1#NC_000962.3}"
 # Plain H37Rv (non-PanSN header) for nucmer/MUMmer QC.
 : "${MTB_H37RV:=${MTB_REFDIR}/H37Rv.fasta}"
+
+# --- Outgroup ---------------------------------------------------------------
+# THE PANEL GENOME THAT ROOTS EVERY TREE AND POLARISES EVERY VARIANT, named in
+# one place. It was GCF_035581225 (M. canettii) written into P0, the
+# association tail's tree and event steps, add_outgroup.py, panel_polarity.py
+# and build_snp_tree.sh separately, so a graph without that genome could not
+# be run without editing five files. P0 records the value it used in the
+# build's build_info.tsv (key `outgroup`), and the association tail reads it
+# from there, so a cohort is always rooted on its own build's outgroup.
+# Set it EMPTY for a graph with no outgroup (P0 then makes no polarity table).
+# The panel tree's own outgroup leaves for the AA tag are separate: P0 step
+# ancestral, ANC_OUTGROUPS (decision D44).
+#
+# Leaves of a cohort tree that are outside the MTBC besides the outgroup: the
+# panel's second canettii and the read-based canettii isolate. The
+# association tail pins the MRCA of every other leaf -- the MTBC node -- to
+# the panel's AA (R2-TREES-6); names not in a tree are ignored.
+: "${MTB_NON_MTBC_TIPS=GCF_000253375,canettii}"
+: "${MTB_OUTGROUP=GCF_035581225}"
 
 # --- Container bind convention ---------------------------------------------
 #
@@ -279,6 +303,46 @@ mtb_require_file() {
     done
 }
 
+# --- Build identity of products (audit section B, rerun safety) --------------
+# A skip-if-exists guard that tests only existence keeps a previous build's
+# output when the chain is rerun on a new graph (audit P0P2-1, TP-4, P3IS-8).
+# These helpers let a guard ask WHICH build a product came from.
+
+# The single P0 build to use: $MTB_BUILD_DIR, else the one build under
+# $BUILD_ROOT whose manifest step completed. A half-built directory is never
+# picked by default (audit P0P2-13), and two completed builds are refused.
+mtb_resolve_build() {
+    local root="${BUILD_ROOT:-refbias/build}" b
+    if [[ -n "${MTB_BUILD_DIR:-}" ]]; then
+        printf '%s\n' "${MTB_BUILD_DIR%/}"; return 0
+    fi
+    local -a cands=()
+    for b in "${root}"/*/; do
+        [[ -s "${b}logs/manifest.done" ]] && cands+=("${b%/}")
+    done
+    if [[ "${#cands[@]}" -ne 1 ]]; then
+        echo "[project_env] FATAL: ${#cands[@]} completed builds (logs/manifest.done) under ${root}; set MTB_BUILD_DIR" >&2
+        return 1
+    fi
+    printf '%s\n' "${cands[0]}"
+}
+
+# The ##MTB_graph_build stamp of a VCF (plain or bgzipped); empty if none.
+mtb_vcf_build_id() {
+    local f="$1"
+    [[ -s "$f" ]] || return 0
+    { if [[ "$f" == *.gz ]]; then gzip -cd "$f"; else cat "$f"; fi; } 2>/dev/null \
+        | awk '/^#CHROM/{exit} /^##MTB_graph_build=/{sub(/^##MTB_graph_build=/,""); print; exit}' \
+        || true
+}
+
+# A value from a key<TAB>value file (a .done marker or provenance sidecar);
+# empty when the file or the key is absent.
+mtb_kv() {
+    [[ -s "$1" ]] || return 0
+    awk -F'\t' -v k="$2" '$1==k{print $2; exit}' "$1"
+}
+
 # Print a script's leading comment block as its usage message.
 # Immune to line-number drift, unlike `sed -n '11,17p' "$0"`.
 mtb_usage() {
@@ -297,9 +361,10 @@ mtb_show_config() {
     local v
     for v in MTB_WORK MTB_PERSIST MTB_ARCHIVE MTB_DATA MTB_GRAPHS \
              MTB_CONTAINERS MTB_PGGB_SIF MTB_VG_SIF MTB_GRAPHALIGNER_SIF \
-             MTB_REF_FASTA MTB_REF_PATH MTB_H37RV \
+             MTB_REF_FASTA MTB_REF_PATH MTB_H37RV MTB_OUTGROUP MTB_NON_MTBC_TIPS \
              MTB_SNPEFF_JAR MTB_JAVA MTB_SNPEFF_DB MTB_PY MTB_PY_VT MTB_ODGI MTB_MINIMAP2 \
              MTB_SAMTOOLS MTB_BGZIP MTB_TABIX MTB_BEDTOOLS MTB_BCFTOOLS MTB_K8 MTB_PAFTOOLS \
+             MTB_BLASTN MTB_MAKEBLASTDB MTB_UNIVEC \
              MTB_BWA MTB_WGSIM MTB_GATK_SIF MTB_DELLY_ENV \
              MTB_CRAM_ROOT MTB_CRAM_REF MTB_BUILD_DIR MTB_GRAPH_FRAMES \
              MTB_THREADS MTB_PARTITION; do

@@ -32,6 +32,14 @@ build-scoped, which is what the build id in every row is for.
 """
 import argparse, bisect, collections, csv, gzip, os, sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import mtb_norm  # noqa: E402
+import importlib.util as _ilu  # noqa: E402
+_gfs = _ilu.spec_from_file_location(
+    "graph_frame", os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "graphframe", "bin", "graph_frame.py"))
+graph_frame = _ilu.module_from_spec(_gfs); _gfs.loader.exec_module(graph_frame)
+
 
 def op(p):
     return gzip.open(p, "rt") if p.endswith(".gz") else open(p)
@@ -62,6 +70,13 @@ def load_vcf(path):
                 continue
             out.append((int(f[1]), ref, alt, f[5]))
     return out
+
+
+def is_indel_anchored(ref, alt):
+    """A left-anchored indel: one shared first base, one allele a single
+    base."""
+    return (len(ref) != len(alt) and ref[:1] == alt[:1]
+            and (len(ref) == 1 or len(alt) == 1))
 
 
 def load_intervals(bed):
@@ -143,19 +158,38 @@ def parse_pos_file(path, want_node=False):
         try:
             src = int(f[0].rsplit(",", 2)[-2]) + 1
             if want_node:
-                nid, off, _ = f[1].split(",")
-                val = (int(nid), int(off), None)
+                # odgi's node offset runs along R's WALK of the node; the
+                # strand is kept so main() can restate it as the node's
+                # forward offset (mtb_norm.forward_offset)
+                nid, off, nst = f[1].split(",")
+                val = (int(nid), int(off), nst.strip())
             else:
                 tgt = f[1].rsplit(",", 2)
                 # f[3] is strand.vs.ref as REPLACED by graphframe/bin/
                 # frame_convert.py: the relation between the two refs
                 # sequences, which is `-` only when the panel stores one of the
                 # two accessions reverse complemented. odgi's own flag is
-                # carried in f[4] and is deliberately not used here -- it
-                # already accounts for locally inverted steps, and folding it
-                # in again complements the allele at exactly those sites.
-                val = (int(tgt[-2]) + 1, int(f[2]) if len(f) > 2 else 0,
-                       f[3] if len(f) > 3 and f[3] in ("+", "-") else "+")
+                # carried in f[4].
+                t = int(tgt[-2]) + 1
+                st = f[3] if len(f) > 3 and f[3] in ("+", "-") else "+"
+                # WHERE f[4] IS `-` (R and H37Rv walk the node in opposite
+                # directions) THE TARGET IS ONE BASE HIGH AND R READS
+                # COMPLEMENTED to what f[3] says. The earlier note here, that
+                # odgi already accounts for the inverted step, rested on 4
+                # pilot SNPs. Measured instead by reading R's 31-mer around the
+                # source against H37Rv's around the target:
+                #   f[3] f[4]  homolog            GCF_000193185  scale200 P4
+                #   +    -     t-1, complemented  8,684 / 8,694   167 / 228
+                #   -    -     t-1, same strand        -              7 / 7
+                #   +    +     t, same strand    34,298 / 34,465
+                # (bin/p5_states.py corrects the H37Rv -> R direction the same
+                # way.) The shift is -1 because the target here is always
+                # H37Rv, which the panel stores forward; for a target stored
+                # reverse complemented it would be +1.
+                if len(f) > 4 and f[4].strip() == "-":
+                    t -= 1
+                    st = "-" if st == "+" else "+"
+                val = (t, int(f[2]) if len(f) > 2 else 0, st)
         except (ValueError, IndexError):
             continue
         out.setdefault(src, val)
@@ -186,6 +220,22 @@ def main():
     ap.add_argument("--ref-fasta", default="",
                     help="the matched reference's FASTA, for the anchor base of "
                          "an OFF-path record, where H37Rv is not the reference")
+    ap.add_argument("--node-lengths", default="",
+                    help="the build's node table (assets/node_positions.tsv, "
+                         "P0 step nodes), for node lengths. A node key's "
+                         "offset is the node's FORWARD offset, and where R "
+                         "walks the node in reverse that is L-1-offset; "
+                         "without the length such a record cannot be keyed "
+                         "and is dropped, counted")
+    ap.add_argument("--frames", default="",
+                    help="the build's graph frame table (default: "
+                         "MTB_GRAPH_FRAMES or MTB_BUILD_DIR's), to tell whether "
+                         "R is stored reverse complemented in the panel; needed "
+                         "to write node-frame alleles on the node's forward "
+                         "strand")
+    ap.add_argument("--h37rv-accession", default="GCF_000195955",
+                    help="H37Rv's accession: R = H37Rv (D21) has nothing to "
+                         "inherit, so its empty inherited half is not warned of")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
@@ -284,10 +334,72 @@ def main():
         return 1
     hpos = [hmap.get(pos) for pos, _, _, _ in matched]
     npos = [nmap.get(pos) for pos, _, _, _ in matched]
+    # ONE KEY PER BASE. odgi counts the node offset along the walking
+    # direction, so two references walking a node in opposite directions gave
+    # one base two keys (scale200: 13 of 11,163 keyed nodes had records from
+    # both directions). Offsets are restated in the node's forward
+    # orientation, which needs the node's length where the walk is `-`.
+    want_len = {str(v[0]) for v in npos if v is not None and v[2] == "-"}
+    nlen = (mtb_norm.load_node_lengths(a.node_lengths, want_len)
+            if a.node_lengths and want_len else {})
 
     rows = []
     n_near = 0
     n_anchor = collections.Counter()
+    n_nodestrand = collections.Counter()
+    # D41: R's alleles read the node reverse complemented when R walks it `-`
+    # in the panel, or when R itself is stored flipped in the panel (22 of 333
+    # accessions), but not both. Asked once, and only if R has node rows.
+    r_flipped = None
+    frames = None
+    walk = None
+
+    def locate(q):
+        """(node, forward offset, reading strand) of R's 1-based refs
+        position q, from R's walk in the build's node table; None where the
+        table cannot say. Loaded the first time it is needed."""
+        nonlocal walk
+        if not a.node_lengths:
+            return None
+        if walk is None:
+            walk = mtb_norm.load_path_nodes(a.node_lengths, a.reference)
+        pp = frames.to_panel(a.reference, q - 1) + 1
+        i = bisect.bisect_right(walk, (pp, float("inf"))) - 1
+        if i < 0:
+            return None
+        start, ln, nd, st, occ = walk[i]
+        if occ != 1 or not (start <= pp < start + ln):
+            return None
+        fo = mtb_norm.forward_offset(pp - start, st, ln)
+        return nd, fo, "-" if (st == "-") != r_flipped else "+"
+
+    by_node = None
+    n_leftalign = collections.Counter()
+
+    def node_base(nd):
+        """base(i): node nd's forward-strand base at offset i, spelled from
+        R's own sequence (R's path spells the node exactly); None where R's
+        node table cannot say."""
+        nonlocal walk, by_node
+        if not a.node_lengths or not rseq:
+            return lambda i: None
+        if walk is None:
+            walk = mtb_norm.load_path_nodes(a.node_lengths, a.reference)
+        if by_node is None:
+            by_node = {w[2]: w for w in walk if w[4] == 1}
+        w = by_node.get(str(nd))
+        if w is None:
+            return lambda i: None
+        start, ln, _, st, _ = w
+        cmp_ = (st == "-") != r_flipped
+
+        def base(i):
+            if not 0 <= i < ln:
+                return None
+            pp = start + (i if st == "+" else ln - 1 - i)
+            b = rseq[frames.to_refs(a.reference, pp - 1)].upper()
+            return b.translate(comp) if cmp_ else b
+        return base
 
     # --- direct arm: core sequence only ---------------------------------------
     for pos, ref, alt, qual in load_vcf(a.direct):
@@ -315,7 +427,16 @@ def main():
             n_noproj["no H37Rv projection" if hp is None else "no node projection"] += 1
             continue
         h, dist, strand = hp[0], hp[1], hp[2] or "+"
-        node, off = np_[0], np_[1]
+        node = np_[0]
+        off = mtb_norm.forward_offset(np_[1], np_[2], nlen.get(str(node)))
+        if off is None and dist != 0:
+            # a node key in the walking direction would be a second key for
+            # the same base, so it is not written
+            n_noproj["no node length for a reverse-walked node"] += 1
+            continue
+        if off is None:
+            off = ""          # on-path: the column is informational; unknown
+        r_ref, r_alt = ref, alt          # as R reads them, for the node frame
         h, ref, alt, anchor_status = on_strand(h, r_pos, ref, alt, strand,
                                                dist == 0)
         n_anchor[anchor_status] += 1
@@ -336,6 +457,83 @@ def main():
             else:
                 reg_off = "off_path_accessory"
                 nm = acc_name(h)
+            # ONE KEY PER EVENT, NOT ONE PER WALK DIRECTION (D41). The
+            # alleles were H37Rv-strand (on_strand above), which says nothing
+            # about the node: references walking the node in opposite
+            # directions wrote one event as C>T and G>A, two keys. They are
+            # restated from R's own alleles on the node's forward strand.
+            if r_flipped is None:
+                frames = graph_frame.Frames(a.frames or None)
+                r_flipped = frames.flipped(a.reference)
+            rs = "-" if (np_[2] == "-") != r_flipped else "+"
+            node, off, ref, alt, nst = mtb_norm.node_forward_restate(
+                node, off, rs, r_ref, r_alt, rseq, r_pos, locate)
+            # AN EVENT WHOSE H37Rv-STRAND ANCHOR IS ON THE H37Rv PATH (D41,
+            # user's option b). R's anchor is off the path, but read on
+            # H37Rv's strand the anchor is R's base AFTER the span, and where
+            # that base projects onto the path with dist 0 a reference
+            # reading the other way places this same event in H37Rv
+            # coordinates (or leaves it to the direct arm in core). It is
+            # written as that reference writes it. p4_place.sh projects the
+            # base after every indel for this.
+            #
+            # Where R reads ALONG H37Rv's strand (the base after projects with
+            # strand +), H37Rv reads the node in reverse too, and the forward
+            # reader's record goes through on_strand: anchor t-len(D)-1. That
+            # assumes the span is H37Rv sequence, so it is used only where the
+            # resulting REF is H37Rv's own (always for an insertion); a
+            # deletion of off-path sequence would land elsewhere (scale200:
+            # ~100 bp from other samples' keys) and stays a node key.
+            if nst == "off_node" and is_indel_anchored(r_ref, r_alt):
+                hq = hmap.get(r_pos + len(r_ref))
+                t = None
+                if hq is not None and hq[1] == 0 and hseq \
+                        and 1 <= hq[0] <= len(hseq):
+                    D, I = rc(r_ref[1:]), rc(r_alt[1:])      # H37Rv strand
+                    if hq[2] == "-":
+                        t = hq[0]
+                        if rseq and r_pos + len(r_ref) <= len(rseq) and \
+                                rseq[r_pos + len(r_ref) - 1].translate(comp).upper() \
+                                != hseq[t - 1].upper():
+                            n_nodestrand["to_h37rv_anchor_disagrees"] += 1
+                    else:
+                        D, I = r_ref[1:], r_alt[1:]
+                        t = hq[0] - len(D) - 1
+                        if t < 1 or hseq[t:t + len(D)].upper() != D.upper():
+                            n_nodestrand["off_node_not_h37rv_sequence"] += 1
+                            t = None
+                if t is not None:
+                    anc = hseq[t - 1].upper()
+                    reg = region(t)
+                    if reg == "core":
+                        # the direct arm owns core sequence, as it does
+                        # for a reference reading the event forward
+                        n_nodestrand["to_h37rv_core_direct_arm"] += 1
+                        continue
+                    n_nodestrand["to_h37rv"] += 1
+                    hr, ha = anc + D, anc + I
+                    rows.append(dict(
+                        sample=a.sample, reference=a.reference,
+                        build_id=a.build_id, arm="composed",
+                        component="called", region=reg, frame="h37rv",
+                        key=f"h37rv:{t}", r_pos=r_pos, h37rv_pos=t,
+                        dist_to_ref=0, node="", node_offset="",
+                        frame_strand=hq[2], ref=hr, alt=ha,
+                        kind=classify(hr, ha),
+                        size=abs(len(strip_gap(ha)) - len(strip_gap(hr))),
+                        acc_locus="", qual=qual))
+                    n_off -= 1
+                    if reg_off == "off_path_near":
+                        n_near -= 1
+                    continue
+            n_nodestrand[nst] += 1
+            # LEFT-ALIGNED ON THE NODE, as h37rv keys are on H37Rv: readers
+            # walking a homopolymer in opposite directions otherwise keep
+            # different anchors (scale200: 3 events with two keys each)
+            if nst != "off_node" and is_indel_anchored(ref, alt):
+                off, ref, alt, la = mtb_norm.node_left_align(
+                    off, ref, alt, node_base(node))
+                n_leftalign[la] += 1
             rows.append(dict(
                 sample=a.sample, reference=a.reference, build_id=a.build_id,
                 arm="composed", component="called", region=reg_off,
@@ -361,8 +559,28 @@ def main():
     # This is the half T16 showed carries 89.2% of composition's false positives.
     # It is kept because dropping it loses the recall that makes composition worth
     # using in PE/PPE at all, and it is labelled so downstream can weigh it.
-    called_at = {r["h37rv_pos"] for r in rows if r["frame"] == "h37rv"}
-    n_inh = 0
+    # SUPPRESSED WHERE A CALLED RECORD OVERLAPS IT, not only where one sits at
+    # the same position (audit P4P5-8). The sample's own call replaced R's
+    # bases over its REF span; an inherited allele inside that span is R's
+    # sequence the sample no longer has. Equality of positions kept 782 such
+    # records in scale200, e.g. a called TGGG>T at 976,895 beside an
+    # inherited TTG>GGG at 976,896.
+    called_spans = sorted(
+        (int(r["h37rv_pos"]), int(r["h37rv_pos"]) + max(len(r["ref"]), 1) - 1)
+        for r in rows if r["frame"] == "h37rv")
+    c_starts = [s for s, _ in called_spans]
+    c_reach, m = [], 0
+    for _, e in called_spans:
+        m = max(m, e); c_reach.append(m)
+
+    def overlaps_called(s, e):
+        j = bisect.bisect_right(c_starts, e) - 1
+        while j >= 0 and c_reach[j] >= s:
+            if called_spans[j][1] >= s:
+                return True
+            j -= 1
+        return False
+    n_inh = n_inh_over = 0
     if not os.path.exists(a.graph_vcf):
         sys.exit(f"FATAL: --graph-vcf {a.graph_vcf} does not exist; the "
                  f"inherited half would be silently empty")
@@ -389,7 +607,10 @@ def main():
             alt = alts[ai - 1]
             if set(ref + alt) - set("ACGTN"):
                 continue
-            if region(pos) == "core" or pos in called_at:
+            if region(pos) == "core":
+                continue
+            if overlaps_called(pos, pos + max(len(ref), 1) - 1):
+                n_inh_over += 1
                 continue
             n_inh += 1
             rows.append(dict(
@@ -401,7 +622,8 @@ def main():
                 kind=classify(ref, alt),
                 size=abs(len(strip_gap(alt)) - len(strip_gap(ref))),
                 acc_locus="", qual="."))
-    else:
+    elif a.reference != a.h37rv_accession:
+        # (R = H37Rv has no differences from itself to inherit)
         print(f"  WARNING: {a.reference} has no column in {a.graph_vcf}; "
               f"the inherited half of the composed arm is EMPTY for this "
               f"sample, which understates its recall", file=sys.stderr)
@@ -410,9 +632,12 @@ def main():
         print("  no records placed -- refusing to emit an empty table",
               file=sys.stderr)
         return 1
-    with open(a.out, "w", newline="") as fh:
+    # to a temporary name and renamed: p4_place.sh skips any sample whose
+    # table is non-empty, so a task killed mid-write must not leave one
+    with open(a.out + ".tmp", "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t")
         w.writeheader(); w.writerows(rows)
+    os.replace(a.out + ".tmp", a.out)
 
     c = collections.Counter((r["arm"], r["component"], r["region"]) for r in rows)
     print(f"  {len(rows)} records placed")
@@ -420,6 +645,12 @@ def main():
         print(f"  matched-arm records dropped, {why}: {n}")
     for k in sorted(c):
         print(f"    {k[0]:<9s}{k[1]:<10s}{k[2]:<9s}{c[k]:>7d}")
+    if n_nodestrand:
+        print("  node-frame alleles on the node's forward strand (D41): "
+              + ", ".join(f"{k} {v}" for k, v in sorted(n_nodestrand.items())))
+    if n_leftalign:
+        print("  node-frame indels left-aligned on the node: "
+              + ", ".join(f"{k} {v}" for k, v in sorted(n_leftalign.items())))
     n_acc = n_off - n_near
     # count names among accessory-scale records only: counting them across all
     # off-path rows produced "11 of 5 carry a name", which is the kind of ratio
@@ -434,12 +665,14 @@ def main():
     if rev:
         nre = sum(1 for r in rev if r["kind"] != "SNP")
         print(f"  opposite strand: {len(rev)} records project onto H37Rv's other "
-              f"strand because the panel stores {a.reference} reverse "
-              f"complemented; {nre} of them are indels")
+              f"strand, because the panel stores {a.reference} reverse "
+              f"complemented or the step is locally inverted; {nre} of them "
+              f"are indels")
         for k in sorted(n_anchor):
             if k != "same_strand":
                 print(f"    {k}: {n_anchor[k]}")
-    print(f"  inherited: {n_inh} records from {a.reference}'s own differences")
+    print(f"  inherited: {n_inh} records from {a.reference}'s own differences; "
+          f"{n_inh_over} dropped where a called record overlaps them")
     print(f"  written: {a.out}")
     return 0
 

@@ -46,7 +46,19 @@ VCFDIR="${P1IVCF:-${P1IDIR}/vcf}"
 TAG="${TAG:-$(basename "$(dirname "$P1IDIR")")}"
 [[ "$TAG" == "refbias" ]] && TAG="pilot"
 RES="${RES:-is6110/results}"
-OG="${OG:-$(awk -F'\t' '$1=="graph"{print $2}' "${MTB_BUILD_DIR:-refbias/build/7713a8d71d8e}/build_info.tsv")}"
+# THE BUILD, AND EVERYTHING TAKEN FROM IT. The graph fell back to build
+# 7713a8d71d8e's (CX333) when MTB_BUILD_DIR was unset, and the writer was
+# called without --refs, --h37rv or --build-id, so every IS6110 VCF and key
+# row was stamped 7713a8d71d8e and measured against CX333's refs whatever the
+# build. All four now come from the resolved build.
+BUILD="$(mtb_resolve_build)" || exit 1
+BUILD_ID="$(mtb_kv "${BUILD}/build_info.tsv" build_id)"
+[[ -n "$BUILD_ID" ]] || { echo "FATAL: no build_id in ${BUILD}/build_info.tsv" >&2; exit 1; }
+OG="${OG:-$(mtb_kv "${BUILD}/build_info.tsv" graph)}"
+H37RV_ACC="${H37RV_ACC:-GCF_000195955}"
+[[ -s "$OG" ]] || { echo "FATAL: no graph at '${OG}'" >&2; exit 1; }
+[[ -s "${BUILD}/refs/${H37RV_ACC}.fasta" ]] \
+    || { echo "FATAL: no ${BUILD}/refs/${H37RV_ACC}.fasta" >&2; exit 1; }
 mkdir -p "$VCFDIR" "$RES"
 
 # The PILOT's tables are unprefixed (p1i_cohort_keys.tsv and so on), and that
@@ -73,12 +85,12 @@ echo "=== 0/5 keep the last run's IS6110 projections"
 # into a build-scoped store that p1is reuses. They can only be filed under
 # their carriers while the key table that produced them still exists, which is
 # now: step 5 below rewrites it. Nothing to do on a cohort's first run.
-STORE="${MTB_BUILD_DIR:+${MTB_BUILD_DIR}/proj_is6110}"
-if [[ -n "$STORE" && -s "$KEYS" && -d "${P1IDIR}/p5stage2/proj" ]]; then
+STORE="${BUILD}/proj_is6110"
+if [[ -s "$KEYS" && -d "${P1IDIR}/p5stage2/proj" ]]; then
     "$MTB_PY" is6110/bin/is6110_p5_stage2.py --mode seed --cohort-keys "$KEYS" \
         --refmap "$REFMAP" --workdir "${P1IDIR}/p5stage2" --store "$STORE"
 else
-    echo "    nothing to keep (no earlier key table, projections or build)"
+    echo "    nothing to keep (no earlier key table or projections)"
 fi
 
 echo "=== 0/5 DR-array rescue"
@@ -98,8 +110,14 @@ echo "=== 2/5 reconcile"
 # --check-against is deliberately empty. Its default points at the PILOT's
 # isclean_summary.tsv, which has 23 rows, so any other cohort is refused -- a
 # real refusal that cost a run before it was understood.
+# --crossmap-dir: each isolate's own matched reference's crossmap. Without it
+# reconcile used H37Rv's for everyone, so chrom_side_only rows had orig_pos in
+# the wrong frame, the missing-crossmap guard never ran, and the ISMapper join
+# compared matched-frame positions with H37Rv ones (audit P3IS-7). The join
+# is off in this mode; --ismapper-dir "" says so explicitly.
 "$MTB_PY" is6110/bin/is6110_reconcile.py \
     --elside-dir "$P1IDIR" --junc-dir "$P1IDIR" --refmap "$REFMAP" \
+    --crossmap-dir "${CLEANDIR:-is6110/assets/isclean_matched}" --ismapper-dir "" \
     --check-against "" --out "$RECON" \
     --summary-out "${RECON%.tsv}_summary.tsv"
 
@@ -111,16 +129,20 @@ echo "=== 3/5 project into the H37Rv frame"
 # scale100 were run by hand WITH the flag, so this matches what they did.
 "$MTB_PY" is6110/bin/is6110_project_sites.py --all-stacks \
     --reconcile "$RECON" --refmap "$REFMAP" --graph "$OG" \
+    --node-lengths "${BUILD}/assets/node_positions.tsv" \
     --workdir "${WORK:-refbias/work/p1iv}" --out "$H37RV"
 
 echo "=== 4/5 flank placement"
 "$MTB_PY" is6110/bin/is6110_place_by_flank.py \
     --sites "$H37RV" --minimap2 "$MTB_MINIMAP2" \
+    --refs "${BUILD}/refs" --h37rv "${BUILD}/refs/${H37RV_ACC}.fasta" \
     --workdir "${WORK:-refbias/work/p1iv}" --out "$FLANK"
 
 echo "=== 5/5 VCFs"
 "$MTB_PY" is6110/bin/is6110_write_vcf.py \
     --reconcile "$RECON" --flank "$FLANK" --refmap "$REFMAP" \
+    --refs "${BUILD}/refs" --h37rv "${BUILD}/refs/${H37RV_ACC}.fasta" \
+    --build-id "$BUILD_ID" \
     --outdir "$VCFDIR" --keys-out "$KEYS"
 
 echo "=== p1iv done"

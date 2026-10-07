@@ -46,7 +46,14 @@ import csv, os
 
 COMP = str.maketrans("ACGTNacgtn", "TGCANtgcan")
 
-DEFAULT_TABLE = os.path.join("graphframe", "results", "graph_frame_offsets.tsv")
+# The build's frame table (P0 step frames). It was graphframe/results/, the
+# CX333 graph's table, read whenever MTB_GRAPH_FRAMES was unset -- so a script
+# run on a new build outside refbias_run.sh would have converted every
+# projection with the old graph's frames. Now MTB_GRAPH_FRAMES, else
+# <MTB_BUILD_DIR>/assets/graph_frame_offsets.tsv, else an error.
+DEFAULT_TABLE = (os.path.join(os.environ["MTB_BUILD_DIR"], "assets",
+                              "graph_frame_offsets.tsv")
+                 if os.environ.get("MTB_BUILD_DIR") else "")
 
 
 def rc(s):
@@ -55,7 +62,10 @@ def rc(s):
 
 class Frames:
     def __init__(self, table=None):
-        self.table = table or os.environ.get("MTB_GRAPH_FRAMES", DEFAULT_TABLE)
+        self.table = table or os.environ.get("MTB_GRAPH_FRAMES") or DEFAULT_TABLE
+        if not self.table:
+            raise SystemExit("FATAL: no frame table: set MTB_GRAPH_FRAMES or "
+                             "MTB_BUILD_DIR (<build>/assets/graph_frame_offsets.tsv)")
         self.f = {}
         with open(self.table, newline="") as fh:
             for r in csv.DictReader(fh, delimiter="\t"):

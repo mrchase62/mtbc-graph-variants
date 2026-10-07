@@ -27,15 +27,22 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sv_scatter import tree_frame
-from assoc_scan import descendant_matrix, bh
+from assoc_scan import (needs_refine, refine_branch, refine_region,
+                        refine_strat, REFINE_P, REFINE_BELOW)
+from assoc_scan import (descendant_matrix, bh, event_key, leave_one_out,
+                        load_lineages, load_carriers)
+from variant_span import deleted_span, small_deleted_span, changed_span  # noqa: F401
 
 
 def load_genes(path):
+    """(start, end, strand, name), 1-based inclusive. The snpEff dump's start
+    is 0-based (rpoB is `759806 763325`, true span 759807-763325), so reading
+    it as 1-based gave every gene one extra base on its left."""
     g = []
     for r in csv.reader(open(path), delimiter="\t"):
         if len(r) > 7 and r[4] == "Gene":
             try:
-                g.append((int(r[1]), int(r[2]), int(r[3]), r[6] or r[7]))
+                g.append((int(r[1]) + 1, int(r[2]), int(r[3]), r[6] or r[7]))
             except ValueError:
                 pass
     g.sort()
@@ -58,6 +65,11 @@ def main():
                          "minus-strand gene is at HIGHER coordinates.")
     ap.add_argument("--min-origins", type=int, default=2)
     ap.add_argument("--permutations", type=int, default=20000)
+    ap.add_argument("--refine-permutations", type=int, default=REFINE_P,
+                    help="permutations for a null whose count is at or below "
+                         "--refine-below after the first pass (assoc_scan.py's "
+                         "adaptive rule); 0: no refinement")
+    ap.add_argument("--refine-below", type=int, default=REFINE_BELOW)
     ap.add_argument("--lineages", default="",
                     help="TSV with `sample` and `lineage` columns. Adds a third "
                          "null that permutes the PHENOTYPE within lineage, "
@@ -67,6 +79,20 @@ def main():
                          "controls where events fall, not who carries the "
                          "phenotype.")
     ap.add_argument("--min-pool", type=int, default=200)
+    ap.add_argument("--min-determinacy", type=float, default=0.80,
+                    help="the scan's callability floor, applied per record: a "
+                         "record whose reconstruction leaves more than this "
+                         "share of branches undetermined contributes no "
+                         "origins. Without it 6%% (small), 16-22%% (sv) and "
+                         "7-9%% (is6110) of burden origins came from records "
+                         "the scan treats as untestable.")
+    ap.add_argument("--sv-min-overlap", type=int, default=1,
+                    help="--cls sv, and small deletions under --cls small: a "
+                         "deletion is credited to EVERY gene it "
+                         "removes at least this many bp of. 1 credits any "
+                         "partial overlap. A deletion that touches no gene "
+                         "falls back to the promoter or intergenic unit at "
+                         "its first deleted base.")
     ap.add_argument("--out", required=True)
     ap.add_argument("--seed", type=int, default=20260925)
     a = ap.parse_args()
@@ -76,18 +102,17 @@ def main():
     li = {l: j for j, l in enumerate(T["leaves"])}
     D = descendant_matrix(T)
     nd = D.sum(axis=1)
-    carriers = {l.strip() for l in open(a.phenotype) if l.strip()}
+    carriers = load_carriers(a.phenotype, li)
     dep = np.zeros(len(T["leaves"]), dtype=bool)
     for s in carriers:
-        if s in li:
-            dep[li[s]] = True
+        dep[li[s]] = True
     ov = (D & dep).sum(axis=1) / np.maximum(nd, 1)
     OVP = None
-    if a.lineages and os.path.exists(a.lineages):
-        lin = {}
-        for r in csv.DictReader(open(a.lineages), delimiter="\t"):
-            if r.get("sample") in li:
-                lin[li[r["sample"]]] = r.get("lineage") or "unknown"
+    if not a.lineages:
+        print("  WARNING: no --lineages, so no lineage null and nothing can "
+              "pass all three")
+    if a.lineages:
+        lin = load_lineages(a.lineages, T["leaves"])
         groups = collections.defaultdict(list)
         for i in range(len(T["leaves"])):
             groups[lin.get(i, "unassigned")].append(i)
@@ -110,15 +135,30 @@ def main():
     genes, gstart = load_genes(a.genes)
 
     def gene_at(p):
-        i = bisect.bisect_right(gstart, p)
-        for s, e, st, n in genes[max(0, i - 3):i]:
-            if s <= p <= e:
-                return n
-        return None
+        # the first gene holding p: used only to name the promoter or
+        # intergenic unit's fallback test below; crediting goes through
+        # genes_over, which returns EVERY gene (D18)
+        g = genes_over(p, p, 1)
+        return g[0] if g else None
 
-    def unit_at(p):
-        """gene body, else promoter, else the intergenic gap itself."""
-        g = gene_at(p)
+    gmaxlen = max((e - s for s, e, st, n in genes), default=0)
+
+    def genes_over(first, last, min_overlap, inside=False):
+        """every gene sharing at least `min_overlap` bp with [first, last];
+        with `inside`, every gene holding both ends (an insertion between
+        them)"""
+        lo = bisect.bisect_left(gstart, first - gmaxlen)
+        hi = bisect.bisect_right(gstart, last)
+        if inside:
+            return [n for s, e, st, n in genes[lo:hi] if s <= first and last <= e]
+        return [n for s, e, st, n in genes[lo:hi]
+                if min(e, last) - max(s, first) + 1 >= min_overlap]
+
+    def unit_at(p, gene_body=True):
+        """gene body, else promoter, else the intergenic gap itself.
+        `gene_body=False` for a record that changes no gene's bases, so the
+        gene holding its anchor is not credited after all."""
+        g = gene_at(p) if gene_body else None
         if g:
             return g, "gene"
         best = None
@@ -143,7 +183,9 @@ def main():
     reg_of = collections.defaultdict(collections.Counter)
     kind_of = {}
     n_kind = collections.Counter()
-    n_site = n_nogene = n_noframe = 0
+    n_site = n_nogene = n_noframe = n_uncall = n_multi = 0
+    missing = []
+    nbranch = T["n"] - 1
     for r in csv.DictReader(open(os.path.join(a.events, "variants.tsv")),
                             delimiter="\t"):
         if r["class"] != a.cls or int(r["n_gain"]) < 1:
@@ -158,21 +200,62 @@ def main():
         if r["frame"] not in ("h37rv", "") or not r["pos"].isdigit():
             n_noframe += 1
             continue
-        g, kind = unit_at(int(r["pos"]))
-        n_kind[kind] += 1
-        k = r["row_key"].split("|")
-        key = (int(k[0]) if k[0].isdigit() else k[0], k[1], k[2])
-        try:
-            v = ev.calls.loc[key]
-        except Exception:
+        # THE SCAN'S CALLABILITY FLOOR. A record mostly undetermined on the
+        # tree has not been reconstructed, and its few resolved gains are not
+        # origins the burden can count. Burden records are H37Rv-frame and
+        # unconditional, so the floor is over the whole tree, as in the scan.
+        if 1.0 - int(r["n_undet"]) / max(1, nbranch) < a.min_determinacy:
+            n_uncall += 1
             continue
-        by_gene[g] |= {lab_i[cols[j]] for j in np.where(v == 1)[0]}
-        kind_of[g] = kind
-        reg_of[g][r.get("region") or "other"] += 1
+        # A DELETION REMOVES A SPAN, NOT ITS ANCHOR BASE. Crediting it to the
+        # unit at POS put a deletion of several genes on one of them, and could
+        # put it on the gene ENDING at the anchor base, which it does not touch
+        # at all (svi:DEL:3348474:59 and Rv2991). 21% of gwas1000's deletions
+        # with an origin removed a gene other than the one credited.
+        # The same holds for a SMALL deletion: crediting its anchor base put
+        # 99 of scale200's 3,862 small deletions with an origin (gwas1000: 175
+        # of 9,133) on a unit other than the genes whose bases they remove.
+        # EVERY RECORD NOW FOLLOWS ONE RULE (D18, D39): the genes its changed
+        # bases touch, every one where genes overlap (17,874 bp of H37Rv);
+        # an insertion, the genes holding both its flanking bases.
+        first, last, inside = changed_span(r, a.cls)
+        is_del = (deleted_span(r) if a.cls == "sv" else
+                  small_deleted_span(r) if a.cls == "small" else None)
+        units = [(g, "gene") for g in genes_over(
+            first, last, a.sv_min_overlap if is_del else 1, inside)]
+        if not units:
+            # no gene's bases changed: the promoter or intergenic unit. An
+            # insertion is looked up from both flanks, since upstream of a
+            # plus-strand gene is below its start (the left flank) and
+            # upstream of a minus-strand gene above its end (the right); an
+            # insertion between two genes is in the promoter of whichever
+            # starts there, not in the gene ending there
+            cand = [unit_at(first, gene_body=False)]
+            if inside:
+                cand.append(unit_at(last, gene_body=False))
+            units = [next((u for u in cand if u[1] == "promoter"), cand[0])]
+        n_multi += len(units) > 1
+        for kind in {kd for _, kd in units}:
+            n_kind[kind] += 1
+        try:
+            v = ev.calls.loc[event_key(r["row_key"])]
+        except Exception:
+            missing.append(r["row_key"])
+            continue
+        b = {lab_i[cols[j]] for j in np.where(v == 1)[0]}
+        for g, kind in units:
+            by_gene[g] |= b
+            kind_of[g] = kind
+            reg_of[g][r.get("region") or "other"] += 1
     ev.close()
+    if missing:
+        sys.exit(f"FATAL: {len(missing):,} variants.tsv rows have no event-"
+                 f"matrix row, e.g. {missing[:3]}")
     print(f"  {n_site:,} {a.cls} records with at least one origin; "
-          f"{n_noframe:,} have no H37Rv coordinate. The rest enter the burden "
-          f"over {len(by_gene):,} units:")
+          f"{n_noframe:,} have no H37Rv coordinate; {n_uncall:,} are below "
+          f"the {a.min_determinacy:.0%} callability floor. The rest enter the "
+          f"burden over {len(by_gene):,} units"
+          + f" ({n_multi:,} records credited to two or more genes):")
     for k in ("gene", "promoter", "intergenic"):
         if n_kind[k]:
             nu = sum(1 for u, kk in kind_of.items() if kk == k)
@@ -199,16 +282,14 @@ def main():
               f"units" + ("" if len(pool[k]) >= a.min_pool
                           else f"   (below {a.min_pool}: no null)"))
 
-    P, out = a.permutations, []
+    P, out, aux = a.permutations, [], []
     for g, br in sorted(tested.items()):
         br = np.asarray(br)
         obs = float(ov[br].mean())
         k = len(br)
         d = rng.choice(T["n"], size=(P, k), p=w)
         p_branch = max(1, int((ov[d].mean(axis=1) >= obs).sum())) / P
-        own = collections.Counter(br.tolist())
-        pl = [x for x in pool[strat[g]]
-              if not (own[x] and own.__setitem__(x, own[x] - 1))]
+        pl = leave_one_out(pool[strat[g]], br.tolist())
         if len(pl) >= a.min_pool:
             pa = np.asarray(pl)
             d2 = pa[rng.integers(0, len(pa), size=(P, k))]
@@ -223,6 +304,36 @@ def main():
                         carriers_with_phenotype=carr,
                         p_branch=p_branch, p_region=p_region,
                         p_lineage=p_lineage, null_pool=len(pl)))
+        aux.append((br, np.asarray(pl) if len(pl) >= a.min_pool else None, obs))
+    # adaptive permutations, as in assoc_scan.py: a null at the floor of P is
+    # re-tested with --refine-permutations draws before BH
+    for o in out:
+        o["refined"] = ""
+    if a.refine_permutations:
+        P2 = a.refine_permutations
+        lin_items, lin_rows = [], []
+        for o, (br, pa, obs) in zip(out, aux):
+            done = []
+            if needs_refine(o["p_branch"], P, a.refine_below):
+                o["p_branch"] = refine_branch(rng, ov, w, T["n"], br, obs, P2)
+                done.append("branch")
+            if pa is not None and needs_refine(o["p_region"], P, a.refine_below):
+                o["p_region"] = refine_region(rng, ov, pa, len(br), obs, P2)
+                done.append("region")
+            if OVP is not None and needs_refine(o["p_lineage"], P, a.refine_below):
+                lin_items.append((D[br].astype(np.float32), nd[br], obs))
+                lin_rows.append(o)
+                done.append("lineage")
+            o["refined"] = ",".join(done)
+        if lin_items:
+            strata = [(np.asarray(ix), int(dep[np.asarray(ix)].sum()))
+                      for ix in groups.values()]
+            for o, pv in zip(lin_rows, refine_strat(
+                    rng, strata, len(T["leaves"]), lin_items, P2)):
+                o["p_lineage"] = pv
+        nref = collections.Counter(x for o in out for x in o["refined"].split(",") if x)
+        print(f"  refined with {P2:,} permutations: "
+              + (", ".join(f"{k} {v:,}" for k, v in sorted(nref.items())) or "none"))
     # BH within stratum, for the same reason the null is within stratum.
     for f, q in (("p_branch", "q_branch"), ("p_region", "q_region"),
                  ("p_lineage", "q_lineage")):
@@ -241,7 +352,7 @@ def main():
             "gene", "kind", "stratum", "origins", "obs",
             "carriers_with_phenotype",
             "p_branch", "q_branch", "p_region", "q_region",
-            "p_lineage", "q_lineage", "null_pool"])
+            "p_lineage", "q_lineage", "null_pool", "refined"])
         wr.writeheader()
         wr.writerows(out)
     nb = sum(1 for o in out if o["q_branch"] < 0.05)

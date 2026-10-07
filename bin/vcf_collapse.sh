@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Collapse duplicate allele records left behind by vcfwave, and refill AC/AN/AF.
 #
-#   bin/vcf_collapse.sh <graph-dir-name> [--in FILE] [--out FILE]
+#   bin/vcf_collapse.sh <graph-dir-name> [--in FILE] [--out FILE] [--ref H37RV_FASTA]
 #
 # WHY THIS IS NEEDED
 #
@@ -21,16 +21,49 @@
 #
 # THE FIX
 #
-#   norm -m +any    merge all records at a position into one multiallelic
-#                   record; identical ALTs collapse and genotypes are unioned
-#   norm -m -any    split back to biallelic, one record per DISTINCT allele
-#   +fill-tags      recompute AC/AN/AF, which the round-trip leaves stale
+#   norm -m -any    split the few multiallelic records to biallelic
+#   norm -f H37Rv   left-align every indel (D22, below)
+#   COLLAPSE_PY     trim each allele to its minimal REF/ALT (shared suffix, then
+#                   shared prefix down to one anchor base), then write ONE
+#                   record per (CHROM, POS, REF, ALT) with each sample's GT the
+#                   union over the records sharing that key: 1 if any record
+#                   says 1, else 0 if any says 0, else missing. Every other
+#                   column comes from the first record with that key.
+#   sort            trimming moves POS, so the stream is re-sorted
+#   +fill-tags      recompute AC/AN/AF from the unioned genotypes
 #
-# Verified: at POS 1849 this yields one C->A record with AC=107 AN=416, and at
-# POS 3928274 it keeps C->A, C->G and C->N as three records with carriers intact.
+# The output has no duplicate keys and no padded SNPs; both are checked, and the
+# run fails if either is found.
+#
+# THE PREVIOUS FIX, AND WHY IT WAS REPLACED (audit GRAPHVCF-5, 2026-10-05)
+#
+# This used `norm -m +any | norm -m -any`. The merge makes one record per POS
+# whose REF is the longest REF there, and the split does not trim it again, so a
+# SNP that shared its POS with a longer allele came out padded (CG>TG): 1,399
+# records in CX333, 376 of them SNPs, which every reader requiring len(REF)==1
+# or an exact (pos,ref,alt) join then lost. And a haploid merged record holds
+# one allele per sample, so a genome carrying a SNP plus an indel anchored on
+# the same base lost one of them (61 carrier cells read 0).
 #
 # `norm -d exact` is NOT a substitute -- it keeps the first record and discards
 # the others' genotypes (24 of 107 carriers at POS 1849).
+#
+# THE PRODUCT
+#
+# all_variants.collapsed.vcf.gz is the graph's variant file for every
+# downstream reader. all_variants.decomposed.vcf.gz is vcfwave's per-allele
+# intermediate: the same key can appear in several records with the carriers
+# split between them, and a reader that does not union them reads wrong
+# genotypes (audit Fault A / GRAPHVCF-1).
+#
+# LEFT-ALIGNED, THEN COLLAPSED (the user's decision D22, 2026-10-07). POS was
+# vcfwave's, trimmed, while every cohort key is left-aligned (bin/mtb_norm.py),
+# so an indel in a repeat was one event under two positions: the graph's and
+# the cohort's, and P5's panel_af lookup came back blank for it. In CX333
+# `norm -f` moves 8,934 of 93,214 records, and 41 events that vcfwave wrote at
+# two positions become one key. Left-aligning before the union merges those
+# 41 in the same pass. --ref is H37Rv (any header: it is renamed to the VCF's
+# one contig, and its length must match); REF must agree with it.
 set -euo pipefail
 
 # --- locate config/project_env.sh -----------------------------------------
@@ -51,23 +84,108 @@ GRAPH_DIR="${MTB_GRAPHS}/${GRAPH_NAME}"; shift
 
 IN="${GRAPH_DIR}/all_variants.decomposed.vcf.gz"
 OUT="${GRAPH_DIR}/all_variants.collapsed.vcf.gz"
+REF_FA="${MTB_REF_FASTA:-}"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --in)  IN="$2";  shift 2 ;;
         --out) OUT="$2"; shift 2 ;;
+        --ref) REF_FA="$2"; shift 2 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
 mtb_require_file "$IN"
 
+# Reads a plain-text, biallelic VCF on stdin and writes the collapsed records,
+# unsorted, on stdout. tests/test_audit_selection.py runs this text directly.
+# --- COLLAPSE_PY begin
+read -r -d '' COLLAPSE_PY <<'PY' || true
+import sys
+def trim(pos, ref, alt):
+    while len(ref) > 1 and len(alt) > 1 and ref[-1] == alt[-1]:
+        ref, alt = ref[:-1], alt[:-1]
+    while len(ref) > 1 and len(alt) > 1 and ref[0] == alt[0]:
+        ref, alt, pos = ref[1:], alt[1:], pos + 1
+    return pos, ref, alt
+CODE = {".": 0, "0": 1, "1": 2}     # union order: missing < REF < ALT
+GT = ".01"
+recs, n_in, n_pad = {}, 0, 0
+for line in sys.stdin:
+    if line.startswith("##"):
+        sys.stdout.write(line); continue
+    if line.startswith("#"):
+        sys.stdout.write("##MTB_collapse=indels left-aligned against H37Rv; alleles "
+                         "trimmed to minimal REF/ALT; one record per "
+                         "CHROM/POS/REF/ALT; GT union (1 over 0 over .)\n")
+        sys.stdout.write(line); continue
+    f = line.rstrip("\n").split("\t")
+    if "," in f[4]:
+        sys.exit(f"FATAL: multiallelic record at {f[0]}:{f[1]}; split first")
+    if f[8] != "GT":
+        sys.exit(f"FATAL: FORMAT {f[8]} at {f[0]}:{f[1]}; only GT is handled")
+    n_in += 1
+    pos, ref, alt = trim(int(f[1]), f[3].upper(), f[4].upper())
+    if (ref, alt) != (f[3].upper(), f[4].upper()):
+        n_pad += 1
+    try:
+        g = bytearray(CODE[x] for x in f[9:])
+    except KeyError as e:
+        sys.exit(f"FATAL: genotype {e} at {f[0]}:{f[1]}; expected haploid 0/1/.")
+    k = (f[0], pos, ref, alt)
+    if k in recs:
+        old = recs[k][1]
+        for i, v in enumerate(g):
+            if v > old[i]:
+                old[i] = v
+    else:
+        recs[k] = ([f[0], str(pos), f[2], ref, alt] + f[5:9], g)
+n_noalt = 0
+for k, (fix, g) in recs.items():
+    n_noalt += 2 not in g
+    sys.stdout.write("\t".join(fix + [GT[v] for v in g]) + "\n")
+snp_pad = sum(1 for (c, p, r, a) in recs if len(r) > 1 and len(a) > 1
+              and (r[0] == a[0] or r[-1] == a[-1]))
+print(f"    {n_in} records in, {len(recs)} distinct keys out; {n_pad} trimmed; "
+      f"{n_noalt} with no ALT carrier", file=sys.stderr)
+if snp_pad:
+    sys.exit(f"FATAL: {snp_pad} padded records remain after trimming")
+PY
+# --- COLLAPSE_PY end
+
 echo "### collapsing duplicate alleles"
 echo "    in  : $IN  ($(mtb_bcftools index -n "$IN" 2>/dev/null || echo '?') records)"
 
-mtb_bcftools norm -m +any "$IN" -Ou \
-  | mtb_bcftools norm -m -any -Ou \
-  | mtb_bcftools +fill-tags -Oz -o "$OUT" -- -t AC,AN,AF
-mtb_bcftools index -t "$OUT"
+SORT_TMP="$(mktemp -d "${OUT}.sort_tmp.XXXXXX")"
+trap 'rm -rf "$SORT_TMP"' EXIT
 
-echo "    out : $OUT  ($(mtb_bcftools index -n "$OUT") records)"
+# H37Rv under the VCF's contig name (the graph's PanSN path name)
+[[ -n "$REF_FA" && -r "$REF_FA" ]] || {
+    echo "FATAL: left-alignment needs H37Rv: --ref FASTA (or MTB_REF_FASTA); got '${REF_FA}'" >&2; exit 1; }
+mapfile -t CTG < <(mtb_bcftools view -h "$IN" | sed -n 's/^##contig=<ID=\([^,>]*\).*length=\([0-9]*\).*/\1\t\2/p')
+[[ "${#CTG[@]}" -eq 1 ]] || { echo "FATAL: ${IN} has ${#CTG[@]} contig lines; expected H37Rv's one" >&2; exit 1; }
+CTG_NAME="${CTG[0]%%$'\t'*}"; CTG_LEN="${CTG[0]##*$'\t'}"
+REF_RN="${SORT_TMP}/h37rv.fa"
+awk -v n="$CTG_NAME" '/^>/{if (++k > 1) exit 3; print ">" n; next} {print}' "$REF_FA" > "$REF_RN" \
+    || { echo "FATAL: ${REF_FA} holds more than one sequence; expected H37Rv alone" >&2; exit 1; }
+REF_LEN="$(grep -v '^>' "$REF_RN" | tr -d '\n\r' | wc -c)"
+[[ "$REF_LEN" -eq "$CTG_LEN" ]] || {
+    echo "FATAL: ${REF_FA} is ${REF_LEN} bp; ${IN}'s contig ${CTG_NAME} is ${CTG_LEN}" >&2; exit 1; }
+
+mtb_bcftools norm -m -any "$IN" -Ov \
+  | mtb_bcftools norm --check-ref e -f "$REF_RN" -Ov - \
+  | "$MTB_PY" -c "$COLLAPSE_PY" \
+  | mtb_bcftools sort -m 2G -T "$SORT_TMP" -Ou - \
+  | mtb_bcftools +fill-tags -Oz -o "$OUT" -- -t AC,AN,AF
+mtb_bcftools index -f -t "$OUT"
+
+# The product's contract: one record per key. Checked on the written file, so a
+# change upstream of the trim (or in the sort) cannot break it silently.
+NDUP="$(mtb_bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\n' "$OUT" | sort | uniq -d | wc -l)"
+[[ "$NDUP" -eq 0 ]] || { echo "FATAL: ${NDUP} duplicate (CHROM,POS,REF,ALT) keys in ${OUT}" >&2; exit 1; }
+# and every indel left-aligned: a second pass moves nothing
+NMOVE="$(mtb_bcftools norm -f "$REF_RN" "$OUT" -Ou 2>&1 >/dev/null \
+    | awk -F'\t' '/^Lines/{split($2, a, "/"); print a[4]}')"
+[[ "$NMOVE" == "0" ]] || { echo "FATAL: ${NMOVE:-?} records of ${OUT} are not left-aligned" >&2; exit 1; }
+
+echo "    out : $OUT  ($(mtb_bcftools index -n "$OUT") records, 0 duplicate keys, left-aligned)"
 echo
 echo "Now re-split classes:  bin/vcf_split_classes.sh ${GRAPH_NAME} --in ${OUT}"

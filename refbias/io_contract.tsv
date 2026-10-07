@@ -38,10 +38,11 @@ p2	post	sample	yes	${OUTROOT}/p2/${S}.delly.vcf	structural, caller one
 p2	post	sample	no	${OUTROOT}/p2/${S}.dysgu.vcf	structural, caller two
 p2	post	sample	yes	${WORKPFX}p2/${S}.bam	alignment, read by p3
 p3	pre	sample	yes	${WORKPFX}p2/${S}.bam	from p2
-p3	pre	build	yes	${BUILD}/assets/accessory_panel.fasta	128 novel and mosaic contigs
+p3	pre	build	yes	${BUILD}/assets/accessory_panel.fasta	128 novel and mosaic contigs, made and indexed by P0 step assets
 p3	post	sample	yes	${OUTROOT}/p3/${S}.accessory.tsv	arm A, presence by breadth
 p3	post	sample	yes	${OUTROOT}/p3/${S}.copynumber.tsv	arm B, copy number by depth
 p3	post	sample	yes	${OUTROOT}/p3/${S}.elementdepth.tsv	per-interval depth; computed and currently unused
+p3	pre	cohort	yes	${REFMAP}	p3acc's sample list and each sample's matched reference
 p3	post	sample	yes	accessory/${NAME}/${S}.presence.tsv	level-1 accessory presence (p3acc)
 p4	pre	sample	yes	${OUTROOT}/p2/${S}.vcf.gz	from p2
 p4	pre	sample	yes	${WORKPFX}p1/${S}.h37rv.vcf.gz	from p1 -- the dependency that broke the pinned-reference arm
@@ -60,6 +61,7 @@ p1g	pre	cohort	yes	${COHORT}
 p1g	pre	build	yes	is6110/assets/H37Rv.isclean.fasta	the fixed cut-down reference
 p1g	post	sample	yes	${OUTROOT}/p1g/${S}.junctions.tsv	chromosome-side junctions
 p1g	post	sample	yes	${OUTROOT}/p1g/${S}.elementdepth.tsv	element to chromosome depth ratio
+p1g	post	sample	yes	${OUTROOT}/p1g/${S}.isclean.bam	the IS-clean H37Rv alignment p5svgt reads
 p1i	pre	cohort	yes	${REFMAP}	each isolate's matched reference
 p1i	pre	build	yes	is6110/assets/isclean_matched/	333 cut-down references, crossmaps and indexes
 p1i	pre	build	yes	is6110/assets/matched_gff/	333 element interval files
@@ -68,6 +70,7 @@ p1i	post	sample	yes	${OUTROOT}/p1i/${S}.junctions.tsv	chromosome-side junctions
 p1iv	pre	sample	yes	${OUTROOT}/p1i/${S}.elstacks.tsv	from p1i
 p1iv	post	cohort	yes	${OUTROOT}/p1i/vcf/${S}.is6110.vcf	matched frame, authoritative
 p1iv	post	cohort	yes	${OUTROOT}/p1i/vcf/${S}.is6110.h37rv.vcf	H37Rv frame, derived
+p1iv	post	cohort	yes	is6110/results/${NAME}_p1i_cohort_keys.tsv	the arm's cohort key table, which p1is reads
 p1is	pre	cohort	yes	${OUTROOT}/p1i/${S}.junctions.tsv	the matched arm's per-isolate junctions, from p1i
 p1is	pre	cohort	yes	is6110/results/${NAME}_p1i_cohort_keys.tsv	the arm's cohort key table, from p1iv
 p1is	post	cohort	yes	is6110/results/${NAME}_p5_is6110_states.stage2.tsv	the earned REF/ABSENT states

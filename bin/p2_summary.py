@@ -88,8 +88,16 @@ def main():
     if not rows:
         print("no P2 output found", file=sys.stderr); return 1
     with open(a.out, "w") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t")
+        w = csv.DictWriter(fh, fieldnames=list(rows[0]), delimiter="\t",
+                           lineterminator="\n")
         w.writeheader(); w.writerows(rows)
+    # Say so when the H37Rv side is missing: a blank h37rv_small disables
+    # p5_sanity's burden check, which then reports 0 rather than failing.
+    no_h37 = sum(1 for r in rows if r["h37rv_small"] == "")
+    if no_h37:
+        print(f"  WARNING: {no_h37} of {len(rows)} isolates have no P1 H37Rv VCF "
+              f"in {a.p1_work}; h37rv_small and reduction are blank for them",
+              file=sys.stderr)
 
     print(f"  {len(rows)} isolates with P2 output"
           f"{'; INCOMPLETE: ' + ', '.join(incomplete) if incomplete else ''}\n")

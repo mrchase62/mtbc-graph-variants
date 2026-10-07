@@ -25,8 +25,8 @@ something else in the EVENT stream -- hence 3 for a loss, which keeps losses
 recorded rather than silently merged into "no event".
 
 POLARITY IS READ, NOT ASSUMED. A gain means a gain of the DERIVED allele, and
-which allele that is comes from the VCF: `AA_INVERTED` marks the 8.9% of panel
-sites where the reference carries the derived allele, so there GT=0 is the
+which allele that is comes from the VCF: `AA_INVERTED` marks the panel sites
+where the reference carries the derived allele, so there GT=0 is the
 derived state and GT=1 the ancestral one. Getting this backwards would invert
 the direction of every event at those sites. Records with no `AA` -- every
 is6110 and sv record, since those are not panel SNP sites -- are polarised
@@ -56,6 +56,21 @@ arise again inside it, manufacturing parallel gains that never happened. On the
 synthetic test this turns one true loss into two spurious gains plus a loss.
 The sound fix is not a flag: include an outgroup in the cohort tree, or graft
 the cohort onto the rooted panel tree, so the root state is resolved by data.
+
+THE MTBC NODE IS PINNED, NOT THE ROOT (the user's decision on review 2's
+R2-TREES-6, 2026-10-07). The cohort tree is rooted on the outgroup, so it
+DOES contain the MTBC ancestor, and that is exactly the node the panel's AA
+describes (bin/ancestral_alleles.py: the MRCA of every leaf that is not an
+outgroup). The warning above is about pinning a node the AA does not
+describe; this one it does. Left to the cohort's own parsimony that node was
+derived at 80 AA-polarised variants on scale200, against about 35,000
+consistent, and 26 of the 80 read as two or more losses, which the scan never
+tests. --pin-mtbc pins it to the AA allele wherever AA resolved (polarity
+ref_ancestral or alt_ancestral) and the node has data; the node is the MRCA
+of every leaf not named in --mtbc-exclude (the outgroup and the canettii
+genomes), and the run stops if an excluded leaf sits beneath it.
+<out>/mtbc_pinned.tsv lists each variant whose MTBC state the pin changed and
+what parsimony alone said.
 
 WHY THE INTERNAL LABELS ARE REWRITTEN. Our trees come from IQ-TREE, whose
 internal labels are support values like `100/100` and are therefore neither
@@ -219,6 +234,27 @@ def read_vcf(path, want_class=None, want_frame=None):
     return samples, variants, gt_rows, n_skipped
 
 
+def primary_alt(alt):
+    """The ALT a lookup should key on: `C,*` is the SNP C, the `*` only marking
+    samples whose region is absent (audit TP-2)."""
+    alts = [x for x in alt.split(",") if x != "*"]
+    return alts[0] if len(alts) == 1 else alt
+
+
+# Classes whose REF is true of the reference by construction, even at a
+# node-frame record: an IS6110 or SV site the reference does not carry, and an
+# accessory locus absent from it. Any other node-frame record sits on sequence
+# the reference path does not traverse, so the reference tip is unknown there.
+REF_BY_CONSTRUCTION = ("is6110", "sv", "accessory_presence")
+
+
+def ref_tip_gt(v):
+    """The GT character the reference tip (--ref-sample) takes at variant v."""
+    if v["frame"] not in ("h37rv", "") and v["cls"] not in REF_BY_CONSTRUCTION:
+        return ord(".")
+    return ord("0")
+
+
 def leaf_bits(gt_chars, derived_is_ref, absent):
     """Raw GT characters -> two-bit state masks, in the derived-allele frame."""
     b = np.zeros(gt_chars.shape, dtype=np.uint8)
@@ -241,11 +277,15 @@ def leaf_bits(gt_chars, derived_is_ref, absent):
     return b
 
 
-def fitch(post, pre, children, parent, leaf_index, bits, pin_root=None):
+def fitch(post, pre, children, parent, leaf_index, bits, pin_root=None,
+          pin_node=None, pin_mask=None, pinned_from=None):
     """Vectorised Fitch over a block of variants.
 
     bits is (n_leaves, n_block); returns the resolved per-node state masks as
-    (n_nodes, n_block).
+    (n_nodes, n_block). `pin_node` with `pin_mask` pins that node to the
+    ancestral state where the mask is set and the node has data; if
+    `pinned_from` is a dict, it receives {block column: unpinned mask} for
+    every column the pin changed.
     """
     n_nodes = len(post)
     n_block = bits.shape[1]
@@ -282,6 +322,13 @@ def fitch(post, pre, children, parent, leaf_index, bits, pin_root=None):
             continue
         cand = down[p] & u
         down[node] = np.where(u == UNK, UNK, np.where(cand != UNK, cand, u))
+        if node == pin_node and pin_mask is not None:
+            nat = down[node].copy()            # not a view: overwritten below
+            fix = pin_mask & (u != UNK)
+            down[node] = np.where(fix, A_BIT, nat)
+            if pinned_from is not None:
+                for c in np.flatnonzero(fix & (nat != A_BIT)):
+                    pinned_from[int(c)] = int(nat[c])
     return down
 
 
@@ -306,11 +353,21 @@ def main():
                          "it to the panel-ancestral allele wherever AA "
                          "resolved -- READ THE WARNING in this script's "
                          "header before using it")
+    ap.add_argument("--pin-mtbc", action="store_true",
+                    help="pin the MTBC node (the MRCA of every leaf not in "
+                         "--mtbc-exclude) to the AA allele wherever AA "
+                         "resolved (R2-TREES-6)")
+    ap.add_argument("--mtbc-exclude", default="",
+                    help="comma-separated leaves outside the MTBC: the "
+                         "outgroup and any canettii; names not in the tree "
+                         "are ignored")
     ap.add_argument("--chunk", type=int, default=20000,
                     help="variants per Fitch block")
-    ap.add_argument("--panel-polarity",
-                    default="refbias/assets/panel_polarity.tsv",
-                    help="ancestral allele read off the outgroup's own "
+    # NO DEFAULT. It was refbias/assets/panel_polarity.tsv, CX333's hand-made
+    # table; the chain passes the build's (P0 step panel_polarity).
+    ap.add_argument("--panel-polarity", required=True,
+                    help="<build>/assets/panel_polarity.tsv: "
+                         "ancestral allele read off the outgroup's own "
                          "genotype in the panel VCF, from bin/panel_polarity.py. "
                          "Consumed ONLY where AA did not resolve, because Fitch "
                          "over 333 genomes and a tree is the stronger "
@@ -318,7 +375,8 @@ def main():
                          "table comes from a SNP alignment, so every indel is "
                          "unpolarised without it and defaults to ALT-as-derived "
                          "-- backwards wherever the reference is the odd genome "
-                         "out.")
+                         "out. A missing table is FATAL; pass "
+                         "--panel-polarity '' to run without one on purpose")
     ap.add_argument("--min-panel-af", type=float, default=0.05,
                     help="the outgroup's allele is only taken as ANCESTRAL "
                          "against the reference when the panel also carries it "
@@ -354,8 +412,10 @@ def main():
                          "INAPPLICABLE -- not reference, not unknown -- so its "
                          "leaf is made uninformative and the reconstruction is "
                          "confined to the carrier clades. Needs --node-locus.")
-    ap.add_argument("--node-locus",
-                    default="accessory/assets/node_locus.tsv",
+    # NO DEFAULT: accessory/assets/node_locus.tsv was made by hand from CX333
+    # cohorts, and node ids belong to one graph. Required with
+    # --accessory-presence (checked below).
+    ap.add_argument("--node-locus", default="",
                     help="node -> accessory locus, from "
                          "accessory/bin/node_locus_from_p4.py. This is p4's own "
                          "coordinate anchor, not sequence containment.")
@@ -457,6 +517,31 @@ def main():
     pre = list(range(len(nodes)))
     eprint(f"  tree: {len(nodes)} nodes, {len(leaves)} leaves, "
            f"root {labels[root_i]}")
+    mtbc_i = None
+    if a.pin_mtbc:
+        excl = {x for x in a.mtbc_exclude.split(",") if x} & set(leaves)
+        if not excl:
+            sys.exit("FATAL: --pin-mtbc needs --mtbc-exclude to name at least "
+                     "one leaf of this tree (the outgroup)")
+        leaf_set = {i for i in range(len(nodes)) if is_leaf[i]}
+        ing = [i for i in leaf_set if labels[i] not in excl]
+        anc = None
+        for i in ing:                          # MRCA by intersecting paths
+            path, x = [], i
+            while x is not None:
+                path.append(x); x = parent[x]
+            anc = path if anc is None else [x for x in anc if x in set(path)]
+        mtbc_i = anc[0]
+        below, stack = set(), [mtbc_i]
+        while stack:
+            x = stack.pop(); below.add(x); stack.extend(children[x])
+        inside = sorted(labels[i] for i in leaf_set & below if labels[i] in excl)
+        if inside or mtbc_i == root_i:
+            sys.exit(f"FATAL: the MTBC node {labels[mtbc_i]} has excluded "
+                     f"leaves beneath it ({', '.join(inside) or 'it is the root'}); "
+                     f"the tree does not separate the MTBC from {sorted(excl)}")
+        eprint(f"  MTBC node {labels[mtbc_i]}: {len(ing)} leaves; outside it "
+               f"{', '.join(sorted(excl))}")
 
     # ---- VCF
     eprint(f"  reading {a.vcf} ...")
@@ -464,16 +549,35 @@ def main():
         a.vcf, want_class or None, want_frame or None)
 
     # ---- polarity from the outgroup, where AA left the record unpolarised
-    if a.panel_polarity and os.path.exists(a.panel_polarity):
+    # A table that was asked for (or defaulted) and is not there is an error,
+    # not a skip: run from another directory, the relative default silently
+    # left every indel unpolarised (audit TP-9).
+    if a.panel_polarity and not os.path.exists(a.panel_polarity):
+        sys.exit(f"FATAL: --panel-polarity {a.panel_polarity} does not exist. "
+                 f"Build it with bin/panel_polarity.py, or pass "
+                 f"--panel-polarity '' to run without outgroup polarity")
+    if a.panel_polarity:
         pol_tab = {}
-        for r in csv.DictReader(open(a.panel_polarity), delimiter="\t"):
-            pol_tab[(int(r["pos"]), r["ref"].upper(), r["alt"].upper())] = (
-                r["ancestral"], r["panel_af"])
+        with open(a.panel_polarity, newline="") as fh:
+            rd = csv.DictReader(fh, delimiter="\t")
+            if "chrom" not in (rd.fieldnames or []):
+                sys.exit(f"FATAL: {a.panel_polarity} has no chrom column; it "
+                         f"predates the one-row-per-key table. Rebuild it with "
+                         f"bin/panel_polarity.py")
+            for r in rd:
+                # the panel names the contig PanSN-style, the cohort VCF bare
+                k = (r["chrom"].split("#")[-1], int(r["pos"]),
+                     r["ref"].upper(), r["alt"].upper())
+                if k in pol_tab:
+                    sys.exit(f"FATAL: {a.panel_polarity} repeats the key {k}; "
+                             f"rebuild it with bin/panel_polarity.py")
+                pol_tab[k] = (r["ancestral"], r["panel_af"])
         n_fix = collections.Counter()
         for v in variants:
             if v["polarity"] != "unpolarised":
                 continue
-            hit = pol_tab.get((v["pos"], v["ref"].upper(), v["alt"].upper()))
+            hit = pol_tab.get((v["chrom"], v["pos"], v["ref"].upper(),
+                               primary_alt(v["alt"]).upper()))
             if hit is None:
                 continue
             anc, af = hit
@@ -491,7 +595,8 @@ def main():
             else:
                 v["polarity"], v["derived"] = "ref_ancestral_outgroup", "ALT"
                 n_fix["REF is ancestral -- the polarity is confirmed"] += 1
-            n_fix["  of which indels" if len(v["ref"]) != len(v["alt"])
+            n_fix["  of which indels"
+                  if len(v["ref"]) != len(primary_alt(v["alt"]))
                   else "  of which SNPs"] += 1
         if n_fix:
             eprint("  polarity from the outgroup, for records AA left "
@@ -591,7 +696,8 @@ def main():
     if extra:
         eprint(f"  note: ignoring {len(extra)} VCF samples absent from the tree")
     # -1 marks the reference tip, which has no genotype column and is read as
-    # the reference allele at every record; -2 marks the outgroup, whose
+    # the reference allele at every record except a node-frame one, where the
+    # reference has no sequence and is unknown (ref_tip_gt); -2 the outgroup, whose
     # alleles come from the alignment rather than the VCF.
     take = np.asarray([-2 if (a.outgroup_name and l == a.outgroup_name)
                        else -1 if l == a.ref_sample else col[l]
@@ -601,7 +707,8 @@ def main():
     is_og_tip = take == -2
     if a.ref_sample:
         eprint(f"  note: tree leaf {a.ref_sample} is the VCF reference; "
-               f"reading it as REF at every record")
+               f"reading it as REF at every record, unknown at node-frame "
+               f"records")
     leaf_index = [None] * len(nodes)
     for j, i in enumerate([i for i in range(len(nodes)) if is_leaf[i]]):
         leaf_index[i] = j
@@ -622,15 +729,15 @@ def main():
         og_gt = np.full(len(variants), ord("."), dtype=np.uint8)
         hit = collections.Counter()
         for j, v in enumerate(variants):
-            i = at.get((v["chrom"], v["pos"], v["ref"].upper(),
-                        v["alt"].upper()))
+            alt = primary_alt(v["alt"]).upper()
+            i = at.get((v["chrom"], v["pos"], v["ref"].upper(), alt))
             if i is None:
                 hit["site not in the alignment"] += 1
                 continue
             b = og_seq[i].upper()
             if b == v["ref"].upper():
                 og_gt[j] = ord("0"); hit["reference allele"] += 1
-            elif b == v["alt"].upper():
+            elif b == alt:
                 og_gt[j] = ord("1"); hit["alternate allele"] += 1
             else:
                 hit["N or a third base"] += 1
@@ -690,6 +797,9 @@ def main():
                f"removed")
         variants = [variants[i] for i in keep]
         gt_rows = [gt_rows[i] for i in keep]
+        if og_gt is not None:
+            og_gt = og_gt[keep]      # or every later record reads its
+                                     # neighbour's outgroup allele (TP-6)
         keys = [v["key"] for v in variants]
 
     # ---- LEVEL 2: which samples is an inside-the-insert variant even about? -
@@ -714,31 +824,50 @@ def main():
     node_locus = {}
     n_l2 = 0
     if a.accessory_presence:
-        if not os.path.exists(a.node_locus):
-            sys.exit(f"FATAL: --accessory-presence needs --node-locus; "
-                     f"{a.node_locus} does not exist")
+        if not a.node_locus or not os.path.exists(a.node_locus):
+            sys.exit(f"FATAL: --accessory-presence needs --node-locus (this "
+                     f"cohort's, from accessory/bin/node_locus_from_p4.py); "
+                     f"'{a.node_locus}' does not exist")
         with open(a.node_locus, newline="") as fh:
             for r in csv.DictReader(fh, delimiter="\t"):
                 if r.get("locus"):
                     node_locus[r["node"]] = r["locus"]
         per = collections.defaultdict(set)
+        measured = set()
         pf = sorted(glob.glob(os.path.join(a.accessory_presence,
                                            "*.presence.tsv")))
         for f in pf:
             with open(f, newline="") as fh:
                 for r in csv.DictReader(fh, delimiter="\t"):
+                    if r.get("state") in ("PRESENT", "ABSENT", "UNCERTAIN"):
+                        measured.add(r["locus"])
                     if r.get("state") == "PRESENT":
                         per[r["locus"]].add(r["sample"])
         acc_carriers = dict(per)
         eprint(f"  level 2: {len(node_locus):,} nodes placed in "
                f"{len({v for v in node_locus.values()}):,} accessory loci; "
                f"{len(pf):,} presence tables")
-        # attach the locus to every variant that sits on a placed node
+        # attach the locus to every variant that sits on a placed node.
+        #
+        # A LOCUS LEVEL 1 NEVER MEASURED IS NOT CONDITIONED ON (review 2,
+        # R2-INT-2). Where no sample was measured at the locus -- every cell
+        # UNMEASURABLE, the read route being blind to sequence H37Rv already
+        # carries -- there is no carrier set, and conditioning on an empty one
+        # made every leaf unknown: the variant silently left the scan (249 of
+        # 308 conditional variants on gwas1000). Such a variant is left
+        # unconditional, on P5's own per-cell states, with the locus recorded
+        # in acc_locus_unmeasured. A locus that WAS measured and has no carrier
+        # in the cohort still makes its variants inapplicable everywhere.
+        n_unmeasured = 0
         for v in variants:
             nd = ""
             if v["id"].startswith("node:"):
                 nd = v["id"].split(":")[1]
             lid = node_locus.get(nd, "")
+            if lid and lid not in measured:
+                v["acc_locus"], v["acc_locus_unmeasured"] = "", lid
+                n_unmeasured += 1
+                continue
             v["acc_locus"] = lid
             if lid:
                 n_l2 += 1
@@ -746,7 +875,8 @@ def main():
         for lid, ss in acc_carriers.items():
             car_leaf[lid] = np.asarray([l in ss for l in leaves])
         eprint(f"  {n_l2:,} variants are inside a placed accessory locus and "
-               f"become conditional")
+               f"become conditional; {n_unmeasured:,} are inside a locus no "
+               f"sample was measured at and stay unconditional")
     else:
         for v in variants:
             v["acc_locus"] = ""
@@ -757,6 +887,7 @@ def main():
            f"{2 * n_n * n_v / 1e9:.2f} GB in memory")
     states = np.empty((n_n, n_v), dtype=np.uint8)
     events = np.empty((n_n, n_v), dtype=np.uint8)
+    pinned = []          # (variant index, unpinned MTBC mask), --pin-mtbc
 
     # ---- reconstruct, in blocks
     for s in range(0, n_v, a.chunk):
@@ -766,7 +897,7 @@ def main():
             v = variants[j]
             g = gt_rows[j][take_safe]
             if is_ref_tip.any():
-                g = np.where(is_ref_tip, ord("0"), g)
+                g = np.where(is_ref_tip, ref_tip_gt(v), g)
             if is_og_tip.any():
                 g = np.where(is_og_tip, og_gt[j], g)
             b = leaf_bits(g, v["derived"] == "REF", a.absent)
@@ -787,7 +918,15 @@ def main():
         if a.root == "ancestral":
             pin = np.asarray(
                 [variants[j]["polarity"] != "unpolarised" for j in range(s, e)])
-        down = fitch(post, pre, children, parent, leaf_index, block, pin)
+        mpin, nat = None, {}
+        if mtbc_i is not None:
+            mpin = np.asarray([variants[j]["polarity"] in
+                               ("ref_ancestral", "alt_ancestral")
+                               for j in range(s, e)])
+        down = fitch(post, pre, children, parent, leaf_index, block, pin,
+                     mtbc_i, mpin, nat)
+        for c, m in nat.items():
+            pinned.append((s + c, m))
         # states: written encoding
         st = np.full(down.shape, ST_UNK, dtype=np.uint8)
         st[down == A_BIT] = ST_ANC
@@ -870,7 +1009,7 @@ def main():
                 v = variants[j]
                 g = gt_rows[j][take_safe]
                 if is_ref_tip.any():
-                    g = np.where(is_ref_tip, ord("0"), g)
+                    g = np.where(is_ref_tip, ref_tip_gt(v), g)
                 if is_og_tip.any():
                     g = np.where(is_og_tip, og_gt[j], g)
                 # the flip: derived becomes REF instead of ALT
@@ -934,6 +1073,21 @@ def main():
         eprint(f"  -> {d}/by_variant.kba  ({len(keys)} rows x {len(labels)} cols)")
         eprint(f"  -> {d}/by_node.kba     ({len(labels)} rows x {len(keys)} cols)")
 
+    if mtbc_i is not None:
+        _nm = {D_BIT: "derived", AMB: "tied"}
+        br = np.asarray([i for i in range(n_n) if i != root_i])
+        with open(os.path.join(a.out, "mtbc_pinned.tsv"), "w") as fh:
+            fh.write("id\tpos\tref\talt\tpolarity\tunpinned_mtbc_state\t"
+                     "gains\tlosses\n")
+            for j, m in pinned:
+                v = variants[j]
+                fh.write(f"{v['id']}\t{v['pos']}\t{v['ref']}\t{v['alt']}\t"
+                         f"{v['polarity']}\t{_nm.get(m, str(m))}\t"
+                         f"{int((events[br, j] == EV_GAIN).sum())}\t"
+                         f"{int((events[br, j] == EV_LOSS).sum())}\n")
+        eprint(f"  MTBC node pinned to AA: {len(pinned):,} variants changed "
+               f"-> {a.out}/mtbc_pinned.tsv")
+
     write_pair("ancestor", states)
     write_pair("event", events)
 
@@ -943,7 +1097,8 @@ def main():
         fh.write("row_key\tid\tchrom\tpos\tref\talt\tclass\tframe\tregion\t"
                  "aa\taa_flag\tpolarity\tderived\tpanel_af\tevidence\t"
                  "siteclass\tacc_locus\tn_applicable\tn_inapplicable\t"
-                 "root_state\tn_gain\tn_loss\tn_undet\tn_derived_leaves\n")
+                 "root_state\tn_gain\tn_loss\tn_undet\tn_derived_leaves\t"
+                 "acc_locus_unmeasured\n")
         leaf_rows = np.asarray([i for i in range(n_n) if is_leaf[i]])
         branch_rows = np.asarray([i for i in range(n_n) if i != root_i])
         for j, v in enumerate(variants):
@@ -960,7 +1115,8 @@ def main():
                 ROOT_STATE[int(states[root_i, j])],
                 int((ev == EV_GAIN).sum()), int((ev == EV_LOSS).sum()),
                 int((ev == EV_UNDET).sum()),
-                int((states[leaf_rows, j] == ST_DER).sum()))) + "\n")
+                int((states[leaf_rows, j] == ST_DER).sum()),
+                v.get("acc_locus_unmeasured", ""))) + "\n")
     with open(os.path.join(a.out, "nodes.tsv"), "w") as fh:
         fh.write("label\tparent\tedge_length\tis_leaf\tsupport\tn_leaves\n")
         n_leaves_under = [0] * n_n
@@ -992,6 +1148,8 @@ def main():
     if a.outgroup_name:
         lines.append(f"outgroup          {a.outgroup_name}, alleles from "
                      f"{a.outgroup_fasta}")
+    lines.append("panel polarity    " + (a.panel_polarity or
+                                       "none (--panel-polarity '')"))
     lines.append(f"nodes             {n_n}  ({len(leaves)} leaves, "
                  f"{n_n - len(leaves)} internal)")
     lines.append(f"variants          {n_v}")
@@ -1022,6 +1180,10 @@ def main():
         lines.append(f"  NOTE {pol['root_inferred']:,} had that assumption "
                      f"CONTRADICTED by the reconstruction -- the assumed-derived "
                      f"allele sat at the root -- and were flipped and rebuilt")
+    if mtbc_i is not None:
+        lines.append(f"MTBC node {labels[mtbc_i]} pinned to AA where resolved: "
+                     f"{len(pinned):,} variants changed from parsimony "
+                     f"(mtbc_pinned.tsv)")
     rs = collections.Counter(int(x) for x in states[root_i, :])
     lines.append("state at the tree root")
     for code, name in ((ST_ANC, "ancestral"), (ST_DER, "derived"),

@@ -237,6 +237,58 @@ def compare_ids(name, up, down, fails, expect=None):
     return lines
 
 
+def check_gains(scan, ev_rows, fails):
+    """Every scanned row's `gains` must equal its own n_gain.
+
+    The scan reads a row's event branches from the bytestream by key. When it
+    rebuilt the key from three fields, a `--dedupe suffix` record (`...|#2`)
+    was scored on the FIRST record's branches -- 7 gwas1000 and 4 scale200
+    rows -- and nothing compared the two counts."""
+    ng = {r["row_key"]: r["n_gain"] for r in ev_rows}
+    bad = []
+    with open(scan, newline="") as fh:
+        for r in csv.DictReader(fh, delimiter="\t"):
+            if ng.get(r["row_key"]) != r["gains"]:
+                bad.append(f"{r['row_key']} gains {r['gains']} vs n_gain "
+                           f"{ng.get(r['row_key'], 'absent')}")
+    lines = [f"\n  scan gains against the event matrix's n_gain: "
+             f"{len(bad):,} rows differ"]
+    if bad:
+        lines += [f"    {x}  <== FAIL" for x in bad[:10]]
+        fails.append(f"scan: {len(bad):,} rows tested on a branch set that is "
+                     f"not their own, e.g. {bad[0]}")
+    return lines
+
+
+def check_burdens(paths, fails, warns):
+    """The three gene burdens: present, and every unit's lineage null run.
+
+    The chain writes them and nothing read them back, so a burden whose
+    lineage null never ran (p_lineage blank, as both cohorts' were through
+    2026-10-02), or one never written at all, passed the audit."""
+    lines = ["\n  gene burdens"]
+    for p in paths:
+        if not os.path.exists(p):
+            lines.append(f"    {p}: absent  <== FAIL")
+            fails.append(f"burden: {p} was not written")
+            continue
+        with open(p, newline="") as fh:
+            rows = list(csv.DictReader(fh, delimiter="\t"))
+        blank = sum(1 for r in rows
+                    if (r.get("p_lineage") or "nan").lower() == "nan")
+        tag = ""
+        if blank:
+            tag = "  <== FAIL: lineage null not run"
+            fails.append(f"burden: {p} has {blank:,} of {len(rows):,} units "
+                         f"without a lineage null")
+        elif not rows:
+            tag = "  <-- WARN: no testable unit"
+            warns.append(f"burden: {p} has no testable unit")
+        lines.append(f"    {p}: {len(rows):,} units, {blank:,} without a "
+                     f"lineage null{tag}")
+    return lines
+
+
 def load_carriers(d, events, assoc_bin):
     """locus -> number of applicable branches, exactly as the scan computes it.
 
@@ -363,6 +415,11 @@ def main():
                     exp_ids[v.split(":", 1)[0] if ":" in v else "<no prefix>"] += 1
             out += compare_ids("event matrix -> scan", e_ids, s_ids, fails,
                                expect=exp_ids)
+            out += check_gains(scan, ev_rows, fails)
+            out += check_burdens([os.path.join(os.path.dirname(scan),
+                                               f"{c}_gene.tsv")
+                                  for c in ("small", "sv", "is6110")],
+                                 fails, warns)
 
     out.append("")
     if fails:

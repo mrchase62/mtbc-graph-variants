@@ -64,7 +64,27 @@ Two modes:
 import argparse, bisect, collections, csv, gzip, os, subprocess, sys, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from p5_states import load_gvcf_blocks, make_cov
+from p5_states import load_gvcf, load_gvcf_blocks, make_cov, make_in_spans
+
+
+def gvcf_depth(path, min_dp):
+    """covered(t): a gVCF line of DP >= min_dp spans R position t, and t is
+    not inside a deletion the same gVCF calls.
+
+    NOT INSIDE A DELETION GATK ITSELF CALLED (audit P4P5-14). GATK starts the
+    next reference block after a deletion's POS, so bases the sample's own
+    gVCF calls deleted can sit in GT=0 blocks at real DP -- SAMEA1016081's
+    84 bp deletion at 843,010 had blocks inside it at DP 12-25 -- and were
+    counted as covered. Every other line still counts as depth."""
+    cov_any = make_cov(load_gvcf_blocks(path), min_dp)
+    _, _, alt_at = load_gvcf(path)
+    in_called_del = make_in_spans(sorted(
+        (p0 + len(c), p0 + len(rf) - 1) for p0, (rf, c, _) in alt_at.items()
+        if c != "<NON_REF>" and len(c) < len(rf)))
+
+    def covered(t):
+        return cov_any(t) and not in_called_del(t)
+    return covered
 
 
 def probe_positions(pos, svlen, n):
@@ -206,7 +226,7 @@ def genotype_intervals(a, ivs):
         if not getattr(a, need):
             sys.exit(f"FATAL: --{need} is required when writing states")
     by_src = load_projection(a.projected)
-    cov = make_cov(load_gvcf_blocks(a.gvcf), a.min_dp)
+    cov = gvcf_depth(a.gvcf, a.min_dp)
 
     # Which intervals get the filtered depth, and the target positions they
     # need. Collected first so samtools is called once for the whole sample.
@@ -258,9 +278,20 @@ def genotype_intervals(a, ivs):
         if hit is None:
             return "NOCALL", f"{kind}_unconfirmed, no second frame"
         hs, hclips = hit
-        if hs == "ALT" or hclips >= 1:
+        # THE H37Rv-FRAME STATE DECIDES; A CLIP CLUSTER ALONE DOES NOT (audit
+        # P4P5-3). `clips >= 1` used to promote before the state was looked
+        # at, so an interval whose H37Rv-frame depth covered it in full was
+        # "confirmed" by one end's clip cluster, which is common in repeats
+        # and at IS6110 junctions: 995 ALT cells in scale200, 7,321 in
+        # gwas1000. sv_twoframe.py's own ALT already takes clips into account
+        # (both ends clipped at ambiguous depth), so its state is the
+        # confirmation. Full depth with clips at an end is conflicting
+        # evidence and is NOCALL; full depth without clips contradicts.
+        if hs == "ALT":
             return "ALT", f"{kind}_confirmed"
         if hs == "REF":
+            if hclips >= 1:
+                return "NOCALL", f"{kind}_depth_present_but_clipped"
             return "REF", f"{kind}_contradicted"
         return "NOCALL", f"{kind}_unconfirmed"
 
@@ -365,7 +396,8 @@ def main():
                          "before the deletion is called absent")
     ap.add_argument("--deleted-frac", type=float, default=0.2,
                     help="at or below this the depth says the interval IS "
-                         "deleted; reported, never promoted to ALT")
+                         "deleted; ALT (depth_absent) when a flank is "
+                         "covered, unless --no-promote")
     ap.add_argument("--bam", default="",
                     help="the sample's alignment, for mapping-quality-filtered "
                          "depth. Required when --mapq-scope is not `never`.")
@@ -469,7 +501,7 @@ def main():
             continue
         by_src.setdefault(src, (tgt, dist))
 
-    cov = make_cov(load_gvcf_blocks(a.gvcf), a.min_dp)
+    cov = gvcf_depth(a.gvcf, a.min_dp)
     counts = {"ALT": 0, "REF": 0, "ABSENT": 0, "NOCALL": 0}
     evid = {}
     out = []

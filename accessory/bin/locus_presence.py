@@ -6,7 +6,8 @@ been getting wrong. An accessory locus carries two different kinds of
 information, with different state spaces:
 
   level 1   presence or absence of the insert itself. One biallelic character
-            per locus. EVERY sample has a state; nothing is missing.
+            per locus. Every sample has a state, which is UNMEASURABLE for a
+            locus whose sequence H37Rv already carries (see read_route_blind).
   level 2   variation inside the insert, among the samples that carry it.
             Conditional on level 1, and for a non-carrier a variant inside the
             insert is neither reference nor unknown -- it is INAPPLICABLE. You
@@ -45,6 +46,36 @@ import argparse, collections, csv, os, re, subprocess, sys
 
 CIGAR = re.compile(r"(\d+)([MIDNSHP=X])")
 REF_CONSUMING = set("MDN=X")
+BLIND_H37RV_COV = 0.9
+
+
+def read_route_blind(locus):
+    """True for a catalogue locus whose sequence H37Rv already carries: its
+    reads align to H37Rv, so the unmapped and clipped pool cannot measure it,
+    and what the pool does give is reads from some homologous copy elsewhere,
+    not this locus. Shared with bin/merge_cohort_vcf.py, which applies it to
+    tables written before.
+
+    "Carries" means at 95% identity or more over 0.9 of the sequence
+    (h37rv_cov95, written by merge_catalogues.py; review 2, R2-IS-1). The
+    any-identity h37rv_cov and novelty=copy_number made loci 85% identical to
+    H37Rv unmeasurable, though their reads are too divergent to place on H37Rv:
+    on the CX333 catalogue 70 of the 674 loci so judged are measurable, among
+    them ACC_2867346, ACC_2165937 and ACC_0334653, which vary in gwas1000. A
+    catalogue without the column (made before) falls back to the old rule,
+    which can only call more loci blind."""
+    v = locus.get("h37rv_cov95")
+    if v not in (None, ""):
+        try:
+            return float(v) >= BLIND_H37RV_COV
+        except ValueError:
+            return True
+    if (locus.get("novelty") or "") == "copy_number":
+        return True
+    try:
+        return float(locus.get("h37rv_cov") or 0) >= BLIND_H37RV_COV
+    except ValueError:
+        return False
 
 
 def main():
@@ -53,8 +84,12 @@ def main():
     ap.add_argument("--reference", default="",
                     help="the sample's matched panel accession, for the "
                          "reference route")
-    ap.add_argument("--catalogue", default="accessory/assets/accessory_catalogue.tsv")
-    ap.add_argument("--fasta", default="accessory/assets/accessory_catalogue.fasta")
+    # no defaults: accessory/assets/ held CX333's hand-placed catalogue;
+    # locus_presence_one.sh passes the build's (P0 step catalogue)
+    ap.add_argument("--catalogue", required=True,
+                    help="<build>/assets/accessory_catalogue.tsv")
+    ap.add_argument("--fasta", required=True,
+                    help="<build>/assets/accessory_catalogue.fasta")
     ap.add_argument("--cram", required=True)
     ap.add_argument("--h37rv", required=True)
     ap.add_argument("--contig", default="NC_000962.3")
@@ -170,7 +205,21 @@ def main():
         lid = r["locus_id"]
         c0 = cov0.get(lid, 0.0)
         c20 = cov20.get(lid, 0.0)
-        if c0 >= a.present_cov:
+        if read_route_blind(r):
+            # THE READ ROUTE CANNOT SEE THIS LOCUS (audit P3IS-2). Its sequence
+            # is already in H37Rv -- 0.9 of it at 95% identity or more
+            # (read_route_blind); 604 of the 802 CX333 loci, 481 of them
+            # IS6110 copies -- so its reads
+            # place on H37Rv and never reach the unmapped and clipped pool.
+            # Zero coverage here is not absence, and was written ABSENT in
+            # every sample (0 PRESENT of 96,200 cells on the IS6110 loci in
+            # scale200). What coverage the pool does give is a divergent
+            # homolog of unverified meaning, not this locus. Unmeasured; the
+            # coverage is kept in the row.
+            state, why = "UNMEASURABLE", (
+                f"sequence in H37Rv: the read route is blind to it "
+                f"(pool coverage {c0:.2f})")
+        elif c0 >= a.present_cov:
             state, why = "PRESENT", "reads cover the locus"
         elif c0 <= a.absent_cov:
             state, why = "ABSENT", "reads do not cover the locus"
@@ -180,7 +229,7 @@ def main():
         # The reference route is recorded next to the read route rather than
         # overriding it: where they disagree, the sample differs from its own
         # reference, which is a real finding and not an error to hide.
-        agree = "" if rc is None else (
+        agree = "" if (rc is None or state == "UNMEASURABLE") else (
             "agree" if (rc and state == "PRESENT") or (not rc and state == "ABSENT")
             else "differs")
         tally[state] += 1

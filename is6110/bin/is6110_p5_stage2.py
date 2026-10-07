@@ -12,6 +12,8 @@ non-carrier's own element-free alignment whether it looked and found nothing.
     read depth there, and ask whether a junction candidate sits within --window
 
     depth >= --min-dp and no candidate   REF      it looked and found nothing
+      ... at a locus H37Rv holds         NOCALL   it lacks H37Rv's copy, which
+                                                  the <INS> record cannot say
     a junction candidate is present      reported, NOT silently called ALT
     otherwise                            NOCALL
 
@@ -94,14 +96,35 @@ def carriers(a):
     for x in csv.DictReader(open(a.cohort_keys, newline=""), delimiter="\t"):
         if x["frame"] == "h37rv":
             k = f'h37rv:{x["h37rv_pos"]}:'
-        else:
+        elif x["frame"] == "node":
             k = f'node:{x["node"]}:'
+        else:
+            continue          # repeat_node: no key (is6110_write_vcf.py, P3IS-3)
         src.setdefault((x["sample"], x["reference"], int(x["r_pos"])), []).append(k)
     carrier_of = {}
     for (cs, cref, cpos), ks in src.items():
         for k in ks:
             carrier_of.setdefault(k, (cref, cpos))
     return carrier_of
+
+
+_OCCUPIED = {}
+
+
+def occupied(a):
+    """Short keys of the H37Rv loci where H37Rv itself holds an element.
+
+    There the <INS> record's REF is H37Rv's state, element present, and the
+    carriers are REF (is6110_write_vcf.py, audit P3IS-1). A non-carrier with
+    depth and no junction LACKS the element, which is neither REF nor the
+    <INS> allele, so it is left NOCALL rather than written as matching H37Rv.
+    """
+    if a.cohort_keys not in _OCCUPIED:
+        _OCCUPIED[a.cohort_keys] = {
+            f'h37rv:{x["h37rv_pos"]}:'
+            for x in csv.DictReader(open(a.cohort_keys, newline=""), delimiter="\t")
+            if x["frame"] == "h37rv" and x.get("h37rv_state") == "occupied"}
+    return _OCCUPIED[a.cohort_keys]
 
 
 def proj_path(a, tref):
@@ -137,6 +160,10 @@ def project(a, tref, fr, paths, og, ref_of, carrier_of):
                 continue
             order.append((k, cref, cpos))
         known = store_load(a, tref)
+        # A PATH ONTO ITSELF IS THE IDENTITY (D21), whatever odgi or the store
+        # says: where the path passes a node more than once odgi answers with
+        # one of the copies
+        known.update({(c, p): (p, 0) for _, c, p in order if c == tref})
         miss = sorted({(c, p) for _, c, p in order if (c, p) not in known})
         if miss:
             known.update(run_odgi(a, tref, tpath, fr, paths, og, miss))
@@ -354,6 +381,7 @@ def decide(a, s, R):
     cand.sort()
 
     # pass three: decide
+    occ = occupied(a)
     out = []
     for i, r in enumerate(rows):
         if r["state"] != "NOCALL":
@@ -368,6 +396,9 @@ def decide(a, s, R):
             dp = depth.get(cpos, 0)
             if near:
                 st, ev = "NOCALL", f"a junction candidate sits within {a.window} bp"
+            elif dp >= a.min_dp and short(r["key"]) in occ:
+                st, ev = "NOCALL", (f"depth {dp}, no junction candidate: lacks "
+                                    f"the element H37Rv holds here")
             elif dp >= a.min_dp:
                 st, ev = "REF", f"depth {dp}, no junction candidate"
             else:
@@ -456,8 +487,13 @@ def main():
                          "is6110_p5_merge.py --out-states-dir; read instead of "
                          "--stage1-states so a task never parses the cohort's")
     ap.add_argument("--refmap", default="refbias/p1/refmap.tsv")
-    ap.add_argument("--paths", default="refbias/build/7713a8d71d8e/assets/paths.txt")
-    ap.add_argument("--graph", default=None)
+    # no build defaults: --paths was build 7713a8d71d8e's and --graph a glob
+    # over graphs/CX333...; p1i_p5states.sh passes the build's. Needed by the
+    # projecting modes (all, project) only.
+    ap.add_argument("--paths", default="",
+                    help="<build>/assets/paths.txt")
+    ap.add_argument("--graph", default="",
+                    help="the build's .og (build_info.tsv `graph`)")
     ap.add_argument("--odgi", default=os.environ.get("MTB_ODGI", "odgi"))
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--samtools", default=os.environ.get("MTB_SAMTOOLS", "samtools"))
@@ -498,10 +534,9 @@ def main():
 
     if a.mode in ("all", "project"):
         og = a.graph
-        if og is None:
-            import glob
-            g = sorted(glob.glob("graphs/CX333.s10k.k23.K15/*.smooth.final.og"))
-            og = g[0] if g else sys.exit("no graph; pass --graph")
+        if not og or not a.paths:
+            sys.exit(f"FATAL: --mode {a.mode} needs --graph and --paths, the "
+                     f"build's graph and assets/paths.txt")
         fr = graph_frame.Frames()
         paths = {l.split("#")[0]: l.strip() for l in open(a.paths) if l.strip()}
         carrier_of = carriers(a)

@@ -16,24 +16,35 @@
 # Idempotent: a VCF already carrying ##MTB_graph_build is left alone, so
 # re-running a pipeline stage does not accumulate duplicate header lines.
 #
-# Resolution order for the build directory: $MTB_BUILD_DIR, else the single
-# directory under $BUILD_ROOT if there is exactly one. If no build directory can
-# be resolved the file is left UNSTAMPED and this exits 0 with a notice, so that
-# existing harnesses which predate P0 keep working. If a build directory IS
-# resolved and stamping then fails, that is an error and exits non-zero: a
-# provenance step that fails quietly is worse than one that is absent.
+# Resolution order for the build directory: --graph's own build, else
+# $MTB_BUILD_DIR (which must have a build_info.tsv), else the single COMPLETED
+# build under $BUILD_ROOT. Only when $BUILD_ROOT holds no build at all is the
+# file left UNSTAMPED with exit 0, so that harnesses which predate P0 keep
+# working. Anything else that cannot be resolved, and any stamping failure, is
+# an error: a provenance step that fails quietly is worse than one that is
+# absent.
+#
+#   bash bin/stamp_build_id.sh --graph graphs/<g>/<g>.smooth.final.og out.vcf.gz
 set -euo pipefail
 
 # --restamp replaces an existing stamp instead of skipping the file. Needed when
 # a field is ADDED to the stamp: the idempotence guard below is keyed on
 # ##MTB_graph_build, so a file stamped by an older version would otherwise keep
 # a stamp that is missing the new fields, silently.
+#
+# --graph <file.og> names the graph the VCFs came from (audit PGB-14). The
+# stamp is then that graph's build -- <BUILD_ROOT>/<first 12 of its sha256> --
+# and nothing is stamped unless that build exists and records the same graph
+# checksum. Without it, "the only directory under refbias/build" was stamped
+# into a new graph's deconstruct VCF, which labelled it with the old build.
 RESTAMP=0
+GRAPH_ARG=""
 _args=()
-for _a in "$@"; do
-    case "$_a" in
-        --restamp) RESTAMP=1 ;;
-        *) _args+=("$_a") ;;
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --restamp) RESTAMP=1; shift ;;
+        --graph)   GRAPH_ARG="${2:?--graph needs a file}"; shift 2 ;;
+        *) _args+=("$1"); shift ;;
     esac
 done
 set -- "${_args[@]+"${_args[@]}"}"
@@ -56,18 +67,35 @@ TABIX="${MTB_TABIX:-${MTB_QC_BIN}/tabix}"
 
 BUILD_ROOT="${BUILD_ROOT:-refbias/build}"
 BUILD="${MTB_BUILD_DIR:-}"
-if [[ -z "$BUILD" ]]; then
-    mapfile -t _cands < <(find "$BUILD_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
-    if [[ "${#_cands[@]}" -eq 1 ]]; then
-        BUILD="${_cands[0]}"
-    elif [[ "${#_cands[@]}" -gt 1 ]]; then
-        echo "[stamp] ${#_cands[@]} builds under ${BUILD_ROOT}; set MTB_BUILD_DIR" >&2
+if [[ -n "$GRAPH_ARG" ]]; then
+    [[ -s "$GRAPH_ARG" ]] || { echo "[stamp] FATAL: no graph at ${GRAPH_ARG}" >&2; exit 1; }
+    _gsha="$(sha256sum "$GRAPH_ARG" | cut -d' ' -f1)"
+    _gbuild="${BUILD_ROOT}/${_gsha:0:12}"
+    if [[ -n "$BUILD" && "$(cd "$BUILD" 2>/dev/null && pwd -P)" != "$(cd "$_gbuild" 2>/dev/null && pwd -P)" ]]; then
+        echo "[stamp] FATAL: MTB_BUILD_DIR=${BUILD} is not the build of ${GRAPH_ARG} (${_gbuild})" >&2
         exit 1
     fi
-fi
-if [[ -z "$BUILD" || ! -s "${BUILD}/build_info.tsv" ]]; then
-    echo "[stamp] no P0 build directory resolved; leaving $# file(s) unstamped" >&2
-    exit 0
+    BUILD="$_gbuild"
+    [[ -s "${BUILD}/build_info.tsv" ]] || {
+        echo "[stamp] FATAL: graph ${GRAPH_ARG} has no P0 build (${BUILD}); run bin/p0_prepare.sh with OG=${GRAPH_ARG} first" >&2
+        exit 1; }
+    [[ "$(awk -F'\t' '$1=="graph_sha256"{print $2; exit}' "${BUILD}/build_info.tsv")" == "$_gsha" ]] || {
+        echo "[stamp] FATAL: ${BUILD}/build_info.tsv records another graph than ${GRAPH_ARG}" >&2
+        exit 1; }
+elif [[ -n "$BUILD" ]]; then
+    # named explicitly, so a missing record is an error, not a quiet no-op
+    [[ -s "${BUILD}/build_info.tsv" ]] || {
+        echo "[stamp] FATAL: MTB_BUILD_DIR=${BUILD} has no build_info.tsv; nothing stamped" >&2
+        exit 1; }
+else
+    mapfile -t _cands < <(find "$BUILD_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
+    if [[ "${#_cands[@]}" -eq 0 ]]; then
+        # no P0 at all: harnesses that predate P0 keep working, unstamped
+        echo "[stamp] no P0 build directory under ${BUILD_ROOT}; leaving $# file(s) unstamped" >&2
+        exit 0
+    fi
+    # guessing is allowed only between COMPLETED builds (audit P0P2-13)
+    BUILD="$(mtb_resolve_build)" || exit 1
 fi
 
 _info() { awk -F'\t' -v k="$1" '$1==k{print $2; exit}' "${BUILD}/build_info.tsv"; }

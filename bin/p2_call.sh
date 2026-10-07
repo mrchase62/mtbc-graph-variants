@@ -49,14 +49,12 @@ done
 source "$_mtb_env"
 
 BUILD_ROOT="${BUILD_ROOT:-refbias/build}"
-BUILD="${MTB_BUILD_DIR:-}"
-if [[ -z "$BUILD" ]]; then
-    mapfile -t _c < <(find "$BUILD_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
-    [[ "${#_c[@]}" -eq 1 ]] || { echo "FATAL: set MTB_BUILD_DIR (${#_c[@]} builds)" >&2; exit 1; }
-    BUILD="${_c[0]}"
-fi
+# One resolver for every pass: MTB_BUILD_DIR, else the single COMPLETED build
+# (audit P0P2-13).
+BUILD="$(mtb_resolve_build)" || exit 1
 export MTB_BUILD_DIR="$BUILD"
 BUILD_ID="$(awk -F'\t' '$1=="build_id"{print $2}' "${BUILD}/build_info.tsv")"
+[[ -n "$BUILD_ID" ]] || { echo "FATAL: no build_id in ${BUILD}/build_info.tsv" >&2; exit 1; }
 [[ -s "${BUILD}/logs/refs.done" ]] || { echo "FATAL: P0 ${BUILD_ID} refs incomplete" >&2; exit 1; }
 
 REFMAP="${REFMAP:-refbias/p1/refmap.tsv}"
@@ -72,11 +70,22 @@ MTB_CRAM_ROOT="$CRAMROOT" mtb_require_cram_root || exit 1
 [[ -n "$CRAMREF" ]] || { echo "FATAL: MTB_CRAM_REF is unset; set it to the reference the CRAMs were encoded against" >&2; exit 1; }
 OUTDIR="${OUTDIR:-refbias/p2}"
 WORK="${WORK:-refbias/work/p2}"
+# P1's own H37Rv VCFs, for the summary's burden comparison. refbias_run.sh
+# exports P1WORK per cohort; without it the summary read the pilot's P1 folder
+# and left h37rv_small blank for every isolate not in the pilot (audit P0P2-8).
+P1WORK="${P1WORK:-refbias/work/p1}"
 DELLY_ENV="${DELLY_ENV:-${MTB_DELLY_ENV:?MTB_DELLY_ENV is unset; see config/project_env.sh}}"
 DYSGU="${DYSGU:-refbias/work/svvenv/bin/dysgu}"
 THREADS="${SLURM_CPUS_PER_TASK:-8}"
 
 [[ -s "$REFMAP" ]] || { echo "FATAL: no P1 refmap at ${REFMAP}; run P1 first" >&2; exit 1; }
+# A refmap selected against another build's panel is refused. p1_summary.py
+# writes <refmap>.build; a hand-made refmap (pinned-reference arms) has none.
+_rm_build="$(mtb_kv "${REFMAP}.build" build_id)"
+if [[ -n "$_rm_build" && "$_rm_build" != "$BUILD_ID" ]]; then
+    echo "FATAL: ${REFMAP} was selected against build ${_rm_build}, not ${BUILD_ID}" >&2
+    exit 1
+fi
 mkdir -p "$OUTDIR" "$WORK" slurm
 
 # The step is normally $1. bin/refbias_run.sh submits through sbatch,
@@ -84,7 +93,7 @@ mkdir -p "$OUTDIR" "$WORK" slurm
 # accepted as an equivalent. $1 wins if both are given.
 if [[ "${1:-${P2STEP:-}}" == "--summary" ]]; then
     exec "$MTB_PY" bin/p2_summary.py --refmap "$REFMAP" --dir "$OUTDIR" \
-        --work "$WORK" --out "${OUTDIR}/p2_summary.tsv"
+        --work "$WORK" --p1-work "$P1WORK" --out "${OUTDIR}/p2_summary.tsv"
 fi
 
 if [[ $# -ge 1 ]]; then
@@ -125,22 +134,54 @@ CRAM="${CRAMROOT}/${RELPATH}"
 
 # DONE MEANS THE MARKER, written last. Testing only for vcf.gz and delly.vcf
 # accepted a sample whose job died during dysgu (no dysgu VCF, delly never
-# stamped). Samples finished before the marker existed are recognised by their
-# complete outputs -- including a dysgu VCF with a #CHROM line -- and marked.
+# stamped). A sample without the marker is called again (D38).
+#
+# AND DONE MEANS DONE AGAINST THIS BUILD AND THIS REFERENCE (audit P0P2-1).
+# The marker held only a date, so after a rebuild, or a refmap that changed
+# its choice, P2 kept calls made against the previous reference. The marker
+# now records both, and outputs that name another build or reference are
+# refused: rerun into new output folders, or move them aside.
 DONE="${OUTDIR}/${SAMPLE}.p2.done"
-if [[ -s "$DONE" ]]; then
-    echo "[P2] ${SAMPLE}: already done"; exit 0
-fi
-_legacy_complete() {
-    [[ -s "${OUTDIR}/${SAMPLE}.vcf.gz" && -s "${OUTDIR}/${SAMPLE}.delly.vcf" ]] || return 1
-    [[ -x "$DYSGU" ]] || return 0                     # dysgu not part of this site
-    [[ -s "${OUTDIR}/${SAMPLE}.dysgu.vcf" ]] || return 1
-    grep -q '^#CHROM' "${OUTDIR}/${SAMPLE}.dysgu.vcf"
+_write_done() {
+    printf 'build_id\t%s\nreference\t%s\ncompleted\t%s\n' \
+        "$BUILD_ID" "$REFID" "$(date -Is)" > "${DONE}.tmp"
+    mv -f "${DONE}.tmp" "$DONE"
 }
-if _legacy_complete; then
-    date -Is > "$DONE"
-    echo "[P2] ${SAMPLE}: already done (complete outputs from before the marker)"; exit 0
+# What the small-variant VCF says it was made from: its build stamp, and the
+# reference in HaplotypeCaller's command line.
+_vcf_ref() {
+    gzip -cd "$1" 2>/dev/null | awk '/^#CHROM/{exit}
+        /^##GATKCommandLine=<ID=HaplotypeCaller/{
+            n=split($0,w," ")
+            for(i=1;i<n;i++) if(w[i]=="--reference"||w[i]=="-R"){print w[i+1]; exit}}' || true
+}
+_m_build="$(mtb_kv "$DONE" build_id)"; _m_ref="$(mtb_kv "$DONE" reference)"
+_v="${OUTDIR}/${SAMPLE}.vcf.gz"
+_v_build="$(mtb_vcf_build_id "$_v")"
+_v_ref=""; [[ -s "$_v" ]] && _v_ref="$(_vcf_ref "$_v")"
+_foreign=""
+if [[ -n "$_m_build" ]]; then
+    [[ "$_m_build" == "$BUILD_ID" && "$_m_ref" == "$REFID" ]] \
+        || _foreign="${DONE} records build ${_m_build}, reference ${_m_ref:-?}"
+elif [[ -s "$_v" ]]; then
+    [[ "$_v_build" == "$BUILD_ID" ]] \
+        || _foreign="${_v} is stamped '${_v_build:-unstamped}'"
+    [[ -z "$_v_ref" || "$(basename "$_v_ref")" == "${REFID}.fasta" ]] \
+        || _foreign="${_foreign:+${_foreign}; }${_v} was called against ${_v_ref}"
 fi
+if [[ -n "$_foreign" ]]; then
+    echo "FATAL: ${SAMPLE}: P2 output from another build or reference: ${_foreign};" \
+         "this is build ${BUILD_ID}, reference ${REFID}. Rerun into new output" \
+         "folders (OUTDIR, WORK) or move the old outputs aside." >&2
+    exit 1
+fi
+if [[ -n "$_m_build" ]]; then
+    echo "[P2] ${SAMPLE}: already done (build ${BUILD_ID}, reference ${REFID})"; exit 0
+fi
+# Outputs with no marker that records build and reference (a date-only
+# marker, none, or a task that died before writing it) are made again. They
+# were adopted when the VCF's stamp and caller reference matched; no output
+# from before the markers is adopted (D38).
 echo "[P2] ${SAMPLE}: reference ${REFID}, build ${BUILD_ID}"
 
 FQ1="${WORK}/${SAMPLE}_1.fq"; FQ2="${WORK}/${SAMPLE}_2.fq"
@@ -214,5 +255,5 @@ rm -f "$FQ1" "$FQ2"
 echo "[P2] ${SAMPLE}: small $(zcat "${OUTDIR}/${SAMPLE}.vcf.gz" | grep -vc '^#'), "\
 "delly $(grep -vc '^#' "${OUTDIR}/${SAMPLE}.delly.vcf"), "\
 "dysgu $([[ -s "${OUTDIR}/${SAMPLE}.dysgu.vcf" ]] && grep -vc '^#' "${OUTDIR}/${SAMPLE}.dysgu.vcf" || echo 0)"
-date -Is > "$DONE"
+_write_done
 echo "[P2] ${SAMPLE}: done"

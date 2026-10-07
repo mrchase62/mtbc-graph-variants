@@ -43,6 +43,20 @@ def parse_sv_vcf(path, caller):
         svtype = info.get("SVTYPE", "")
         if not svtype:
             continue
+        # THE SAMPLE'S OWN GENOTYPE (audit P4P5-4). delly writes FILTER=PASS
+        # records whose genotype is 0/0 -- 1,695 DEL and 1,082 DUP over
+        # scale200's caller VCFs -- and reading every record made the sample
+        # an ALT carrier of a variant its caller called reference: 883 DEL
+        # rows in scale200, 6,604 in gwas1000. A record is kept only when its
+        # GT has a non-reference allele; 0/0 and an uncalled ./. say nothing
+        # about carrying it. A record with no sample column is kept as before.
+        if len(f) >= 10:
+            fk, fv = f[8].split(":"), f[9].split(":")
+            if "GT" in fk:
+                gt = fv[fk.index("GT")] if fk.index("GT") < len(fv) else "."
+                if not any(x.isdigit() and x != "0"
+                           for x in gt.replace("|", "/").split("/")):
+                    continue
         try:
             pos = int(f[1])
         except ValueError:
@@ -103,7 +117,9 @@ def merge_callers(records):
 FIELDS = ["sample", "reference", "build_id", "svtype", "svlen", "frame",
           "key", "h37rv_pos", "h37rv_end", "r_pos", "r_end", "node_pos",
           "node_end", "src", "n_callers", "sr", "pe", "qual", "filter",
-          "component"]
+          "component", "qual_caller"]
+# qual_caller: the caller whose record supplied `qual` (the representative's),
+# so p5_sv_matrix.py bands it on that caller's scale (audit P4P5-11)
 
 
 def main():
@@ -158,6 +174,14 @@ def main():
         # restated by frame_convert.py from-panel; `-` means R runs reverse to
         # H37Rv here, so an event's breakpoints swap sides (see below)
         strand = f[3].strip() if len(f) > 3 and f[3].strip() in "+-" else "+"
+        # odgi's own flag, column 5 `-`: R walks the node opposite to H37Rv
+        # and the reported target is one base high, R reading complemented
+        # to column 4 (measured in bin/p4_place.py's parse_pos_file: 8,684 of
+        # 8,694 GCF_000193185 positions). The target is H37Rv, stored
+        # forward, so the homolog is tgt-1.
+        if len(f) > 4 and f[4].strip() == "-":
+            tgt -= 1
+            strand = "-" if strand == "+" else "+"
         proj.setdefault(src, (tgt, dist, strand))
 
     pe_iv = []
@@ -232,7 +256,8 @@ def main():
                          r_end=r["end"], node_pos="", node_end="",
                          src=",".join(callers), n_callers=len(callers),
                          sr=r["sr"], pe=r["pe"], qual=r["qual"],
-                         filter=r["filt"], component="called"))
+                         filter=r["filt"], component="called",
+                         qual_caller=r["caller"]))
 
     # --- the inherited half ---------------------------------------------------
     # P4 composes a sample's small variants from TWO halves: its own calls
@@ -272,10 +297,17 @@ def main():
         child.sort()
         cstart = [c[0] for c in child]
 
+        # running maximum of child ends, so the backward scan does not stop
+        # at a short child while an earlier, longer one still overlaps (the
+        # early stop fixed in p6_annotate.make_lookup; audit P4P5-15)
+        creach, m = [], 0
+        for _, e2 in child:
+            m = max(m, e2); creach.append(m)
+
         def has_child(pos, end):
             i = bisect.bisect_left(cstart, end) - 1
-            while i >= 0 and child[i][1] > pos:
-                if child[i][0] < end:
+            while i >= 0 and creach[i] > pos:
+                if child[i][1] > pos and child[i][0] < end:
                     return True
                 i -= 1
             return False
@@ -325,14 +357,17 @@ def main():
                     h37rv_pos=pos, h37rv_end=end, r_pos="", r_end="",
                     node_pos="", node_end="", src="graph_vcf", n_callers=0,
                     sr="", pe="", qual="", filter="INHERITED",
-                    component="inherited"))
+                    component="inherited", qual_caller=""))
 
     # header-only when there is nothing, never an IndexError on rows[0]; an
     # empty table and a missing file must not look the same downstream
-    with open(a.out, "w", newline="") as fh:
+    # to a temporary name and renamed: p4b_place_sv.sh skips any sample whose
+    # table is non-empty, so a task killed mid-write must not leave one
+    with open(a.out + ".tmp", "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=FIELDS, delimiter="\t",
                            lineterminator="\n")
         w.writeheader(); w.writerows(rows)
+    os.replace(a.out + ".tmp", a.out)
     print(f"    inherited: {n_inh} SV records from R's own differences "
           f"from H37Rv")
     print(f"  {a.sample}: {len(recs)} caller records -> {len(events)} events; "

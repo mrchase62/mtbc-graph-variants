@@ -77,7 +77,9 @@ threshold sensitivity: at 200 SNPs the clusters chain and collapse.
 
 | input | default | required? | what it is |
 |---|---|---|---|
-| graph directory | `graphs/CX333.s10k.k23.K15` | **yes** | the `.og` from stage 1 |
+| graph | none: `OG` (or `GRAPH_DIR`) | **yes** | the `.og` from stage 1 |
+| accessory panel | none: `ACCESSORY_DIR` | **yes** | `panel_manifest.tsv`, its genome record and the panel FASTAs, made from this graph (`docs/PANEL_TREE.md` section 4) |
+| outgroup | `MTB_OUTGROUP` in `config/project_env.sh` | | stamped into `build_info.tsv`; empty for a graph with none |
 | panel SNP VCF | `<graph>/snps.vcf.gz` | **yes** | `vg deconstruct` output over the graph |
 | H37Rv reference | `MTB_H37RV`, `MTB_REF_FASTA` | **yes** | plain and PanSN-named copies of the coordinate reference |
 | assemblies | `data/assemblies` | yes | the same genomes, unpacked, for panel extraction |
@@ -98,6 +100,7 @@ deposited sequence in `refs/`. For 110 of 333 accessions they differ by a
 rotation, and for 22 also by strand. Every projection reads it.
 `bin/refbias_run.sh` passes it to each job as `MTB_GRAPH_FRAMES`.
 
+    export OG=<graph.og> ACCESSORY_DIR=<panel dir>
     bash bin/p0_prepare.sh                      # cheap steps
     bash bin/p0_prepare.sh --step gff
     sbatch --array=1-333 bin/p0_prepare.sh --step refs

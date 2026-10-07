@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 # Concatenate the rotated panel into one PanSN-named FASTA for pggb.
 #
-#   bin/make_pansn_fasta.sh [--panel FILE] [--rotated DIR] [--out NAME]
+#   bin/make_pansn_fasta.sh --panel FILE --out NAME [--rotated DIR]
+#
+# --panel is build_panel.py's --out list (header, accession in column 1); --out
+# is the bare name, written to ${MTB_FASTAS}/NAME.fasta.gz. Both are required:
+# the old defaults (panel.rebuild.tsv, the 484-genome first round, and
+# mtb.complex490) built a panel no decision ever chose. An existing
+# NAME.fasta.gz is never overwritten (audit PGB-3): the production panel
+# mtb.complex333.fasta.gz is the graph's input and must stay as built.
 #
 # PanSN naming is sample#haplotype#contig, e.g. GCF_000195955#1#NC_000962.3.
 # pggb splits on the first '#' (via --exclude-delim '#') to group haplotypes, and
@@ -21,9 +28,9 @@ done
 [[ -n "$_mtb_env" ]] || { echo "FATAL: no project_env.sh" >&2; exit 1; }
 source "$_mtb_env"
 
-PANEL="${MTB_DATA}/ncbi/panel.rebuild.tsv"
+PANEL=""
 ROT="${MTB_DATA}/rotated"
-NAME="mtb.complex490"
+NAME=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --panel) PANEL="$2"; shift 2 ;;
@@ -32,12 +39,17 @@ while [[ $# -gt 0 ]]; do
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
+[[ -n "$PANEL" && -n "$NAME" ]] || { echo "usage: $0 --panel FILE --out NAME [--rotated DIR]" >&2; exit 2; }
 mtb_require_file "$PANEL"
 BG="${MTB_QC_BIN}/bgzip"
 mtb_require_file "$BG"
 
 OUT="${MTB_FASTAS}/${NAME}.fasta"
 mkdir -p "$MTB_FASTAS"
+if [[ -e "${OUT}.gz" ]]; then
+    echo "FATAL: ${OUT}.gz exists; refusing to overwrite a built panel. Choose a new --out name." >&2
+    exit 1
+fi
 : > "$OUT"
 n=0; missing=0; multi=0
 while read -r acc _rest; do

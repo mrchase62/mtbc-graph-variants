@@ -12,6 +12,9 @@
 #
 #   sbatch bin/build_snp_tree.sh <alignment.fasta> [outgroup] [prefix]
 #
+# The outgroup defaults to config/project_env.sh's MTB_OUTGROUP (the
+# association tail passes its build's).
+#
 # The alignment holds only variable sites, so an ascertainment-bias correction
 # (+ASC) is required -- without it branch lengths are inflated because the model
 # expects to have seen the invariant majority of the genome.
@@ -29,7 +32,7 @@ source "$_mtb_env"
 : "${MTB_IQTREE:=/n/boslfs02/LABS/sfortune_lab/Lab/software/iqtree-3.0.1-Linux-intel/bin/iqtree3}"
 [[ $# -ge 1 ]] || { mtb_usage "${BASH_SOURCE[0]}"; exit 2; }
 ALN="$1"
-OUTGROUP="${2:-GCF_035581225}"          # M. canettii
+OUTGROUP="${2:-${MTB_OUTGROUP:?no outgroup given and MTB_OUTGROUP is empty}}"
 PREFIX="${3:-${ALN%.fasta}}"
 mtb_require_file "$MTB_IQTREE" "$ALN"
 

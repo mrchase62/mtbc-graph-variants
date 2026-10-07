@@ -44,8 +44,10 @@ def main():
     ap.add_argument("--cohort-keys",
                     default="is6110/results/p1i_cohort_keys.tsv")
     ap.add_argument("--refmap", default="refbias/p1/refmap.tsv")
-    ap.add_argument("--h37rv",
-                    default="refbias/build/7713a8d71d8e/refs/GCF_000195955.fasta")
+    # no default: it was build 7713a8d71d8e's (CX333) H37Rv; p1i_p5states.sh
+    # passes the build's
+    ap.add_argument("--h37rv", required=True,
+                    help="<build>/refs/GCF_000195955.fasta")
     ap.add_argument("--out-keys", default="is6110/results/p5_is6110_keys.tsv")
     ap.add_argument("--out-states",
                     default="is6110/results/p5_is6110_states.tsv",
@@ -64,6 +66,11 @@ def main():
     keys, observed = {}, {}
     skipped = collections.Counter()
     for x in rows:
+        if x["frame"] == "repeat_node":
+            # on a node its carrier's path visits more than once: not an
+            # identity, so not a key (is6110_write_vcf.py, audit P3IS-3)
+            skipped["site on a repeated graph node, not keyed"] += 1
+            continue
         if x["frame"] == "h37rv":
             if not x["h37rv_pos"]:
                 skipped["h37rv frame with no position"] += 1
@@ -88,8 +95,18 @@ def main():
                         canonical_alt=ALT, region="is6110", kind="IS6110",
                         acc_locus="")
         keys.setdefault(k, meta)
-        # a carrier's own state: REF where its matched reference already holds a
-        # copy at that locus (the site sits at an excision join), ALT otherwise
+        # a carrier's own state in the key's frame, as is6110_write_vcf.py
+        # decided it: ALT, or REF at a locus where H37Rv holds the element too
+        # (audit P3IS-1). Two rows of one sample on one key used to be settled
+        # by row order (P3IS-5); the writer now refuses them, so one here
+        # means a stale or hand-made table -- the same state is one cell,
+        # different states stop the run.
+        prev = observed.get((x["sample"], k))
+        if prev is not None:
+            if prev != x["state"]:
+                sys.exit(f"FATAL: {x['sample']} has rows {prev} and "
+                         f"{x['state']} on {k}; regenerate {a.cohort_keys}")
+            skipped["duplicate (sample, key) row, same state"] += 1
         observed[(x["sample"], k)] = x["state"]
 
     with open(a.out_keys, "w", newline="") as fh:

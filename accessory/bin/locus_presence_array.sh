@@ -43,5 +43,44 @@ fi
 [[ -n "$S" ]] || { echo "FATAL: no sample at index ${I}" >&2; exit 1; }
 OUTDIR="${OUTDIR:-accessory/${COHORT_TAG}}"
 OUT="${OUTDIR}/${S}.presence.tsv"
-[[ -s "$OUT" ]] && { echo "already done: $OUT"; exit 0; }
-OUTDIR="$OUTDIR" exec bash accessory/bin/locus_presence_one.sh "$S" "$COHORT_TAG"
+
+# AN EXISTING TABLE IS KEPT ONLY IF IT WAS MADE AGAINST THIS BUILD'S
+# CATALOGUE (audit P3IS-8). Locus ids are ACC_<H37Rv anchor>, and on a new
+# graph the catalogue is rebuilt: an old table merged by id would describe a
+# different sequence, with no warning. locus_presence.py reads THE BUILD'S
+# catalogue (P0 step catalogue), passed through locus_presence_one.sh; it
+# used to read its own default, accessory/assets/ (CX333's hand-placed copy).
+# ACC_CATALOGUE, if set, must be byte-identical to the build's copy. Each
+# table's sidecar <table>.build records the build id and catalogue checksum
+# it was made with. A table from another build or catalogue is refused, not
+# overwritten: use a new OUTDIR or move it aside.
+BUILD="$(mtb_resolve_build)" || exit 1
+BUILD_ID="$(awk -F'\t' '$1=="build_id"{print $2}' "${BUILD}/build_info.tsv")"
+CAT="${ACC_CATALOGUE:-${BUILD}/assets/accessory_catalogue}"
+for ext in tsv fasta; do
+    [[ -s "${BUILD}/assets/accessory_catalogue.${ext}" ]] || {
+        echo "FATAL: build ${BUILD_ID} has no accessory_catalogue.${ext}; run bin/p0_prepare.sh --step catalogue" >&2; exit 1; }
+    cmp -s "${CAT}.${ext}" "${BUILD}/assets/accessory_catalogue.${ext}" || {
+        echo "FATAL: ${CAT}.${ext}, which locus_presence.py reads, differs from build ${BUILD_ID}'s copy" >&2; exit 1; }
+done
+CAT_SHA="$(cat "${CAT}.tsv" "${CAT}.fasta" | sha256sum | cut -c1-16)"
+SIDE="${OUT}.build"
+if [[ -s "$OUT" ]]; then
+    _b="$(mtb_kv "$SIDE" build_id)"; _c="$(mtb_kv "$SIDE" catalogue_sha)"
+    if [[ "$_b" == "$BUILD_ID" && "$_c" == "$CAT_SHA" ]]; then
+        echo "already done: $OUT (build ${BUILD_ID})"; exit 0
+    fi
+    # No sidecar (a task that died before writing it): made again. It was
+    # adopted when newer than the catalogue; no output from before the
+    # sidecars is adopted (D38).
+    if [[ -e "$SIDE" ]]; then
+        echo "FATAL: ${OUT} was made against build '${_b:-unrecorded}', catalogue" \
+             "'${_c:-unrecorded}', not ${BUILD_ID}/${CAT_SHA}. Use a new OUTDIR or" \
+             "move it aside." >&2
+        exit 1
+    fi
+    echo "no build record for ${OUT}: making it again"
+fi
+OUTDIR="$OUTDIR" ACC_CATALOGUE="$CAT" bash accessory/bin/locus_presence_one.sh "$S" "$COHORT_TAG"
+[[ -s "$OUT" ]] || { echo "FATAL: no ${OUT} written" >&2; exit 1; }
+printf 'build_id\t%s\ncatalogue_sha\t%s\ncompleted\t%s\n' "$BUILD_ID" "$CAT_SHA" "$(date -Is)" > "$SIDE"
