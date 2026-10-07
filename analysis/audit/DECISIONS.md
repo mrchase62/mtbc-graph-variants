@@ -48,7 +48,10 @@ copies of production data.
    against UniVec_Core (build 10.0) with VecScreen's settings; a strong hit
    makes it VECTOR. Flags exactly the two known constructs among 2,703
    inserts.
-6. D32: the foreign-screen background chosen by quality, with D27's ranking.
+6. **Done (cba2135):** D32: each sublineage's background genome is the best
+   by `--rank-by` (D27's file and rule), not the first accession. The score
+   file itself is defined with the new panel's clone-collapse step. CX333:
+   44 of 65 slots have a choice.
 7. D38: refuse all outputs from before the guards.
 8. D43: a catalogue input path that is given but missing is fatal.
 

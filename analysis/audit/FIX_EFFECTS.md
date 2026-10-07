@@ -23,6 +23,7 @@ rerunning with that fix off.
 | Fix 3 (D21): H37Rv as a candidate reference, and a path projected onto itself is the identity | P1 reference; P3-P5 and IS6110 projections | H37Rv could never be chosen; odgi mapped a path onto another copy of itself in repeats | 1 of 200 isolates now maps to H37Rv | 0 of 997; across the build's IS6110 projection store, 22 of 2,707 same-reference lookups were on the wrong copy |
 | Fix 4 (D22): graph VCF left-aligned, then collapsed | graph VCF (panel_af, inherited half) | indels in repeats at vcfwave's position, not the cohort's | build asset: 8,304 of 93,214 keys move; 49 records fold into 41 keys | same asset |
 | Fix 5 (D29): UniVec vector check in the foreign screen | panel QC (which genomes are reviewed) | a construct shared by 2+ genomes could pass as native | — | — (panel: of 2,703 inserts, exactly the 2 known constructs flagged VECTOR) |
+| Fix 6 (D32): foreign-screen background chosen by quality | panel QC (the screen's background) | each sublineage's background genome was the first accession, not the best | — | — (CX333: 44 of 65 slots have a choice; the effect depends on the new panel's score file) |
 
 ## D41: one event, one key (scale200, P4 rerun on all 199 samples)
 
@@ -234,11 +235,27 @@ UniVec_Core with VecScreen's blastn settings. A strong match makes it
 genomes were already excluded by hand. For the new panel build, a construct
 can no longer pass by being common.
 
+## Fix 6: the foreign screen's background, chosen by quality (D32)
+
+**Problem.** The foreign screen compares each insert with a small
+background: one genome per sublineage. The genome taken for each sublineage
+was simply the first accession in sorted order, so the background's quality
+was an accident of numbering.
+
+**New rule:** take the best genome per sublineage by `--rank-by`, the same
+score file and rule that pick a clone cluster's representative (D27). A
+competing genome with no score stops the run.
+
+**Measured effect:** the rule matters in 44 of CX333's 65 sublineage slots,
+where 305 genomes compete. Which genomes it picks depends on the score file,
+which will be defined with the new panel's clone-collapse step. Nothing
+changes in current results: the screen is panel QC and runs again with the
+new panel.
+
 ## Still to come
 
-**Fixes 6-8**, each to be added here as it is done:
+**Fixes 7-8**, each to be added here as it is done:
 
-- D32: foreign-screen background chosen by quality.
 - D38: refuse outputs from before the guards.
 - D43: a missing catalogue path stops with an error.
 

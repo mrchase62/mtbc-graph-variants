@@ -789,3 +789,18 @@ pick H37Rv now?"; "commit fix 3 when gwas1000 finishes, then start fix 4".
   done.
 
 **Tests:** 349 pass. Next: fix 6 (D32, the background chosen by quality).
+
+## 2026-10-07: fix 6 done, the foreign screen's background (audit-fixes cba2135)
+
+**User:** "yes, start on fix 6".
+
+- Each sublineage's background genome is now the best by `--rank-by`, the
+  same file and rule `snp_nonredundant.py` uses (D27). Before, it was the
+  first accession in sorted order.
+- A competing genome with no score stops the run.
+- In CX333, 44 of the 65 slots have a choice. The score file itself comes
+  with the new panel's clone-collapse step, so the actual picks are decided
+  then.
+
+**Tests:** 355 pass. Next: fix 7 (D38, refuse outputs from before the
+guards).
