@@ -28,8 +28,9 @@ copies of production data.
 **All 44 decisions are answered (2026-10-07).** To implement on
 `audit-fixes`, one at a time, each with a test, before the new-panel rerun:
 
-1. D18 + D39 + the burden-indel item: credit a variant to every gene its
-   changed bases touch.
+1. **Done (27618e3):** D18 + D39 + the burden-indel item: credit a variant
+   to every gene its changed bases touch. scale200: 271 records change
+   unit; gwas1000: 584.
 2. D20 + D24: choose the matched reference by mismatches per site that both
    sides called, with isolate coverage from the P1 BAMs.
 3. D21: H37Rv as a candidate reference, with a P2-P5 test for R = H37Rv.

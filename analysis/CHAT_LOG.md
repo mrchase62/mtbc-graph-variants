@@ -682,3 +682,35 @@ a test:
 8. D43.
 
 Still with you: ASSOC-1 (the canettii isolate) and R2-TREES-6.
+
+---
+
+## 2026-10-07: fix 1 done, D18 + D39 + burden indels (audit-fixes 27618e3)
+
+**One rule for every variant: the bases it changes decide its genes.** It is
+used by the gene burdens and by the scan's genic/intergenic stratum, from one
+shared helper (`assoc/bin/variant_span.py`).
+
+- **SNPs in overlapping genes** count for every gene, not just the
+  earlier-starting one.
+- **MNPs and complex records** count for every gene their changed bases
+  touch.
+- **Insertions** (small, SV and IS6110) count for a gene only if they fall
+  inside it. One just past a gene's end goes to the neighbouring promoter.
+
+**Effect on the current events** (callability floor not applied in this
+count):
+
+- scale200: 271 records change unit, 260 of them gaining an overlapping
+  gene;
+- gwas1000: 584, including 9 IS6110 records;
+- SVs: none.
+
+**Tests:** 6 new and 1 updated (the old test encoded the anchor rule); 314
+pass. Two mutations of the new rule are both caught.
+
+**Not changed:** P6's annotation still names one gene per position. It is
+descriptive output, and changing its column format would affect everything
+downstream of it.
+
+Next is fix 2, D20 + D24 (reference selection).
