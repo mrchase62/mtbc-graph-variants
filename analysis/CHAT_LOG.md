@@ -744,3 +744,31 @@ references, but a few move by more than 10 SNPs. Tests: 324 pass.
 **Before/after document:** `analysis/audit/FIX_EFFECTS.md` collects the
 measured stage-level effect of D41, fix 1 and fix 2. Part 2 (end results)
 will be added after the scale200 rerun. Next: fix 3 (D21).
+
+## 2026-10-07: fixes 3 and 4 done (audit-fixes 1c6b365, cf46f41)
+
+**User:** "yes, write the document, then start fix 3"; "how many isolates
+pick H37Rv now?"; "commit fix 3 when gwas1000 finishes, then start fix 4".
+
+**Fix 3 (D21), H37Rv as a candidate reference:**
+
+- scale200: 1 isolate (SAMEA7526648) now picks H37Rv, at 29 vs 36 SNPs.
+- gwas1000: none; no other choice changes.
+- **Found on the way:** a path projected onto itself through the graph is
+  not the identity in repeats. With R = H37Rv, 729 of 51,139 P4 records
+  moved, by up to 1 kb; in the P5 direction, 16 of 52,007. In the current
+  IS6110 arm (any R), 22 of 2,707 same-reference lookups landed on another
+  copy.
+- Fixed once in `frame_convert.py`, plus the two IS6110 scripts that read
+  odgi directly.
+
+**Fix 4 (D22), graph VCF left-aligned before the collapse:**
+
+- 8,304 of 93,214 keys move; 49 records fold into 41 keys; no carrier
+  lost.
+- **Also found:** the production graph VCF predates the earlier GRAPHVCF-5
+  collapse fix (1,461 padded keys, 61 missing carrier cells). The new build
+  regenerates it.
+
+**Tests:** 344 pass. Both fixes are recorded in
+`analysis/audit/FIX_EFFECTS.md`. Next: fix 5 (UniVec).

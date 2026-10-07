@@ -20,6 +20,8 @@ rerunning with that fix off.
 | D41: node alleles on the forward strand, plus node-indel left-alignment | P4 keys | one event read in opposite directions got two keys | 11 bases with two keys → 0; homopolymer events with two keys 3 → 0; 73 records now keyed in H37Rv | not run (P4 not rerun for gwas1000) |
 | Fix 1 (D18, D39): genes credited by the bases a variant changes | burden units, genic stratum | SNPs in overlapping genes, MNPs and insertions at gene ends | 271 of 63,988 records change unit (0.4%) | 584 of 150,118 (0.4%), 9 of them IS6110 |
 | Fix 2 (D20, D24): reference picked by mismatches per site both sides called | P1 reference | uncovered sites counted as matching; raw counts not normalised | 24 of 200 isolates get a different reference (12%) | 112 of 997 (11%) |
+| Fix 3 (D21): H37Rv as a candidate reference, and a path projected onto itself is the identity | P1 reference; P3-P5 and IS6110 projections | H37Rv could never be chosen; odgi mapped a path onto another copy of itself in repeats | 1 of 200 isolates now maps to H37Rv | 0 of 997; across the build's IS6110 projection store, 22 of 2,707 same-reference lookups were on the wrong copy |
+| Fix 4 (D22): graph VCF left-aligned, then collapsed | graph VCF (panel_af, inherited half) | indels in repeats at vcfwave's position, not the cohort's | build asset: 8,304 of 93,214 keys move; 49 records fold into 41 keys | same asset |
 
 ## D41: one event, one key (scale200, P4 rerun on all 199 samples)
 
@@ -141,12 +143,76 @@ Examples (scale200):
 - This is the fix most likely to move end results, because it changes the
   whole P2-P4 input for about 11% of isolates.
 
+## Fix 3: H37Rv as a candidate reference (D21)
+
+**Problem.** H37Rv is the reference the graph was decomposed against, so it
+had no column in the panel VCF and could never be chosen as a matched
+reference, even for an isolate closer to H37Rv than to any other panel
+genome.
+
+**Measured effect on reference choice** (same selector run as fix 2, with
+H37Rv added):
+
+- scale200: 1 isolate changes. SAMEA7526648 moves from GCF_013267635 to
+  H37Rv: 29 vs 36 SNPs over about 74,500 sites, a clear win rather than a
+  near-tie.
+- gwas1000: none. H37Rv is not in any isolate's top two.
+- No other isolate's choice changes.
+
+**Found while testing R = H37Rv through P2-P5.** Projecting a position onto
+its *own* path through the graph is not always the identity. Where a path
+passes the same graph nodes more than once (tandem repeats), odgi answers
+with one of the copies.
+
+- Today's P4 on the earlier H37Rv-pinned scale200 arm (100 isolates): 729 of
+  51,139 composed records (1.4%) were keyed away from their own position,
+  by up to 1 kb, all in PE/PPE repeats (552 at 3.93-3.95 Mb). After the
+  fix: 0.
+- The P5 direction (H37Rv keys back onto R = H37Rv): 16 of 52,007 positions,
+  by a median of 4 bp.
+- **This also affects current results, for any reference.** In the IS6110
+  arm's stage 2, a key whose carrier shares the sample's reference is looked
+  up on that reference itself. 22 of 2,707 such lookups in the current
+  projection store landed on another copy, by up to 69 bp, so those IS6110
+  cells were read at the wrong place.
+
+**Expected downstream effect:** one isolate in scale200 is called against
+H37Rv instead of its old reference. IS6110 genotypes change in a handful of
+repeat-region cells.
+
+## Fix 4: the graph VCF, left-aligned (D22)
+
+**Problem.** The graph VCF kept vcfwave's indel positions, trimmed but not
+left-aligned, while every cohort key is left-aligned. An indel in a repeat
+was therefore one event under two positions:
+
+- P5's `panel_af` lookup came back blank for it;
+- vcfwave sometimes wrote one event at two positions, as two records with
+  the carriers split between them.
+
+**Measured effect** (today's collapse on the production decomposed VCF,
+with and without left-alignment):
+
+- 8,304 of 93,214 keys move to their left-aligned position;
+- 49 records fold into 41 keys, with their carriers unioned;
+- no carrier is lost, and the result is identical to left-aligning
+  afterwards.
+
+**Also found:** the production graph VCF predates the earlier collapse fix
+(GRAPHVCF-5, already committed). Against today's code it has 1,461 padded
+keys (e.g. `CT>GT` for the SNP `C>G`) and 61 missing carrier cells. The new
+build regenerates it.
+
+**Expected downstream effect:**
+
+- `panel_af` filled for indels in repeats;
+- the panel and cohort agree on indel positions;
+- the 41 merged events show their full carrier counts.
+
 ## Still to come
 
-**Fixes 3-8**, each to be added here as it is done:
+**Fixes 5-8**, each to be added here as it is done:
 
-- D21: H37Rv as a candidate reference.
-- D22: left-align the collapsed graph VCF, then re-collapse.
 - UniVec vector check.
 - D32: foreign-screen background chosen by quality.
 - D38: refuse outputs from before the guards.

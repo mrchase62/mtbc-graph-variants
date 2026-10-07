@@ -35,8 +35,15 @@ copies of production data.
    mismatches per site that both sides called, with isolate coverage from
    the P1 BAMs. Rank-1 changes for 24/200 scale200 and 112/997 gwas1000
    isolates; the old choice now trails by a median of ~2 SNPs.
-3. D21: H37Rv as a candidate reference, with a P2-P5 test for R = H37Rv.
-4. D22: left-align the collapsed graph VCF, then re-collapse.
+3. **Done (1c6b365):** D21: H37Rv as a candidate reference. scale200: 1
+   isolate picks it; gwas1000: none. Found and fixed on the way: a path
+   projected onto itself through the graph is not the identity in repeats
+   (R = H37Rv: 729 of 51,139 P4 records moved; IS6110 stage 2, any R: 22 of
+   2,707 lookups).
+4. **Done (cf46f41):** D22: the graph VCF is left-aligned against H37Rv
+   before the collapse. 8,304 of 93,214 keys move; 49 records fold into 41
+   keys. The production graph VCF also predates the GRAPHVCF-5 collapse
+   fix (1,461 padded keys); the new build regenerates it.
 5. D29 addition: a UniVec vector check (download approved).
 6. D32: the foreign-screen background chosen by quality, with D27's ranking.
 7. D38: refuse all outputs from before the guards.
