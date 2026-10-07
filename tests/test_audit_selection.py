@@ -69,9 +69,10 @@ class SelectionByAllele(unittest.TestCase):
     SAMPLES = ["gA", "gG"]
 
     def select(self, panel_records, isolate_records, depth=None, top=2,
-               full=False, check=True):
+               full=False, check=True, h37rv=""):
         """`depth`: {pos: reads}; default 30 at every panel site.
-        isolate_records: (pos, ref, alt, gt[, filter])."""
+        isolate_records: (pos, ref, alt, gt[, filter]). `h37rv`: the name
+        of the all-REF H37Rv candidate (D21); empty leaves it out."""
         with tempfile.TemporaryDirectory() as d:
             panel = vcf(os.path.join(d, "panel.vcf"), self.SAMPLES, panel_records)
             iso = os.path.join(d, "iso.vcf")
@@ -90,7 +91,8 @@ class SelectionByAllele(unittest.TestCase):
             out = os.path.join(d, "cand.tsv")
             r = subprocess.run([py(), "bin/t8_select_reference.py", "--vcf", iso,
                                 "--panel-snps", panel, "--depth", dep,
-                                "--out", out, "--top", str(top)],
+                                "--out", out, "--top", str(top),
+                                "--h37rv-name", h37rv],
                                capture_output=True, text=True)
             if check:
                 self.assertEqual(r.returncode, 0, r.stderr)

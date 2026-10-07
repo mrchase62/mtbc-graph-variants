@@ -33,8 +33,11 @@ by `distance_per_site`. A genome compared over fewer than --min-compared-frac
 of the best-covered genome's sites is not a candidate, so a sparse genome
 cannot win on a small denominator.
 
-H37Rv is never a candidate here (audit P0P2-7). It is the deconstruct
-reference path, so it has no column in the panel VCF.
+H37RV IS A CANDIDATE (the user's decision D21, 2026-10-07; it was not, audit
+P0P2-7). It is the deconstruct reference path, so it has no column in the
+panel VCF; it is added as a column that is REF at every panel site, which is
+what the graph says of the reference it was decomposed against. An isolate
+nearer H37Rv than any other panel genome (scale200: 1) then maps to H37Rv.
 
 No self-exclusion and no near-clone exclusion here, unlike stage 1. Those existed
 because a panel genome is its own nearest neighbour and the panel contains
@@ -111,6 +114,9 @@ def main():
                          "(P5's --min-dp)")
     ap.add_argument("--min-mapq", type=int, default=20)
     ap.add_argument("--min-compared-frac", type=float, default=0.5)
+    ap.add_argument("--h37rv-name", default="GCF_000195955",
+                    help="H37Rv's accession, added as an all-REF candidate "
+                         "(D21); empty to leave it out")
     a = ap.parse_args()
     if bool(a.bam) == bool(a.depth):
         sys.exit("FATAL: pass exactly one of --bam or --depth. Without the "
@@ -143,6 +149,12 @@ def main():
         key_idx[k] = len(rows)
         rows.append(g)
     G = np.array(rows, dtype=np.int8)
+    if a.h37rv_name:
+        if a.h37rv_name in samples:
+            sys.exit(f"FATAL: {a.h37rv_name} already has a column in "
+                     f"{a.panel_snps}; is it the deconstruct reference?")
+        G = np.hstack([G, np.zeros((G.shape[0], 1), dtype=np.int8)])
+        samples = samples + [a.h37rv_name]
 
     # isolate profile: 1 where it calls that ALLELE at a panel site, else 0.
     # Positions under a filtered record, or under an indel or complex

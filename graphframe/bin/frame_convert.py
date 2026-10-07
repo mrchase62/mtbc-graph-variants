@@ -48,6 +48,14 @@ The `-v` form's node offset is likewise counted along the source path's
 walking direction: one base of a node walked `+` by one path and `-` by
 another has offsets off and L-1-off. Node keys are written with the node's
 forward offset (bin/mtb_norm.py, forward_offset).
+
+A PATH PROJECTED ONTO ITSELF IS THE IDENTITY (D21). Where the source and the
+target are the same path, `from-panel` writes the source position as the
+target, distance 0, odgi flag `+`. odgi does not: where the path passes a
+node more than once it answers with one of the copies. With H37Rv as the
+matched reference, scale200's pinned arm had 729 of 51,139 composed P4
+records (all in PE/PPE tandem repeats, 552 at 3.93-3.95 Mb) moved by up to
+1 kb, and P5 projects the other way through the same nodes.
 """
 import argparse, importlib.util, os, sys
 
@@ -92,13 +100,22 @@ def to_panel(fr, fh_in, fh_out, strict):
 
 
 def from_panel(fr, fh_in, fh_out, strict):
-    n = c = 0
+    n = c = s = 0
     for line in fh_in:
         line = line.rstrip("\n")
         if not line or line.startswith("#"):
             fh_out.write(line + "\n"); continue
         f = line.split("\t")
         flip = False
+        same = (len(f) >= 3 and "#" in f[1].split(",", 1)[0]
+                and f[0].rsplit(",", 2)[0] == f[1].rsplit(",", 2)[0])
+        if same:
+            # the identity, before conversion: one path, one frame
+            f[1] = f[0].rsplit(",", 1)[0] + ",+"
+            f[2] = "0"
+            if len(f) >= 4 and f[3] in ("+", "-"):
+                f[3] = "+"
+            s += 1
         for i in (0, 1):
             if i >= len(f):
                 break
@@ -121,7 +138,8 @@ def from_panel(fr, fh_in, fh_out, strict):
             f[3] = "-" if flip else "+"
         n += 1
         fh_out.write("\t".join(f) + "\n")
-    print(f"[frame_convert] from-panel: {n} records, {c} coordinates converted",
+    print(f"[frame_convert] from-panel: {n} records, {c} coordinates converted"
+          + (f", {s} projected onto their own path (identity)" if s else ""),
           file=sys.stderr)
 
 

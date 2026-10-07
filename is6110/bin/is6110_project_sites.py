@@ -130,6 +130,10 @@ def parse_position(text, want_node):
                     st = "-" if st == "+" else "+"
                 val = (FRAMES.to_refs(tacc, tpos) + 1,
                        int(f[2]) if len(f) > 2 else 0, st)
+                if tp[0] == sp[0]:
+                    # a path onto itself is the identity (D21); odgi answers
+                    # with one copy where the path passes a node twice
+                    val = (src[1] + 1, 0, "+")
         except (ValueError, IndexError):
             continue
         out.setdefault(src, val)

@@ -233,6 +233,9 @@ def main():
                          "R is stored reverse complemented in the panel; needed "
                          "to write node-frame alleles on the node's forward "
                          "strand")
+    ap.add_argument("--h37rv-accession", default="GCF_000195955",
+                    help="H37Rv's accession: R = H37Rv (D21) has nothing to "
+                         "inherit, so its empty inherited half is not warned of")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
@@ -619,7 +622,8 @@ def main():
                 kind=classify(ref, alt),
                 size=abs(len(strip_gap(alt)) - len(strip_gap(ref))),
                 acc_locus="", qual="."))
-    else:
+    elif a.reference != a.h37rv_accession:
+        # (R = H37Rv has no differences from itself to inherit)
         print(f"  WARNING: {a.reference} has no column in {a.graph_vcf}; "
               f"the inherited half of the composed arm is EMPTY for this "
               f"sample, which understates its recall", file=sys.stderr)

@@ -201,6 +201,7 @@ GRAPH_VCF="${GRAPH_VCF:-${BUILD}/assets/graph_collapsed.vcf.gz}"
 [[ -s "$GRAPH_VCF" ]] || { echo "FATAL: no graph VCF at ${GRAPH_VCF}" >&2; exit 1; }
 "$MTB_PY" bin/p4_place.py \
     --sample "$SAMPLE" --reference "$REFID" --build-id "$BUILD_ID" \
+    --h37rv-accession "${H37RV_PATH%%#*}" \
     --graph-vcf "$GRAPH_VCF" \
     --h37rv "${BUILD}/refs/GCF_000195955.fasta" \
     --ref-fasta "${BUILD}/refs/${REFID}.fasta" \

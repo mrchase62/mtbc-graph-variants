@@ -591,8 +591,9 @@ step_nodes() {
 # The P1 tie-break's per-reference IS6110 interval counts. p1_summary.py read
 # them from is6110/assets/isclean_matched, outside the build, and a missing
 # crossmap silently skipped the rule (audit P0P2-4). They are a property of
-# the panel's assemblies, so they are a build asset: one row per panel genome
-# but H37Rv (never a candidate), each checked against this build's refs/.
+# the panel's assemblies, so they are a build asset: one row per panel genome,
+# H37Rv included since it is a candidate (D21), each checked against this
+# build's refs/.
 step_is6110_intervals() {
     _inputs isclean_manifest_sha256 "${ISCLEAN_DIR}/manifest.tsv" \
             code_sha256 bin/p0_check.py
@@ -601,7 +602,7 @@ step_is6110_intervals() {
     local out="${BUILD}/assets/is6110_intervals.tsv"
     "$MTB_PY" bin/p0_check.py is6110-intervals --isclean-dir "$ISCLEAN_DIR" \
         --refs "${BUILD}/refs" --accessions "${BUILD}/assets/accessions.txt" \
-        --skip "$H37RV_ACC" --out "${out}.tmp" || { rm -f "${out}.tmp"; return 1; }
+        --out "${out}.tmp" || { rm -f "${out}.tmp"; return 1; }
     mv -f "${out}.tmp" "$out"
     _mark is6110_intervals
 }

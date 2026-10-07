@@ -160,6 +160,10 @@ def project(a, tref, fr, paths, og, ref_of, carrier_of):
                 continue
             order.append((k, cref, cpos))
         known = store_load(a, tref)
+        # A PATH ONTO ITSELF IS THE IDENTITY (D21), whatever odgi or the store
+        # says: where the path passes a node more than once odgi answers with
+        # one of the copies
+        known.update({(c, p): (p, 0) for _, c, p in order if c == tref})
         miss = sorted({(c, p) for _, c, p in order if (c, p) not in known})
         if miss:
             known.update(run_odgi(a, tref, tpath, fr, paths, og, miss))
