@@ -22,7 +22,25 @@ copies of production data.
 | Panel construction | D28-D33 | D28, D30, D31, D33 confirmed; D29 confirmed **plus a UniVec vector check** (download approved by the user); **D32 switched:** the foreign-screen background is chosen by quality with D27's ranking rule. To implement before the panel build (2026-10-07) |
 | Build safety | D34-D38 | D34-D37 confirmed; **D38 switched:** refuse all outputs from before the guards (no evidence-based adoption); the rerun regenerates everything. To implement (2026-10-07) |
 | Leftovers | D39-D40 | **D39 switched:** complex/MNP records credited to every gene their REF span touches; the open item "indels in the small and IS6110 burdens credited by their anchor base" folded in (indels follow the span rule). D40 confirmed (now the same rule as D18). To implement with D18 (2026-10-07) |
+| Clean-up pass | D42-D44 | all confirmed; **D43 fix queued:** a catalogue input path that is given but does not exist stops with an error instead of being skipped (R2 caveat) (2026-10-07) |
 | Node-frame alleles | D41 | option b, done on `audit-fixes` (2026-10-06) |
+
+**All 44 decisions are answered (2026-10-07).** To implement on
+`audit-fixes`, one at a time, each with a test, before the new-panel rerun:
+
+1. D18 + D39 + the burden-indel item: credit a variant to every gene its
+   changed bases touch.
+2. D20 + D24: choose the matched reference by mismatches per site that both
+   sides called, with isolate coverage from the P1 BAMs.
+3. D21: H37Rv as a candidate reference, with a P2-P5 test for R = H37Rv.
+4. D22: left-align the collapsed graph VCF, then re-collapse.
+5. D29 addition: a UniVec vector check (download approved).
+6. D32: the foreign-screen background chosen by quality, with D27's ranking.
+7. D38: refuse all outputs from before the guards.
+8. D43: a catalogue input path that is given but missing is fatal.
+
+Still with the user, outside this file: ASSOC-1 (the canettii isolate) and
+R2-TREES-6.
 
 ## Calling and genotyping (P4-P5)
 
@@ -78,7 +96,13 @@ copies of production data.
 - **ASSOC-1, the canettii isolate:** see `analysis/canettii_effect/README.md`.
   Survivors are unchanged without it; it inflates only the branch null.
 
-## Found during the fixes, still open
+## Found during the fixes (closed 2026-10-07)
+
+**Closed.** Per review 2 (`review2/integration.md`), five are fixed on
+`audit-fixes`: the odgi strand off-by-one, the retier off-by-one, the `mixed`
+header, p5_sanity NA and the ISMapper default. The burden-indel item is folded
+into D39. The rerun prerequisites are enforced by the build's guards.
+
 
 - **Possible odgi strand off-by-one in P4:**
   - At inverted path steps, odgi's position output is one base off and

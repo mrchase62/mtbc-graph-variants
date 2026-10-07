@@ -43,11 +43,12 @@ fixes, with tests) were approved on 2026-10-05.
 
 - **Every audit fix is on branch `audit-fixes`** (283 tests), not yet in
   main. The current association results remain provisional.
-- **Waiting on the user:** the 44 decisions, and D41.
+- **The 44 decisions are answered (2026-10-07).** Ten are switched or added;
+  the queue of 8 fixes is at the top of `analysis/audit/DECISIONS.md`.
 - **Step 4 is done:** section 0q lists 12 items to fix before any rerun.
-  **All 12 are fixed on `audit-fixes`, and D41 (b)** (293 tests). Waiting on the user:
-  the decisions, the canettii isolate and R2-TREES-6, before the merge into
-  main.
+  **All 12 are fixed on `audit-fixes`, and D41 (b)** (308 tests). Before
+  the merge into main: the 8 queued decision fixes, and the user's answers
+  on the canettii isolate and R2-TREES-6.
 - **Then:** the new panel, graph and build, then scale200 first.
 
 **Before anything else after downtime:**
@@ -2030,7 +2031,8 @@ There are also about 20 LOW items in the reports.
     path visits once, with the offset measured from it.
   - **When:** with the new panel and graph build. Not started.
 - **Waiting on the user before the merge:**
-  - the 44 decisions in `analysis/audit/DECISIONS.md` (D41 is decided: b);
+  - the 44 decisions: answered 2026-10-07; 8 fixes queued at the top of
+    `analysis/audit/DECISIONS.md`;
   - the canettii isolate;
   - R2-TREES-6: 80 variants derived at the MTBC root. Should they be pinned
     to the `AA` allele?

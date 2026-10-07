@@ -652,3 +652,33 @@ This is now the same rule as D18.
 check, D32, D38.
 
 Next is the last group, D42-D44.
+
+---
+
+## 2026-10-07: group 10 (D42-D44); the decisions review is finished
+
+**Confirmed:**
+
+- **D42:** drop and count records with no node length (0 in scale200);
+- **D43:** catalogue inputs are used only when given;
+- **D44:** canettii is the default outgroup, and it is fatal if they are not
+  tree leaves.
+
+**Queued, the D43 fix:** a path that is given but missing becomes fatal.
+
+**Closed:** the "found during the fixes" section. Five items are already
+fixed and the burden-indel item is folded into D39.
+
+**All 44 decisions are answered.** Queue of 8 fixes, each one at a time with
+a test:
+
+1. D18 + D39 + indels (the span rule);
+2. D20 + D24;
+3. D21;
+4. D22;
+5. UniVec;
+6. D32;
+7. D38;
+8. D43.
+
+Still with you: ASSOC-1 (the canettii isolate) and R2-TREES-6.
