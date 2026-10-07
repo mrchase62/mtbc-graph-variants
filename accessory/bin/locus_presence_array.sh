@@ -70,17 +70,16 @@ if [[ -s "$OUT" ]]; then
     if [[ "$_b" == "$BUILD_ID" && "$_c" == "$CAT_SHA" ]]; then
         echo "already done: $OUT (build ${BUILD_ID})"; exit 0
     fi
-    # From before the sidecar: kept only if written after the current
-    # catalogue file, so it cannot predate a catalogue rebuild.
-    if [[ ! -e "$SIDE" && "$OUT" -nt "${CAT}.tsv" && "$OUT" -nt "${CAT}.fasta" ]]; then
-        printf 'build_id\t%s\ncatalogue_sha\t%s\nsource\tinferred_newer_than_catalogue\n' \
-            "$BUILD_ID" "$CAT_SHA" > "$SIDE"
-        echo "already done: $OUT (newer than build ${BUILD_ID}'s catalogue; recorded)"; exit 0
+    # No sidecar (a task that died before writing it): made again. It was
+    # adopted when newer than the catalogue; no output from before the
+    # sidecars is adopted (D38).
+    if [[ -e "$SIDE" ]]; then
+        echo "FATAL: ${OUT} was made against build '${_b:-unrecorded}', catalogue" \
+             "'${_c:-unrecorded}', not ${BUILD_ID}/${CAT_SHA}. Use a new OUTDIR or" \
+             "move it aside." >&2
+        exit 1
     fi
-    echo "FATAL: ${OUT} was made against build '${_b:-unrecorded}', catalogue" \
-         "'${_c:-unrecorded}', not ${BUILD_ID}/${CAT_SHA}. Use a new OUTDIR or" \
-         "move it aside." >&2
-    exit 1
+    echo "no build record for ${OUT}: making it again"
 fi
 OUTDIR="$OUTDIR" ACC_CATALOGUE="$CAT" bash accessory/bin/locus_presence_one.sh "$S" "$COHORT_TAG"
 [[ -s "$OUT" ]] || { echo "FATAL: no ${OUT} written" >&2; exit 1; }

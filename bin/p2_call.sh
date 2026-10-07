@@ -134,8 +134,7 @@ CRAM="${CRAMROOT}/${RELPATH}"
 
 # DONE MEANS THE MARKER, written last. Testing only for vcf.gz and delly.vcf
 # accepted a sample whose job died during dysgu (no dysgu VCF, delly never
-# stamped). Samples finished before the marker existed are recognised by their
-# complete outputs -- including a dysgu VCF with a #CHROM line -- and marked.
+# stamped). A sample without the marker is called again (D38).
 #
 # AND DONE MEANS DONE AGAINST THIS BUILD AND THIS REFERENCE (audit P0P2-1).
 # The marker held only a date, so after a rebuild, or a refmap that changed
@@ -179,21 +178,10 @@ fi
 if [[ -n "$_m_build" ]]; then
     echo "[P2] ${SAMPLE}: already done (build ${BUILD_ID}, reference ${REFID})"; exit 0
 fi
-# Outputs from before the marker recorded build and reference (a date-only
-# marker, or none): accepted only when the VCF's stamp and caller reference,
-# checked above, are this build's and this reference.
-_legacy_complete() {
-    [[ -s "${OUTDIR}/${SAMPLE}.vcf.gz" && -s "${OUTDIR}/${SAMPLE}.delly.vcf" ]] || return 1
-    [[ -n "$_v_ref" ]] || return 1
-    [[ -x "$DYSGU" ]] || return 0                     # dysgu not part of this site
-    [[ -s "${OUTDIR}/${SAMPLE}.dysgu.vcf" ]] || return 1
-    grep -q '^#CHROM' "${OUTDIR}/${SAMPLE}.dysgu.vcf"
-}
-if _legacy_complete; then
-    _write_done
-    echo "[P2] ${SAMPLE}: already done (outputs of build ${BUILD_ID}, reference" \
-         "${REFID}, from before the marker recorded them)"; exit 0
-fi
+# Outputs with no marker that records build and reference (a date-only
+# marker, none, or a task that died before writing it) are made again. They
+# were adopted when the VCF's stamp and caller reference matched; no output
+# from before the markers is adopted (D38).
 echo "[P2] ${SAMPLE}: reference ${REFID}, build ${BUILD_ID}"
 
 FQ1="${WORK}/${SAMPLE}_1.fq"; FQ2="${WORK}/${SAMPLE}_2.fq"

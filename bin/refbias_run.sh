@@ -302,29 +302,20 @@ FRAMES="${BUILD}/assets/graph_frame_offsets.tsv"
 # output root and the accessory presence folder record their build in
 # .mtb_build, and a chain for another build is refused before anything is
 # submitted: run the new build under new output folders (a new registry row).
-# A folder from before the record is adopted only when its outputs' own build
-# stamps (P2 VCFs, else the merged VCF) all name this build.
+# A folder with outputs but no record is refused, whatever its files' stamps
+# say (the user's decision D38, 2026-10-07): it was adopted when its P2 VCFs'
+# stamps named this build, and the presence folder with no evidence at all
+# (R2-BUILD-5). The rerun regenerates everything into new folders.
 ACCDIR="accessory/${COHORT_NAME}"
-_stamp_root() {   # dir: check, adopt or create its build record
-    local d="$1" rec="${1}/.mtb_build" have f b n=0
+_stamp_root() {   # dir: check or create its build record
+    local d="$1" rec="${1}/.mtb_build" have
     if [[ -s "$rec" ]]; then
         have="$(mtb_kv "$rec" build_id)"
         [[ "$have" == "$BUILD_ID" ]] || die "${d} holds outputs of build ${have}; this chain is build ${BUILD_ID}. Use new output folders for a new build."
         return 0
     fi
     if [[ -d "$d" && -n "$(find -H "$d" -mindepth 1 -maxdepth 2 -type f ! -name '.mtb_build' -print -quit 2>/dev/null)" ]]; then
-        for f in "$d"/p2/*.vcf.gz "$d"/p5/merged.vcf.gz; do
-            [[ -s "$f" && "$f" != *.g.vcf.gz ]] || continue
-            b="$(mtb_vcf_build_id "$f")"
-            [[ "$b" == "$BUILD_ID" ]] || die "${d} has no build record and ${f} is stamped '${b:-unstamped}', not ${BUILD_ID}. Use new output folders."
-            n=$((n + 1)); [[ "$n" -ge 20 ]] && break
-        done
-        # the presence folder has no stamped VCFs; its tables are checked one
-        # by one against the build's catalogue by locus_presence_array.sh
-        if [[ "$n" -eq 0 && "$d" != "$ACCDIR" ]]; then
-            die "${d} holds outputs but no build record and no stamped VCF to infer one from. Use new output folders, or write ${rec} by hand if you know its build."
-        fi
-        echo "  ${d}: no build record; adopting build ${BUILD_ID} (${n} stamped outputs checked)" >&2
+        die "${d} holds outputs from before build records (no ${rec}); they are not adopted (D38). Use new output folders."
     fi
     [[ "$DRY" -eq 1 ]] && return 0
     mkdir -p "$d"

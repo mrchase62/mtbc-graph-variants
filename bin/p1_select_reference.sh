@@ -133,16 +133,11 @@ if [[ -n "$_foreign" ]]; then
          "or move the old outputs aside." >&2
     exit 1
 fi
-if [[ -s "$CAND" && -s "$H37VCF" ]]; then
-    if [[ "$_m_build" == "$BUILD_ID" ]]; then
-        echo "[P1] ${SAMPLE}: already done (build ${BUILD_ID})"; exit 0
-    fi
-    # From before the marker: the candidates were selected in the same task
-    # that wrote the H37Rv VCF, so that VCF's stamp is their build. Recorded,
-    # not assumed again.
-    printf 'build_id\t%s\nreference\t%s\nsource\tinferred_from_h37rv_vcf_stamp\n' \
-        "$BUILD_ID" "$(awk -F'\t' 'NR==2{print $2}' "$CAND")" > "$P1DONE"
-    echo "[P1] ${SAMPLE}: already done (build ${BUILD_ID}, from the H37Rv VCF stamp)"; exit 0
+# Done means the marker. Outputs of this build without one (a task that died
+# before writing it) are made again: they used to be adopted on the H37Rv
+# VCF's stamp, and no output from before the markers is adopted (D38).
+if [[ -s "$CAND" && -s "$H37VCF" && "$_m_build" == "$BUILD_ID" ]]; then
+    echo "[P1] ${SAMPLE}: already done (build ${BUILD_ID})"; exit 0
 fi
 
 echo "[P1] ${SAMPLE}: build ${BUILD_ID}"

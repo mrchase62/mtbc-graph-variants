@@ -155,14 +155,20 @@ class P1Guard(unittest.TestCase):
         r = self.p1()
         self.assertNotEqual(r.returncode, 0, r.stdout)
 
-    def test_current_build_legacy_outputs_kept_and_recorded(self):
+    def test_unmarked_outputs_of_this_build_made_again(self):
+        # D38: they were adopted on the H37Rv VCF's stamp
         write_vcf_gz(os.path.join(self.work, "S1.h37rv.vcf.gz"), ["S1"], "newbuild")
+        r = self.p1()
+        self.assertNotIn("already done", r.stdout)
+        self.assertIn("[P1] S1: build newbuild", r.stdout)
+        self.assertFalse(os.path.exists(os.path.join(self.out, "S1.p1.done")))
+
+    def test_marked_outputs_kept(self):
+        write_vcf_gz(os.path.join(self.work, "S1.h37rv.vcf.gz"), ["S1"], "newbuild")
+        write(os.path.join(self.out, "S1.p1.done"), "build_id\tnewbuild\n")
         r = self.p1()
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("already done", r.stdout)
-        m = open(os.path.join(self.out, "S1.p1.done")).read()
-        self.assertIn("build_id\tnewbuild", m)
-        self.assertIn("reference\tR1", m)
 
 
 class P2Guard(unittest.TestCase):
@@ -221,13 +227,22 @@ class P2Guard(unittest.TestCase):
               "build_id\tnewbuild\nreference\tR2\n")
         self.assertNotEqual(self.p2().returncode, 0)
 
-    def test_current_outputs_kept_and_marker_records_both(self):
+    def test_unmarked_outputs_of_this_build_called_again(self):
+        # D38: complete outputs whose stamp and caller reference matched
+        # were adopted and marked
         self.outputs("newbuild", "R1")
         r = self.p2()
+        self.assertNotIn("already done", r.stdout)
+        self.assertIn("[P2] S1: reference R1, build newbuild", r.stdout)
+        self.assertFalse(os.path.exists(os.path.join(self.out, "S1.p2.done")))
+
+    def test_marked_outputs_kept(self):
+        self.outputs("newbuild", "R1")
+        write(os.path.join(self.out, "S1.p2.done"),
+              "build_id\tnewbuild\nreference\tR1\n")
+        r = self.p2()
         self.assertEqual(r.returncode, 0, r.stderr)
-        m = open(os.path.join(self.out, "S1.p2.done")).read()
-        self.assertIn("build_id\tnewbuild", m)
-        self.assertIn("reference\tR1", m)
+        self.assertIn("already done", r.stdout)
 
     def test_refmap_from_other_build_refused(self):
         write(self.refmap + ".build", "build_id\toldbuild\n")
@@ -520,9 +535,18 @@ class PresenceGuard(unittest.TestCase):
                    SLURM_SUBMIT_DIR=self.d, SLURM_ARRAY_TASK_ID=1, COHORT_TAG="coh",
                    REFMAP=self.refmap, MTB_BUILD_DIR=self.b, **kw)
 
-    def test_table_older_than_catalogue_refused(self):
+    def test_unrecorded_table_made_again_not_adopted(self):
+        # D38: a table newer than the catalogue was adopted with no record
         write(self.out, "locus_id\tcall\n")
-        os.utime(self.out, (1, 1))
+        r = self.arr()
+        self.assertIn("making it again", r.stdout)
+        self.assertNotIn("already done", r.stdout)
+        self.assertFalse(os.path.exists(self.out + ".build")
+                         and "inferred" in open(self.out + ".build").read())
+
+    def test_table_of_another_build_refused(self):
+        write(self.out, "locus_id\tcall\n")
+        write(self.out + ".build", "build_id\toldbuild\ncatalogue_sha\tx\n")
         r = self.arr()
         self.assertNotEqual(r.returncode, 0, r.stdout)
         self.assertIn("was made against build", r.stderr)
@@ -625,7 +649,25 @@ class RunnerGuard(unittest.TestCase):
         write_vcf_gz(os.path.join(self.outroot, "p2", "S1.vcf.gz"), ["S1"], "oldbuild")
         r = self.runner()
         self.assertNotEqual(r.returncode, 0)
-        self.assertIn("stamped 'oldbuild'", r.stderr)
+        self.assertIn("not adopted (D38)", r.stderr)
+
+    def test_unrecorded_outroot_with_this_builds_stamps_refused(self):
+        # D38: adopted when its P2 VCFs' stamps named this build
+        write_vcf_gz(os.path.join(self.outroot, "p2", "S1.vcf.gz"), ["S1"], "newbuild")
+        r = self.runner()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("not adopted (D38)", r.stderr)
+
+    def test_unrecorded_presence_folder_refused(self):
+        # R2-BUILD-5: adopted with no evidence at all
+        acc = os.path.join(ROOT, "accessory", self.name)
+        try:
+            write(os.path.join(acc, "S1.presence.tsv"), "locus_id\tcall\n")
+            r = self.runner()
+        finally:
+            shutil.rmtree(acc, ignore_errors=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn(f"accessory/{self.name} holds outputs", r.stderr)
 
     def test_no_frame_fallback_outside_the_build(self):
         os.remove(os.path.join(self.b, "assets", "graph_frame_offsets.tsv"))
