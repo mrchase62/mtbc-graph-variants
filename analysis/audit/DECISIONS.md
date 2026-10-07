@@ -31,8 +31,10 @@ copies of production data.
 1. **Done (27618e3):** D18 + D39 + the burden-indel item: credit a variant
    to every gene its changed bases touch. scale200: 271 records change
    unit; gwas1000: 584.
-2. D20 + D24: choose the matched reference by mismatches per site that both
-   sides called, with isolate coverage from the P1 BAMs.
+2. **Done (a30bcd4):** D20 + D24: choose the matched reference by
+   mismatches per site that both sides called, with isolate coverage from
+   the P1 BAMs. Rank-1 changes for 24/200 scale200 and 112/997 gwas1000
+   isolates; the old choice now trails by a median of ~2 SNPs.
 3. D21: H37Rv as a candidate reference, with a P2-P5 test for R = H37Rv.
 4. D22: left-align the collapsed graph VCF, then re-collapse.
 5. D29 addition: a UniVec vector check (download approved).

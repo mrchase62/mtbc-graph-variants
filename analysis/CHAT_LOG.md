@@ -714,3 +714,29 @@ descriptive output, and changing its column format would affect everything
 downstream of it.
 
 Next is fix 2, D20 + D24 (reference selection).
+
+## Fix 2 done; how the fixes change the results (2026-10-07)
+
+**User:** "will you compare the previous runs with the fixed runs to show
+how the fixes change the results? I haven't seen any results from these
+fixes yet."
+
+**Answer:** each fix has so far been checked against the production
+outputs at the level it changes. The end results (P5 matrix, trees,
+association survivors, DR positive controls) can only be compared after the
+post-fixes scale200 rerun, which still needs a cost estimate and approval.
+Proposed: (1) now, a before/after document collecting every fix's measured
+effect; (2) after the rerun, an old-vs-new comparison at every stage.
+
+**Fix 2 (D20 + D24), commit a30bcd4:** the new selector was run on every
+isolate of both cohorts (outputs in the scratchpad) and compared with the
+production choices:
+
+| cohort | isolates | rank-1 changes | new pick was old rank 2 | old choice trails by ≤2 SNPs | ≤5 | >10 |
+|---|---|---|---|---|---|---|
+| scale200 | 200 | 24 (12%) | 18 | 13 | 21 | 1 |
+| gwas1000 | 997 | 112 (11%) | 87 | 59 | 91 | 5 |
+
+Panel sites covered per isolate: median about 74,100 of 75,587 (minimum
+about 71,600). Most changes are near-ties between closely related
+references, but a few move by more than 10 SNPs. Tests: 324 pass.
