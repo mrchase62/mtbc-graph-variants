@@ -16,6 +16,7 @@ copies of production data.
 | Calling and genotyping | D1-D7 | all confirmed as implemented (2026-10-07) |
 | IS6110 | D8-D10 | all confirmed as implemented; D8's alternative (key by the nearest single-copy node) tracked for the new build in HANDOFF 0q (2026-10-07) |
 | Ancestral states and outgroup | D11-D14 | all confirmed as implemented (2026-10-07) |
+| Association tests | D15-D19 | D15, D16, D17, D19 confirmed. **D18 switched:** credit a point variant to every overlapping gene (consistent with D40 and SV deletions). To implement (2026-10-07) |
 | Node-frame alleles | D41 | option b, done on `audit-fixes` (2026-10-06) |
 
 ## Calling and genotyping (P4-P5)

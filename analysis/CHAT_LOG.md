@@ -555,3 +555,22 @@ Next is group 3, ancestral states (D11-D14).
   lacks the site, so it carries no element there.
 
 Next is group 4, association tests (D15-D19).
+
+---
+
+## 2026-10-07: group 4, association tests (D15-D19)
+
+**Confirmed:**
+
+- **D15:** the all-three-nulls survivor rule;
+- **D16:** any overlap credits a gene for a deletion;
+- **D17:** burdens use the 80% callability floor;
+- **D19:** each cohort is tiered from its own genotypes.
+
+**Switched, D18:** a point variant in overlapping genes is credited to every
+gene, not just the earlier-starting one. That matches D40 and SV deletions.
+
+The code change is queued with any other switched decisions, to be made one
+at a time after the review.
+
+Next is group 5, reference selection and the graph VCF (D20-D24).
