@@ -499,3 +499,12 @@ P4 on all 199 scale200 samples.
 Yes. Every substantive turn gets an entry here. The two headings above were
 brought into the same format as the earlier ones, with commit references.
 It is now committed on main (the user asked, 2026-10-07).
+
+---
+
+## 2026-10-07: chat log and audit folder committed to main
+
+- Chat log: b6bf039.
+- `analysis/audit/` (19 Markdown files, including DECISIONS.md and
+  D41_EXPLAINED.md): committed next.
+- The rest of `analysis/` stays uncommitted.
