@@ -605,3 +605,19 @@ Next is group 6, the graph build (D25-D27).
 - **D27:** `--rank-by` is required.
 
 Next is group 7, panel construction (D28-D33).
+
+---
+
+## 2026-10-07: group 7, panel construction (D28-D33)
+
+**Confirmed:** D28, D30, D31 and D33.
+
+**D29 confirmed, with an addition:** a UniVec vector check. You approved the
+download, which I'll do when implementing it.
+
+**Switched, D32:** the foreign-screen background is chosen by quality, using
+the same ranking rule as D27.
+
+**Queue:** D18, D20/D24, D21, D22, the UniVec check, D32.
+
+Next is group 8, build safety (D34-D38).
