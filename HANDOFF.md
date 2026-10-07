@@ -2020,6 +2020,15 @@ There are also about 20 LOW items in the reports.
     - record each node's ancestral orientation as an annotation.
   - **When:** with the new panel and graph build, since node ids are
     graph-specific. Not started.
+- **New item (D8, tracked at the user's request, 2026-10-07): key IS6110
+  insertions on repeated nodes by the nearest single-copy node.**
+  - Today, insertions on a node the carrier's own path visits more than
+    once are not keyed: scale200 drops 456 of 772 node-frame rows and
+    gwas1000 1,945 of 3,585. Keying them by the repeated node merged sites
+    more than 1.1 Mb apart (`node:46966:0`).
+  - **Plan:** key each such insertion by the nearest flanking node that the
+    path visits once, with the offset measured from it.
+  - **When:** with the new panel and graph build. Not started.
 - **Waiting on the user before the merge:**
   - the 44 decisions in `analysis/audit/DECISIONS.md` (D41 is decided: b);
   - the canettii isolate;

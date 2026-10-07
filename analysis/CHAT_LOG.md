@@ -526,3 +526,18 @@ than guessing:
 
 They are recorded in a new answers table at the top of DECISIONS.md. Next is
 group 2, IS6110 (D8-D10).
+
+---
+
+## 2026-10-07: group 2, IS6110 (D8-D10)
+
+**You confirmed all three as implemented.**
+
+- **D8:** insertions on repeated nodes are not keyed.
+- **D9:** at sites where H37Rv has a copy, non-carriers are NOCALL.
+- **D10:** conflicting duplicate rows stop with an error.
+
+**Tracked for the new graph build:** keying D8's insertions by the nearest
+single-copy node. It is listed in HANDOFF 0q beside the AA item.
+
+Next is group 3, ancestral states (D11-D14).
