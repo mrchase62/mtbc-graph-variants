@@ -819,3 +819,28 @@ guards).
   the scale200 rerun will need a new registry row with new output folders.
 
 **Tests:** 360 pass (4 old tests rewritten, 6 added). Next: fix 8 (D43).
+
+## 2026-10-07: fix 8 done; all 8 queued fixes complete (audit-fixes 1b359b6)
+
+**User:** "yes, start on fix 8".
+
+- **D43:** a catalogue input that is named but missing now stops the run,
+  in `merge_catalogues.py` and in P0 (whose input record wrote a missing
+  path as "absent", the same as none).
+- **Real data:** with CX333's real insgt tables the catalogue is
+  byte-identical. With a typo, the old code exited 0 and dropped the insgt
+  cluster from 214 of 802 loci.
+
+**Tests:** 364 pass.
+
+**All 8 queued fixes are done.** Each one's measured effect is in
+`analysis/audit/FIX_EFFECTS.md`.
+
+**Still waiting on the user:**
+
+- the canettii isolate (ASSOC-1);
+- R2-TREES-6;
+- the merge of `audit-fixes` into main.
+
+**Then:** the new panel and graph build, then the scale200 rerun into new
+output folders, with a cost estimate first.

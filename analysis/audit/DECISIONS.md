@@ -56,7 +56,9 @@ copies of production data.
    adopted. A folder without `.mtb_build` is refused, and an unmarked sample
    is made again. All 8 production cohort roots lack a record, so the rerun
    needs new output folders.
-8. D43: a catalogue input path that is given but missing is fatal.
+8. **Done (1b359b6):** D43: a catalogue input path that is named but missing
+   stops the run, in `merge_catalogues.py` and in P0. With a typo the old
+   code dropped the insgt cluster from 214 of 802 loci without an error.
 
 Still with the user, outside this file: ASSOC-1 (the canettii isolate) and
 R2-TREES-6.

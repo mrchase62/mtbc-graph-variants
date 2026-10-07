@@ -25,6 +25,7 @@ rerunning with that fix off.
 | Fix 5 (D29): UniVec vector check in the foreign screen | panel QC (which genomes are reviewed) | a construct shared by 2+ genomes could pass as native | — | — (panel: of 2,703 inserts, exactly the 2 known constructs flagged VECTOR) |
 | Fix 6 (D32): foreign-screen background chosen by quality | panel QC (the screen's background) | each sublineage's background genome was the first accession, not the best | — | — (CX333: 44 of 65 slots have a choice; the effect depends on the new panel's score file) |
 | Fix 7 (D38): no adoption of outputs from before the build records | run safety (P1, P2, accessory presence, the chain runner) | old outputs could be reused when their stamps looked right | — | — (no result changes; all 8 cohort roots lack a record, so reruns go to new folders) |
+| Fix 8 (D43): a named but missing catalogue input is fatal | graph build (accessory catalogue) | a mistyped path was read as none | — | — (real inputs: output identical; a typo used to drop the insgt cluster from 214 of 802 loci silently) |
 
 ## D41: one event, one key (scale200, P4 rerun on all 199 samples)
 
@@ -275,11 +276,26 @@ it reused them if their stamps looked right:
 All 8 production cohort folders lack a build record, so the post-fix rerun
 writes to new folders, which means a new row in the cohort registry.
 
+## Fix 8: a named but missing catalogue input stops the run (D43)
+
+**Problem.** The accessory catalogue merge treated a mistyped path to its
+optional tables (insgt clusters, routing, a census) as "none", and P0's
+input record wrote such a path as "absent", the same as unset. The run then
+succeeded with the columns silently empty.
+
+**New rule:** an empty value still means none, but a named path must exist.
+This is checked in the merge and in P0 before it decides whether the step
+is already done.
+
+**Measured effect** on CX333's inputs:
+
+- with the real insgt tables, the catalogue is byte-identical to before;
+- with a typo in the clusters path, the old code exited successfully and
+  dropped the insgt cluster from 214 of 802 loci; now it stops.
+
 ## Still to come
 
-**Fix 8**, to be added here when done:
-
-- D43: a missing catalogue path stops with an error.
+All 8 queued fixes are done.
 
 **Part 2 (after the scale200 rerun):** old vs new for:
 

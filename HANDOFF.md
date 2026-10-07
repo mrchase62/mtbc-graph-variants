@@ -43,12 +43,17 @@ fixes, with tests) were approved on 2026-10-05.
 
 - **Every audit fix is on branch `audit-fixes`** (283 tests), not yet in
   main. The current association results remain provisional.
-- **The 44 decisions are answered (2026-10-07).** Ten are switched or added;
-  the queue of 8 fixes is at the top of `analysis/audit/DECISIONS.md`.
+- **The 44 decisions are answered (2026-10-07), and all 8 queued decision
+  fixes are done on `audit-fixes`** (364 tests; list at the top of
+  `analysis/audit/DECISIONS.md`). Each fix's measured effect on current
+  outputs is in `analysis/audit/FIX_EFFECTS.md`.
 - **Step 4 is done:** section 0q lists 12 items to fix before any rerun.
-  **All 12 are fixed on `audit-fixes`, and D41 (b)** (308 tests). Before
-  the merge into main: the 8 queued decision fixes, and the user's answers
-  on the canettii isolate and R2-TREES-6.
+  **All 12 are fixed on `audit-fixes`, and D41 (b).** Before the merge into
+  main: the user's answers on the canettii isolate and R2-TREES-6.
+- **For the rerun (D38):** every production cohort folder lacks a build
+  record, so a rerun needs new output folders (a new row in
+  `refbias/cohorts.tsv`). The new graph build needs `bin/fetch_univec.sh`
+  run once and `--rank-by` for the foreign screen (`docs/PANEL_BUILD.md`).
 - **Then:** the new panel, graph and build, then scale200 first.
 
 **Before anything else after downtime:**
