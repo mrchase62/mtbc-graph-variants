@@ -162,6 +162,11 @@ mtb_require_cram_root() {
 # an undefined variable became an empty argument.
 : "${MTB_K8:=${HOME}/bin/k8}"
 : "${MTB_PAFTOOLS:=${HOME}/bin/paftools.js}"
+# BLAST+ for the foreign screen's UniVec check (D29); not in the QC env
+: "${MTB_BLASTN:=/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/autocycler/bin/blastn}"
+: "${MTB_MAKEBLASTDB:=/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/autocycler/bin/makeblastdb}"
+# NCBI UniVec_Core, fetched into the repository's data/ by bin/fetch_univec.sh
+: "${MTB_UNIVEC:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/data/univec/UniVec_Core}"
 
 : "${MTB_SNPEFF_JAR:=/n/boslfs02/LABS/sfortune_lab/Lab/mchase/snpEff/snpEff.jar}"
 : "${MTB_JAVA:=/n/boslfs02/LABS/sfortune_lab/Lab/software/jdk-20.0.1/bin/java}"
@@ -353,6 +358,7 @@ mtb_show_config() {
              MTB_REF_FASTA MTB_REF_PATH MTB_H37RV MTB_OUTGROUP \
              MTB_SNPEFF_JAR MTB_JAVA MTB_SNPEFF_DB MTB_PY MTB_PY_VT MTB_ODGI MTB_MINIMAP2 \
              MTB_SAMTOOLS MTB_BGZIP MTB_TABIX MTB_BEDTOOLS MTB_BCFTOOLS MTB_K8 MTB_PAFTOOLS \
+             MTB_BLASTN MTB_MAKEBLASTDB MTB_UNIVEC \
              MTB_BWA MTB_WGSIM MTB_GATK_SIF MTB_DELLY_ENV \
              MTB_CRAM_ROOT MTB_CRAM_REF MTB_BUILD_DIR MTB_GRAPH_FRAMES \
              MTB_THREADS MTB_PARTITION; do

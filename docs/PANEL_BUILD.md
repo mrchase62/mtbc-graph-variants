@@ -88,6 +88,7 @@ GCF_000195835 (mummer/soapdenovo).
 $MTB_PY bin/foreign_insertion_screen.py --accessions $Q/accessions.txt \
     --assembly-dir data/rotated --ref data/ref/H37Rv.fasta \
     --lineages $Q/lineages.all.tsv --is6110 data/annotation/IS6110.fasta \
+    --univec "$MTB_UNIVEC" --blastn "$MTB_BLASTN" --makeblastdb "$MTB_MAKEBLASTDB" \
     --minimap2 "$MTB_MINIMAP2" --k8 "$MTB_K8" --paftools "$MTB_PAFTOOLS" \
     --threads 8 --workdir $Q/work_foreign --out $Q/foreign_insertions.tsv
 ```
@@ -106,6 +107,15 @@ an insert carried by only one other genome is `REVIEW_one_homologue`, so two
 genomes with the same construct no longer pass each other; every non-native
 insert is re-checked with the frequency filter off and against IS6110
 (`final_verdict`: `native_is6110`, `native_recheck`). Read `final_verdict`.
+
+Every insert, native or not, is also searched against NCBI's UniVec_Core with
+VecScreen's blastn settings (D29; fetch it once with `bash
+bin/fetch_univec.sh`, which records the build and checksum). A strong VecScreen
+match makes `final_verdict` `VECTOR`; `univec_strong_bp` and `univec_hit` say
+how much and what. On CX333's 449 inserts and the external assemblies' 2,254
+it flags exactly the two known constructs (GCF_044324775, pJEB; GCF_021535155,
+attB vector) and nothing else. Like every screen here it flags for review and
+does not exclude by itself (D31).
 M. canettii's divergent sequence still reads FOREIGN; review it by hand.
 
 ## 1f. Lineage

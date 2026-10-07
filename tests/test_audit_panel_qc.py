@@ -247,6 +247,77 @@ class ForeignScreen(unittest.TestCase):
         self.assertEqual(self.m.check_background(f"{d}/big.fa", 5), {f"G{i}" for i in range(5)})
 
 
+BLASTN = os.environ.get(
+    "MTB_BLASTN", "/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/autocycler/bin/blastn")
+MAKEBLASTDB = os.path.join(os.path.dirname(BLASTN), "makeblastdb")
+
+
+class UniVecCheck(unittest.TestCase):
+    """The user's decision D29 (2026-10-07): every insert is also searched
+    against UniVec_Core, VecScreen's way, because the homologue rule cannot
+    see a construct that two genomes share."""
+
+    def setUp(self):
+        self.m = load("foreign_insertion_screen_uv", "bin/foreign_insertion_screen.py")
+
+    def test_vecscreen_thresholds(self):
+        st = self.m.vecscreen_strength
+        self.assertEqual(st(30, 400, 450, 5000), "strong")      # internal
+        self.assertEqual(st(29, 400, 450, 5000), "moderate")
+        self.assertEqual(st(24, 1, 30, 5000), "strong")         # terminal
+        self.assertEqual(st(24, 4970, 5000, 5000), "strong")
+        self.assertEqual(st(24, 400, 450, 5000), "weak")        # internal weak: 23-24
+        self.assertEqual(st(22, 400, 450, 5000), "")
+        self.assertEqual(st(19, 26, 60, 5000), "")
+        self.assertEqual(st(19, 25, 60, 5000), "moderate")
+
+    def test_strong_hits_merged_per_insert(self):
+        lines = ["I|1|5000|indel\tv1\t100\t600\t500\t5000\tvector A\n",
+                 "I|1|5000|indel\tv2\t500\t900\t843\t5000\tvector B\n",
+                 "I|1|5000|indel\tv3\t2000\t2030\t26\t5000\tmoderate only\n",
+                 "J|1|3000|gap\tv3\t2000\t2030\t26\t3000\tmoderate only\n"]
+        self.assertEqual(self.m.univec_hits(lines),
+                         {"I|1|5000|indel": (801, "vector B")})   # 100..900, inclusive
+
+    def test_vector_overrides_native(self):
+        rows = {"I": dict(final_verdict="native", univec_strong_bp=0, univec_hit=""),
+                "J": dict(final_verdict="native", univec_strong_bp=0, univec_hit="")}
+        self.m.apply_univec(rows, {"I": (2295, "Cloning vector pDRIVE")})
+        self.assertEqual(rows["I"]["final_verdict"], "VECTOR")
+        self.assertEqual(rows["I"]["univec_strong_bp"], 2295)
+        self.assertEqual(rows["J"]["final_verdict"], "native")
+
+    @unittest.skipUnless(os.path.exists(BLASTN) and os.path.exists(MAKEBLASTDB),
+                         "no BLAST+")
+    def test_blastn_finds_an_embedded_vector(self):
+        import random
+        rnd = random.Random(7)
+        seq = lambda n: "".join(rnd.choice("ACGT") for _ in range(n))  # noqa: E731
+        vec = seq(400)
+        with tempfile.TemporaryDirectory() as d:
+            write(f"{d}/uv.fa", f">gnl|uv|TEST:1-400 test vector\n{vec}\n")
+            write(f"{d}/ins.fa", f">A|1|3000|indel\n{seq(1300)}{vec}{seq(1300)}\n"
+                                 f">B|1|3000|gap\n{seq(3000)}\n")
+            subprocess.run([MAKEBLASTDB, "-in", f"{d}/uv.fa", "-dbtype", "nucl",
+                            "-out", f"{d}/uv"], check=True, capture_output=True)
+            out = subprocess.run([BLASTN] + self.m.VECSCREEN
+                                 + ["-db", f"{d}/uv", "-query", f"{d}/ins.fa",
+                                    "-outfmt", self.m.BLAST_FMT],
+                                 check=True, capture_output=True, text=True).stdout
+        hits = self.m.univec_hits(out.splitlines())
+        self.assertEqual(list(hits), ["A|1|3000|indel"])
+        self.assertEqual(hits["A|1|3000|indel"][0], 400)
+
+    def test_failed_alignment_is_fatal_not_empty(self):
+        with tempfile.TemporaryDirectory() as d:
+            mm2 = write(f"{d}/mm2", "#!/bin/sh\necho 'no such ref' >&2\nexit 1\n")
+            os.chmod(mm2, 0o755)
+            with self.assertRaises(SystemExit) as e:
+                self.m.extract_inserts("G", "a.fa", "missing.fa", mm2, "k8", "p.js",
+                                       1000, 5000, io.StringIO())
+        self.assertIn("minimap2 failed on G", str(e.exception))
+
+
 class SingleBaseRuns(unittest.TestCase):
     """PGB-7a: a pure run of >= 100 bp is flagged, 99 is not."""
 

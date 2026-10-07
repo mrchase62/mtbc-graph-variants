@@ -64,12 +64,30 @@ REQUIRED: each insert's best hit is to the genome it came from, and with
 The workdir records its inputs (inputs.key); a workdir written for different
 accessions, settings or background is refused rather than reused (PGB-5f).
 
+THE VECTOR CHECK (the user's decision D29, 2026-10-07). The homologue rule
+cannot see a construct that two genomes share; REVIEW_one_homologue catches
+two, not three. So every insert, native or not, is also searched against
+NCBI's UniVec_Core (--univec; bin/fetch_univec.sh) the way VecScreen does it:
+blastn -task blastn -reward 1 -penalty -5 -gapopen 3 -gapextend 3 -dust yes
+-soft_masking true -evalue 700 -searchsp 1750000000000, and a hit is STRONG at
+score >= 30, or >= 24 within 25 bases of either end of the insert. Any strong
+hit makes final_verdict VECTOR, whatever the homologue rule said;
+univec_strong_bp is the insert bases those hits cover. Measured on the
+inserts of CX333 (449) and of the 156 external assemblies (2,254): strong
+hits on exactly the two known constructs, GCF_044324775's pJEB integration
+(2,295 bp) and GCF_021535155's attB vector (2,107 bp), and on nothing else;
+no moderate hit either.
+
 The outgroup is not exempted here: M. canettii's divergent sequence reads
 FOREIGN and is reviewed by hand (QC_PIPELINE.md 1.4).
 """
 import argparse, collections, csv, hashlib, os, subprocess, sys
 
 ASM10 = ["-cx", "asm10", "--secondary=yes", "-N", "100", "-p", "0.05"]
+VECSCREEN = ["-task", "blastn", "-reward", "1", "-penalty", "-5", "-gapopen", "3",
+             "-gapextend", "3", "-dust", "yes", "-soft_masking", "true",
+             "-evalue", "700", "-searchsp", "1750000000000"]
+BLAST_FMT = "6 qseqid sseqid qstart qend score qlen stitle"
 
 
 def read_fasta(path):
@@ -121,6 +139,11 @@ def extract_inserts(acc, asm, ref, mm2, k8, paftools, min_len, min_block, out_fh
     """Write every insert >= min_len as >acc|ref_pos|len|source. Returns the count."""
     res = subprocess.run([mm2, "-cx", "asm5", "--cs", "-t", "2", ref, asm],
                          capture_output=True, text=True)
+    # a failed alignment (a missing --ref) read as "no inserts" and was then
+    # marked done, so a rerun in the workdir reused the empty result
+    if res.returncode != 0:
+        sys.exit(f"FATAL: minimap2 failed on {acc} (exit {res.returncode}):\n"
+                 f"{res.stderr[-2000:]}")
     paf = res.stdout
     if paf_path:
         with open(paf_path, "w") as fh:
@@ -200,6 +223,46 @@ def recheck_verdict(length, verdict, per_genome, is_bp, min_genomes):
     return verdict
 
 
+def vecscreen_strength(score, qs, qe, qlen):
+    """VecScreen's match categories: terminal = within 25 bases of an end."""
+    terminal = min(qs, qe) <= 25 or max(qs, qe) >= qlen - 24
+    for name, t, i in (("strong", 24, 30), ("moderate", 19, 25), ("weak", 16, 23)):
+        if score >= (t if terminal else i):
+            return name
+    return ""
+
+
+def univec_hits(blast_lines):
+    """{insert: (strong bp covered, best strong hit title)} from BLAST_FMT
+    output; inserts with no strong hit are absent."""
+    iv, best = collections.defaultdict(list), {}
+    for l in blast_lines:
+        f = l.rstrip("\n").split("\t")
+        if len(f) < 7:
+            continue
+        q, qs, qe, sc, ql = f[0], int(f[2]), int(f[3]), int(float(f[4])), int(f[5])
+        if vecscreen_strength(sc, qs, qe, ql) != "strong":
+            continue
+        iv[q].append((min(qs, qe), max(qs, qe)))
+        if q not in best or sc > best[q][0]:
+            best[q] = (sc, f[6])
+    out = {}
+    for q, xs in iv.items():
+        xs.sort(); tot, end = 0, 0
+        for s, e in xs:
+            if e > end:
+                tot += e - max(s, end + 1) + 1; end = e
+        out[q] = (tot, best[q][1])
+    return out
+
+
+def apply_univec(rows, hits):
+    """A strong UniVec hit makes an insert VECTOR, native or not."""
+    for q, (bp, hit) in hits.items():
+        if q in rows:
+            rows[q].update(univec_strong_bp=bp, univec_hit=hit, final_verdict="VECTOR")
+
+
 def background_from_lineages(accs, lineages):
     """one accession per sublineage (first in sorted order), plus every
     accession with no call"""
@@ -249,6 +312,12 @@ def main():
     ap.add_argument("--max-background", type=int, default=120)
     ap.add_argument("--is6110", required=True,
                     help="canonical IS6110 FASTA, for the re-check")
+    ap.add_argument("--univec", required=True,
+                    help="NCBI UniVec_Core FASTA (bin/fetch_univec.sh), for the "
+                         "vector check every insert gets (D29)")
+    ap.add_argument("--blastn", default=os.environ.get("MTB_BLASTN", "blastn"))
+    ap.add_argument("--makeblastdb",
+                    default=os.environ.get("MTB_MAKEBLASTDB", "makeblastdb"))
     ap.add_argument("--min-len", type=int, default=1000)
     ap.add_argument("--min-block", type=int, default=5000)
     ap.add_argument("--max-foreign-frac", type=float, default=0.10,
@@ -288,8 +357,11 @@ def main():
     samples = check_background(bg, a.max_background)
     print(f"  background: {len(samples)} genomes ({bg})")
 
+    with open(a.univec, "rb") as fh:
+        uv_sha = hashlib.sha256(fh.read()).hexdigest()
     key = hashlib.sha256("\n".join(
-        [a.ref, a.assembly_dir, a.assembly_suffix, str(a.min_len), str(a.min_block)]
+        [a.ref, a.assembly_dir, a.assembly_suffix, str(a.min_len), str(a.min_block),
+         uv_sha]
         + accs + sorted(samples)).encode()).hexdigest()
     kpath = os.path.join(a.workdir, "inputs.key")
     ins_fa = os.path.join(a.workdir, "inserts.fa")
@@ -335,7 +407,8 @@ def main():
                        best_homologue_bp=best, best_homologue_genome=g,
                        n_homologue_genomes=n, frac=round(best / max(ln, 1), 4),
                        verdict=v, recheck_best_bp="", recheck_n_genomes="",
-                       is6110_bp="", final_verdict=v)
+                       is6110_bp="", univec_strong_bp=0, univec_hit="",
+                       final_verdict=v)
 
     todo = [q for q, r in rows.items() if r["verdict"] != "native"]
     if todo:
@@ -359,6 +432,16 @@ def main():
             r["is6110_bp"] = isb
             r["final_verdict"] = recheck_verdict(r["insert_len"], r["verdict"], pg, isb,
                                                  a.min_homologue_genomes)
+
+    # every insert against UniVec, native ones included (D29)
+    udb = os.path.join(a.workdir, "univec")
+    subprocess.run([a.makeblastdb, "-in", a.univec, "-dbtype", "nucl", "-out", udb],
+                   capture_output=True, text=True, check=True)
+    ub = subprocess.run([a.blastn] + VECSCREEN + ["-db", udb, "-query", ins_fa,
+                                                  "-num_threads", str(a.threads),
+                                                  "-outfmt", BLAST_FMT],
+                        capture_output=True, text=True, check=True).stdout.splitlines()
+    apply_univec(rows, univec_hits(ub))
 
     out = sorted(rows.values(), key=lambda r: (r["final_verdict"].startswith("native"),
                                                -r["insert_len"]))
