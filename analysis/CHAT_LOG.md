@@ -541,3 +541,17 @@ group 2, IS6110 (D8-D10).
 single-copy node. It is listed in HANDOFF 0q beside the AA item.
 
 Next is group 3, ancestral states (D11-D14).
+
+---
+
+## 2026-10-07: group 3, ancestral states (D11-D14)
+
+**You confirmed all four as implemented.**
+
+- **D11:** an uncalled outgroup is N.
+- **D12:** `*` and sibling-allele samples count as missing.
+- **D13:** panel allele frequency comes from genotypes.
+- **D14:** the H37Rv tip stays REF at node-frame IS6110 records. H37Rv
+  lacks the site, so it carries no element there.
+
+Next is group 4, association tests (D15-D19).
