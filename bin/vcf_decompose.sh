@@ -11,7 +11,7 @@
 # Produce ONE VCF containing SNPs, indels AND structural variants, genotyped
 # across every path in the graph.
 #
-#   sbatch bin/vcf_decompose.sh <graph-dir-name> [--max-allele N] [--chunk N]
+#   sbatch bin/vcf_decompose.sh <graph-dir-name> --ref H37RV_FASTA [--max-allele N] [--chunk N]
 #
 # This is the step the 2025 pipeline was missing. It ran `vg deconstruct` and
 # then filtered to `LV=0 && strlen < 200`, which discards every structural
@@ -26,8 +26,8 @@
 #                          SNPs / indels / SVs, keeping genotypes (records with
 #                          an allele over 5 kb always at -I 1000; see below)
 #   bcftools sort          -> all_variants.decomposed.vcf.gz (intermediate)
-#   bin/vcf_collapse.sh    trim, one record per allele, union genotypes
-#                          -> all_variants.collapsed.vcf.gz (THE PRODUCT)
+#   bin/vcf_collapse.sh    left-align, trim, one record per allele, union
+#                          genotypes -> all_variants.collapsed.vcf.gz (THE PRODUCT)
 #
 # all_variants.collapsed.vcf.gz is what every downstream reader should take.
 # The decomposed file holds one record per vcfwave allele: the same
@@ -97,6 +97,7 @@ FALLBACK_I=1000
 CHUNK=5000            # records per vcfwave chunk
 JOBS="${SLURM_CPUS_PER_TASK:-8}"
 IN_VCF=""
+REF_FA="${MTB_REF_FASTA:-}"   # H37Rv, for vcf_collapse.sh's left-alignment (D22)
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -106,6 +107,7 @@ while [[ $# -gt 0 ]]; do
         --chunk)      CHUNK="$2";      shift 2 ;;
         --jobs)       JOBS="$2";       shift 2 ;;
         --input)      IN_VCF="$2";     shift 2 ;;
+        --ref)        REF_FA="$2";     shift 2 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -117,6 +119,11 @@ if [[ -z "${IN_VCF:-}" ]]; then
     else IN_VCF="${GRAPH_DIR}/variants.vcf"; fi
 fi
 mtb_require_file "$MTB_PGGB_SIF" "$IN_VCF"
+# checked now, and made absolute before the cd below: the collapse at the end
+# of a long run must not be the first to find it missing
+[[ -n "$REF_FA" && -r "$REF_FA" ]] || {
+    echo "FATAL: the collapse step left-aligns against H37Rv: pass --ref FASTA (or set MTB_REF_FASTA)" >&2; exit 1; }
+REF_FA="$(readlink -f "$REF_FA")"
 
 WORKDIR="${GRAPH_DIR}/decompose"
 mkdir -p "$WORKDIR/chunks" "$WORKDIR/sort_tmp"
@@ -198,7 +205,7 @@ mtb_bcftools index -t "$OUT"
 echo "### [5/5] collapsing duplicate alleles and refilling AC/AN/AF"
 COLLAPSED="${GRAPH_DIR}/all_variants.collapsed.vcf.gz"
 bash "$COLLAPSE_SH" "$GRAPH_NAME" \
-    --in "$OUT" --out "$COLLAPSED"
+    --in "$OUT" --out "$COLLAPSED" --ref "$REF_FA"
 echo "    $(mtb_bcftools index -n "$OUT") -> $(mtb_bcftools index -n "$COLLAPSED") records"
 
 echo

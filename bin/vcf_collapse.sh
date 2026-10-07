@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Collapse duplicate allele records left behind by vcfwave, and refill AC/AN/AF.
 #
-#   bin/vcf_collapse.sh <graph-dir-name> [--in FILE] [--out FILE]
+#   bin/vcf_collapse.sh <graph-dir-name> [--in FILE] [--out FILE] [--ref H37RV_FASTA]
 #
 # WHY THIS IS NEEDED
 #
@@ -22,6 +22,7 @@
 # THE FIX
 #
 #   norm -m -any    split the few multiallelic records to biallelic
+#   norm -f H37Rv   left-align every indel (D22, below)
 #   COLLAPSE_PY     trim each allele to its minimal REF/ALT (shared suffix, then
 #                   shared prefix down to one anchor base), then write ONE
 #                   record per (CHROM, POS, REF, ALT) with each sample's GT the
@@ -53,8 +54,16 @@
 # downstream reader. all_variants.decomposed.vcf.gz is vcfwave's per-allele
 # intermediate: the same key can appear in several records with the carriers
 # split between them, and a reader that does not union them reads wrong
-# genotypes (audit Fault A / GRAPHVCF-1). Not left-aligned: POS is vcfwave's,
-# trimmed.
+# genotypes (audit Fault A / GRAPHVCF-1).
+#
+# LEFT-ALIGNED, THEN COLLAPSED (the user's decision D22, 2026-10-07). POS was
+# vcfwave's, trimmed, while every cohort key is left-aligned (bin/mtb_norm.py),
+# so an indel in a repeat was one event under two positions: the graph's and
+# the cohort's, and P5's panel_af lookup came back blank for it. In CX333
+# `norm -f` moves 8,934 of 93,214 records, and 41 events that vcfwave wrote at
+# two positions become one key. Left-aligning before the union merges those
+# 41 in the same pass. --ref is H37Rv (any header: it is renamed to the VCF's
+# one contig, and its length must match); REF must agree with it.
 set -euo pipefail
 
 # --- locate config/project_env.sh -----------------------------------------
@@ -75,10 +84,12 @@ GRAPH_DIR="${MTB_GRAPHS}/${GRAPH_NAME}"; shift
 
 IN="${GRAPH_DIR}/all_variants.decomposed.vcf.gz"
 OUT="${GRAPH_DIR}/all_variants.collapsed.vcf.gz"
+REF_FA="${MTB_REF_FASTA:-}"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --in)  IN="$2";  shift 2 ;;
         --out) OUT="$2"; shift 2 ;;
+        --ref) REF_FA="$2"; shift 2 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -102,8 +113,9 @@ for line in sys.stdin:
     if line.startswith("##"):
         sys.stdout.write(line); continue
     if line.startswith("#"):
-        sys.stdout.write("##MTB_collapse=alleles trimmed to minimal REF/ALT; one "
-                         "record per CHROM/POS/REF/ALT; GT union (1 over 0 over .)\n")
+        sys.stdout.write("##MTB_collapse=indels left-aligned against H37Rv; alleles "
+                         "trimmed to minimal REF/ALT; one record per "
+                         "CHROM/POS/REF/ALT; GT union (1 over 0 over .)\n")
         sys.stdout.write(line); continue
     f = line.rstrip("\n").split("\t")
     if "," in f[4]:
@@ -144,7 +156,22 @@ echo "    in  : $IN  ($(mtb_bcftools index -n "$IN" 2>/dev/null || echo '?') rec
 
 SORT_TMP="$(mktemp -d "${OUT}.sort_tmp.XXXXXX")"
 trap 'rm -rf "$SORT_TMP"' EXIT
+
+# H37Rv under the VCF's contig name (the graph's PanSN path name)
+[[ -n "$REF_FA" && -r "$REF_FA" ]] || {
+    echo "FATAL: left-alignment needs H37Rv: --ref FASTA (or MTB_REF_FASTA); got '${REF_FA}'" >&2; exit 1; }
+mapfile -t CTG < <(mtb_bcftools view -h "$IN" | sed -n 's/^##contig=<ID=\([^,>]*\).*length=\([0-9]*\).*/\1\t\2/p')
+[[ "${#CTG[@]}" -eq 1 ]] || { echo "FATAL: ${IN} has ${#CTG[@]} contig lines; expected H37Rv's one" >&2; exit 1; }
+CTG_NAME="${CTG[0]%%$'\t'*}"; CTG_LEN="${CTG[0]##*$'\t'}"
+REF_RN="${SORT_TMP}/h37rv.fa"
+awk -v n="$CTG_NAME" '/^>/{if (++k > 1) exit 3; print ">" n; next} {print}' "$REF_FA" > "$REF_RN" \
+    || { echo "FATAL: ${REF_FA} holds more than one sequence; expected H37Rv alone" >&2; exit 1; }
+REF_LEN="$(grep -v '^>' "$REF_RN" | tr -d '\n\r' | wc -c)"
+[[ "$REF_LEN" -eq "$CTG_LEN" ]] || {
+    echo "FATAL: ${REF_FA} is ${REF_LEN} bp; ${IN}'s contig ${CTG_NAME} is ${CTG_LEN}" >&2; exit 1; }
+
 mtb_bcftools norm -m -any "$IN" -Ov \
+  | mtb_bcftools norm --check-ref e -f "$REF_RN" -Ov - \
   | "$MTB_PY" -c "$COLLAPSE_PY" \
   | mtb_bcftools sort -m 2G -T "$SORT_TMP" -Ou - \
   | mtb_bcftools +fill-tags -Oz -o "$OUT" -- -t AC,AN,AF
@@ -154,7 +181,11 @@ mtb_bcftools index -f -t "$OUT"
 # change upstream of the trim (or in the sort) cannot break it silently.
 NDUP="$(mtb_bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\n' "$OUT" | sort | uniq -d | wc -l)"
 [[ "$NDUP" -eq 0 ]] || { echo "FATAL: ${NDUP} duplicate (CHROM,POS,REF,ALT) keys in ${OUT}" >&2; exit 1; }
+# and every indel left-aligned: a second pass moves nothing
+NMOVE="$(mtb_bcftools norm -f "$REF_RN" "$OUT" -Ou 2>&1 >/dev/null \
+    | awk -F'\t' '/^Lines/{split($2, a, "/"); print a[4]}')"
+[[ "$NMOVE" == "0" ]] || { echo "FATAL: ${NMOVE:-?} records of ${OUT} are not left-aligned" >&2; exit 1; }
 
-echo "    out : $OUT  ($(mtb_bcftools index -n "$OUT") records, 0 duplicate keys)"
+echo "    out : $OUT  ($(mtb_bcftools index -n "$OUT") records, 0 duplicate keys, left-aligned)"
 echo
 echo "Now re-split classes:  bin/vcf_split_classes.sh ${GRAPH_NAME} --in ${OUT}"

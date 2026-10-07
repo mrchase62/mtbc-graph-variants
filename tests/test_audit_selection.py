@@ -208,6 +208,30 @@ def collapse_py():
     return m.group(1)
 
 
+# bcftools for the end-to-end collapse tests: the host's, or the lab's conda
+# one (MTB_BCFTOOLS_DIR overrides), put on PATH for the script
+BCF_DIR = os.environ.get("MTB_BCFTOOLS_DIR") or next(
+    (d for d in ("/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/mtb_isolates/bin",)
+     if os.path.exists(os.path.join(d, "bcftools"))), "")
+HAVE_BCF = bool(shutil.which("bcftools") or BCF_DIR)
+
+
+def bcf_env():
+    return dict(os.environ, PATH=BCF_DIR + os.pathsep + os.environ["PATH"]
+                if BCF_DIR else os.environ["PATH"])
+
+
+def ref_fasta(path, bases, length=1000, fill="T"):
+    """A one-contig FASTA for the collapse's left-alignment; `bases` is
+    {1-based pos: sequence}."""
+    seq = list(fill * length)
+    for p, b in bases.items():
+        seq[p - 1:p - 1 + len(b)] = b
+    with open(path, "w") as fh:
+        fh.write(">anything\n" + "".join(seq) + "\n")
+    return path
+
+
 def parse_vcf_text(text):
     out = {}
     for line in text.splitlines():
@@ -248,27 +272,95 @@ class CollapseKeepsAllelesTrimmed(unittest.TestCase):
                                capture_output=True, text=True, check=True)
         self.assertEqual(parse_vcf_text(r.stdout), self.WANT)
 
-    @unittest.skipUnless(
-        shutil.which("bcftools") or (
-            shutil.which("singularity")
-            and os.path.exists(os.environ.get("MTB_PGGB_SIF", "")
-                               or "/n/netscratch/sfortune_lab/Lab/mchase/MtbPangenome/containers/pggb_latest.sif")),
-        "no bcftools (host or container)")
+    @unittest.skipUnless(HAVE_BCF, "no bcftools")
     def test_collapse_script_end_to_end(self):
         # the whole script, as the build runs it: no duplicate key, no padded
         # SNP, every carrier kept, AC refilled
         with tempfile.TemporaryDirectory(dir="/tmp") as d:
             src = vcf(os.path.join(d, "in.vcf"), ["s0", "s1", "s2"], self.RECORDS)
+            fa = ref_fasta(os.path.join(d, "h.fa"),
+                           {10: "C", 20: "G", 30: "CGA"})
             out = os.path.join(d, "out.vcf.gz")
             subprocess.run(["bash", "bin/vcf_collapse.sh", "TEST", "--in", src,
-                            "--out", out], check=True, capture_output=True,
-                           text=True)
+                            "--out", out, "--ref", fa], check=True,
+                           capture_output=True, text=True, env=bcf_env())
             text = gzip.open(out, "rt").read()
         got = parse_vcf_text(text)
         self.assertEqual(got, self.WANT)
         info = [l.split("\t")[7] for l in text.splitlines()
                 if l.startswith("c\t10\t")][0]
         self.assertIn("AC=2", info.split(";"))
+
+
+@unittest.skipUnless(HAVE_BCF, "no bcftools")
+class CollapseLeftAligns(unittest.TestCase):
+    """The user's decision D22 (2026-10-07): the graph VCF is left-aligned
+    against H37Rv before the union, so one event vcfwave wrote at two
+    positions is one record, at the position every cohort key uses."""
+
+    # G at 100, then AAAA at 101-104, T at 105
+    BASES = {100: "GAAAA"}
+
+    def collapse(self, d, records, ref=True, bases=None):
+        src = vcf(os.path.join(d, "in.vcf"), ["s0", "s1", "s2"], records)
+        out = os.path.join(d, "out.vcf.gz")
+        cmd = ["bash", "bin/vcf_collapse.sh", "TEST", "--in", src, "--out", out]
+        if ref:
+            cmd += ["--ref", ref_fasta(os.path.join(d, "h.fa"),
+                                       bases or self.BASES)]
+        env = bcf_env()
+        env.pop("MTB_REF_FASTA", None)
+        r = subprocess.run(cmd, capture_output=True, text=True, env=env)
+        return r, (parse_vcf_text(gzip.open(out, "rt").read())
+                   if r.returncode == 0 else None)
+
+    def test_one_deletion_at_two_positions_is_one_record(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as d:
+            r, got = self.collapse(d, [(102, "AA", "A", "", ["1", "0", "0"]),
+                                       (103, "AA", "A", "", ["0", "1", "0"])])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(got, {(100, "GA", "G"): ["1", "1", "0"]})
+
+    def test_insertion_left_aligned(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as d:
+            r, got = self.collapse(d, [(104, "A", "AA", "", ["0", "0", "1"])])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(got, {(100, "G", "GA"): ["0", "0", "1"]})
+
+    def test_snp_untouched(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as d:
+            r, got = self.collapse(d, [(103, "A", "C", "", ["1", "0", "0"])])
+        self.assertEqual(got, {(103, "A", "C"): ["1", "0", "0"]})
+
+    def test_no_reference_is_fatal(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as d:
+            r, _ = self.collapse(d, [(103, "A", "C", "", ["1", "0", "0"])],
+                                 ref=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("left-alignment needs H37Rv", r.stderr)
+
+    def test_ref_disagreeing_with_h37rv_is_fatal(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as d:
+            r, _ = self.collapse(d, [(103, "C", "T", "", ["1", "0", "0"])])
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_wrong_length_reference_is_fatal(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as d:
+            src = vcf(os.path.join(d, "in.vcf"), ["s0"],
+                      [(103, "A", "C", "", ["1"])])
+            fa = os.path.join(d, "h.fa")
+            with open(fa, "w") as fh:
+                fh.write(">x\n" + "A" * 999 + "\n")
+            r = subprocess.run(["bash", "bin/vcf_collapse.sh", "TEST", "--in",
+                                src, "--out", os.path.join(d, "o.vcf.gz"),
+                                "--ref", fa], capture_output=True, text=True,
+                               env=bcf_env())
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("999 bp", r.stderr)
+
+    def test_decompose_passes_the_reference(self):
+        s = open("bin/vcf_decompose.sh").read()
+        self.assertIn('--in "$OUT" --out "$COLLAPSED" --ref "$REF_FA"', s)
 
 
 class DecomposeMatchesProduction(unittest.TestCase):
