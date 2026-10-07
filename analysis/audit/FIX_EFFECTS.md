@@ -24,6 +24,7 @@ rerunning with that fix off.
 | Fix 4 (D22): graph VCF left-aligned, then collapsed | graph VCF (panel_af, inherited half) | indels in repeats at vcfwave's position, not the cohort's | build asset: 8,304 of 93,214 keys move; 49 records fold into 41 keys | same asset |
 | Fix 5 (D29): UniVec vector check in the foreign screen | panel QC (which genomes are reviewed) | a construct shared by 2+ genomes could pass as native | — | — (panel: of 2,703 inserts, exactly the 2 known constructs flagged VECTOR) |
 | Fix 6 (D32): foreign-screen background chosen by quality | panel QC (the screen's background) | each sublineage's background genome was the first accession, not the best | — | — (CX333: 44 of 65 slots have a choice; the effect depends on the new panel's score file) |
+| Fix 7 (D38): no adoption of outputs from before the build records | run safety (P1, P2, accessory presence, the chain runner) | old outputs could be reused when their stamps looked right | — | — (no result changes; all 8 cohort roots lack a record, so reruns go to new folders) |
 
 ## D41: one event, one key (scale200, P4 rerun on all 199 samples)
 
@@ -252,11 +253,32 @@ which will be defined with the new panel's clone-collapse step. Nothing
 changes in current results: the screen is panel QC and runs again with the
 new panel.
 
+## Fix 7: no output from before the build records is reused (D38)
+
+**Problem.** When a stage found outputs from before build markers existed,
+it reused them if their stamps looked right:
+
+- P1 inferred the build from the H37Rv VCF's stamp;
+- P2 checked its VCF's stamp and the GATK reference;
+- the accessory presence tables were reused if newer than the catalogue;
+- the chain runner adopted a whole output folder on a sample of 20 VCF
+  stamps, and the presence folder with no evidence at all.
+
+**New rule:**
+
+- A stage counts a sample as done only when its marker names this build.
+  Anything else is made again.
+- An output folder with files but no build record is refused outright, so
+  old data is never overwritten.
+
+**Effect:** none on results. It changes what a rerun is allowed to reuse.
+All 8 production cohort folders lack a build record, so the post-fix rerun
+writes to new folders, which means a new row in the cohort registry.
+
 ## Still to come
 
-**Fixes 7-8**, each to be added here as it is done:
+**Fix 8**, to be added here when done:
 
-- D38: refuse outputs from before the guards.
 - D43: a missing catalogue path stops with an error.
 
 **Part 2 (after the scale200 rerun):** old vs new for:

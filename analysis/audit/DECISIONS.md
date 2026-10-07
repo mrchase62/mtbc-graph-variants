@@ -52,7 +52,10 @@ copies of production data.
    by `--rank-by` (D27's file and rule), not the first accession. The score
    file itself is defined with the new panel's clone-collapse step. CX333:
    44 of 65 slots have a choice.
-7. D38: refuse all outputs from before the guards.
+7. **Done (6afb220):** D38: no output from before the build records is
+   adopted. A folder without `.mtb_build` is refused, and an unmarked sample
+   is made again. All 8 production cohort roots lack a record, so the rerun
+   needs new output folders.
 8. D43: a catalogue input path that is given but missing is fatal.
 
 Still with the user, outside this file: ASSOC-1 (the canettii isolate) and

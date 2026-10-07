@@ -804,3 +804,18 @@ pick H37Rv now?"; "commit fix 3 when gwas1000 finishes, then start fix 4".
 
 **Tests:** 355 pass. Next: fix 7 (D38, refuse outputs from before the
 guards).
+
+## 2026-10-07: fix 7 done, no adoption of old outputs (audit-fixes 6afb220)
+
+**User:** "yes, start on fix 7".
+
+- **Four reuse paths removed:** P1 (H37Rv VCF stamp), P2 (VCF stamp plus
+  GATK reference), the accessory presence tables (newer than the catalogue)
+  and the chain runner (a folder adopted on 20 VCF stamps; the presence
+  folder on no evidence).
+- **Now:** a sample is done only by its marker; anything else is made
+  again. A folder without a build record is refused.
+- **Real data:** all 8 production cohort folders lack a build record, so
+  the scale200 rerun will need a new registry row with new output folders.
+
+**Tests:** 360 pass (4 old tests rewritten, 6 added). Next: fix 8 (D43).
