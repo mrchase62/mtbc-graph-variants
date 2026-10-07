@@ -654,6 +654,48 @@ class NoOldDefaults(unittest.TestCase):
         self.assertIn("build_info.tsv", c)
 
 
+class CatalogueInputsMustExist(unittest.TestCase):
+    """The user's decision D43 (2026-10-07): a catalogue input that is named
+    but missing stops the run. A mistyped INSGT_* path was read as absent,
+    so the catalogue lost its route columns with no error (review 2)."""
+
+    def merge(self, d, **opt):
+        write(f"{d}/loci.tsv", "locus_id\tpos\tklass\trep_len\tn_alleles\t"
+              "carriers_any\tcarrier_frac\th37rv_cov\tnovelty\n"
+              "ACC_5000\t5000\tpolymorphic\t400\t1\t2\t0.6\t0\tnovel\n")
+        g = vcf_gz(f"{d}/g.vcf.gz", ["A1", "A2"])
+        extra = [x for k, v in opt.items() for x in (f"--{k}", v)]
+        return run([sys.executable, os.path.join(ROOT, "accessory/bin/merge_catalogues.py"),
+                    "--loci", "loci.tsv", "--graph-vcf", g, "--out", "c.tsv",
+                    "--out-fasta", "c.fa", *extra], cwd=d)
+
+    def test_missing_named_inputs_are_fatal(self):
+        for k in ("clusters", "routing", "census"):
+            with tempfile.TemporaryDirectory() as d:
+                r = self.merge(d, **{k: f"{d}/typo.tsv"})
+                self.assertNotEqual(r.returncode, 0, k)
+                self.assertIn(f"--{k} {d}/typo.tsv: no such file", r.stderr)
+                self.assertFalse(os.path.exists(f"{d}/c.tsv"))
+
+    def test_empty_means_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = self.merge(d, clusters="", routing="", census="")
+            self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_existing_input_is_read(self):
+        with tempfile.TemporaryDirectory() as d:
+            write(f"{d}/cl.tsv", "contig\th37rv_pos\nX\t5000\n")
+            r = self.merge(d, clusters=f"{d}/cl.tsv")
+            self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_p0_refuses_a_missing_insgt_path(self):
+        c = code("bin/p0_prepare.sh")
+        i = c.index("step_catalogue() {")
+        body = c[i:c.index("\n}\n", i)]
+        self.assertIn('for _f in "${INSGT_CLUSTERS:-}" "${INSGT_ROUTING:-}"', body)
+        self.assertLess(body.index("does not exist"), body.index("_inputs loci_sha256"))
+
+
 class FrameTableFromTheBuild(unittest.TestCase):
     """graph_frame.Frames read graphframe/results/ (CX333's frame table)
     whenever MTB_GRAPH_FRAMES was unset."""

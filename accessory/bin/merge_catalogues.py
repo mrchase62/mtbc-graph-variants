@@ -57,6 +57,15 @@ def main():
                     help="H37Rv FASTA; with --blastn, writes h37rv_cov95")
     ap.add_argument("--blastn", default="")
     a = ap.parse_args()
+    # EMPTY MEANS NONE; A NAMED PATH MUST EXIST (the user's decision D43,
+    # 2026-10-07). A mistyped path was read as absent, so the catalogue was
+    # written without route or census columns and no error.
+    missing = [f"--{k} {v}" for k, v in (("clusters", a.clusters),
+               ("routing", a.routing), ("census", a.census))
+               if v and not os.path.isfile(v)]
+    if missing:
+        sys.exit(f"FATAL: {'; '.join(missing)}: no such file. Pass an empty "
+                 f"value for none.")
 
     loci = list(csv.DictReader(open(a.loci, newline=""), delimiter="\t"))
     print(f"  {len(loci):,} accessory loci")
@@ -102,10 +111,10 @@ def main():
           f"{len(byloc):,} loci")
 
     clus = list(csv.DictReader(open(a.clusters, newline=""), delimiter="\t")) \
-        if os.path.exists(a.clusters) else []
+        if a.clusters else []
     route = {r["contig"]: r for r in csv.DictReader(
         open(a.routing, newline=""), delimiter="\t")} \
-        if os.path.exists(a.routing) else {}
+        if a.routing else {}
     cl_by_loc = collections.defaultdict(list)
     for r in clus:
         lid = locus_at(int(r["h37rv_pos"]))
@@ -113,7 +122,7 @@ def main():
             cl_by_loc[lid].append(r)
     cen = {r["locus"]: r for r in csv.DictReader(
         open(a.census, newline=""), delimiter="\t")} \
-        if os.path.exists(a.census) else {}
+        if a.census else {}
 
     rows, n_seq = [], 0
     with open(a.out_fasta, "w") as fa:

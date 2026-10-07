@@ -530,7 +530,13 @@ step_assets() {
 step_catalogue() {
     # h37rv_cov95 (review 2, R2-IS-1) is measured against the build's H37Rv
     local h37fa="${BUILD}/refs/${H37RV_ACC}.fasta"
-    local blastn="${MTB_BLASTN:-${MTB_QC_BIN}/blastn}"
+    local blastn="${MTB_BLASTN:-${MTB_QC_BIN}/blastn}" _f
+    # A path that is named must exist (D43). _inputs records a missing one
+    # as "absent", the same as none, so a mistyped INSGT_* path built, or
+    # matched an earlier build of, a catalogue without its route columns.
+    for _f in "${INSGT_CLUSTERS:-}" "${INSGT_ROUTING:-}"; do
+        [[ -z "$_f" || -s "$_f" ]] || { echo "FATAL: catalogue input ${_f} does not exist (INSGT_CLUSTERS/INSGT_ROUTING); unset it for none" >&2; return 1; }
+    done
     _inputs loci_sha256 "${BUILD}/assets/accessory_loci.tsv" \
             graph_vcf_sha256 "${BUILD}/assets/graph_collapsed.vcf.gz" \
             clusters_sha256 "${INSGT_CLUSTERS:-}" routing_sha256 "${INSGT_ROUTING:-}" \
