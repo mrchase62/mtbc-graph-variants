@@ -87,7 +87,8 @@ GCF_000195835 (mummer/soapdenovo).
 ```bash
 $MTB_PY bin/foreign_insertion_screen.py --accessions $Q/accessions.txt \
     --assembly-dir data/rotated --ref data/ref/H37Rv.fasta \
-    --lineages $Q/lineages.all.tsv --is6110 data/annotation/IS6110.fasta \
+    --lineages $Q/lineages.all.tsv --rank-by $Q/rank_by.tsv \
+    --is6110 data/annotation/IS6110.fasta \
     --univec "$MTB_UNIVEC" --blastn "$MTB_BLASTN" --makeblastdb "$MTB_MAKEBLASTDB" \
     --minimap2 "$MTB_MINIMAP2" --k8 "$MTB_K8" --paftools "$MTB_PAFTOOLS" \
     --threads 8 --workdir $Q/work_foreign --out $Q/foreign_insertions.tsv
@@ -97,7 +98,13 @@ This is the reconciled command. RUNBOOK.md passed the whole panel FASTA as the
 background, which QC_PIPELINE.md 1.4 says must not be done (1,167 false
 foreign calls on the external assemblies). `--lineages` builds the background
 in the workdir: one genome per sublineage plus every genome with no call,
-PanSN-named. A hand-made `--background` must be PanSN-named and at most
+PanSN-named. The genome kept for a sublineage is the best by `--rank-by`
+(D32): the same `accession<TAB>score` file, and the same rule, that
+`snp_nonredundant.py --rank-by` uses to pick a clone cluster's representative
+(D27; higher wins, a tie goes to the larger accession). It was the first
+accession in sorted order. In CX333, 44 of the 65 sublineage slots have more
+than one genome to choose from. A competing genome with no score stops the
+run. A hand-made `--background` must be PanSN-named and at most
 `--max-background` (120) genomes. Settings: `-cx asm10 --secondary=yes -N 100
 -p 0.05` (QC_PIPELINE.md 1.4; the code had `-N 50 -p 0.1`).
 

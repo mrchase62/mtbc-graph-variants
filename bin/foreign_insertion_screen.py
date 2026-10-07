@@ -50,9 +50,14 @@ THE BACKGROUND (audit PGB-5c, d). It must be small and diverse: against the
 whole 1.48 Gb panel minimap2 discards repetitive queries, and 2,427 of 4,936
 inserts got no alignment (QC_PIPELINE.md 1.4; RUNBOOK.md's command used the
 whole panel and called 1,167 inserts foreign in the external assemblies).
-Pass --lineages and the script writes one genome per sublineage (the first
-accession of each, in sorted order) plus every genome with no lineage call,
-PanSN-named, into the workdir. A --background FASTA is accepted only if every
+Pass --lineages and the script writes one genome per sublineage plus every
+genome with no lineage call, PanSN-named, into the workdir. The genome kept
+for a sublineage is the best by --rank-by, the same file and rule
+snp_nonredundant.py uses to pick a cluster's representative (the user's
+decisions D27 and D32, 2026-10-07): accession<TAB>score, higher is better,
+a tie goes to the larger accession. It was the first accession in sorted
+order, so the background's quality was an accident of numbering. A
+sublineage member with no score stops the run rather than scoring 0. A --background FASTA is accepted only if every
 name is PanSN (sample#hap#contig), because self-hits are excluded by sample,
 and if it holds no more than --max-background genomes.
 
@@ -263,19 +268,40 @@ def apply_univec(rows, hits):
             rows[q].update(univec_strong_bp=bp, univec_hit=hit, final_verdict="VECTOR")
 
 
-def background_from_lineages(accs, lineages):
-    """one accession per sublineage (first in sorted order), plus every
-    accession with no call"""
+def load_rank(path):
+    """--rank-by, read as snp_nonredundant.py reads it: accession<TAB>score;
+    lines whose score is not a number (a header) are skipped."""
+    score = {}
+    for line in open(path):
+        f = line.rstrip("\n").split("\t")
+        if len(f) >= 2:
+            try:
+                score[f[0]] = float(f[1])
+            except ValueError:
+                pass
+    return score
+
+
+def background_from_lineages(accs, lineages, score):
+    """one accession per sublineage, the best by `score` (D27's rule: higher
+    wins, a tie goes to the larger accession), plus every accession with no
+    call"""
     lin = {r["accession"]: (r.get("strain") or "") for r in
            csv.DictReader(open(lineages), delimiter="\t")}
-    pick, out = {}, []
+    groups, out = collections.defaultdict(list), []
     for acc in sorted(accs):
         s = lin.get(acc, "").split(":")[0]
         if not s:
             out.append(acc)
-        elif s not in pick:
-            pick[s] = acc
-    return sorted(out + list(pick.values()))
+        else:
+            groups[s].append(acc)
+    unscored = sorted(a for m in groups.values() if len(m) > 1
+                      for a in m if a not in score)
+    if unscored:
+        sys.exit(f"FATAL: --rank-by has no score for {len(unscored)} genome(s) "
+                 f"competing for a background slot: {' '.join(unscored[:10])}")
+    pick = [max(m, key=lambda a: (score.get(a, 0), a)) for m in groups.values()]
+    return sorted(out + pick)
 
 
 def check_background(path, max_genomes):
@@ -307,6 +333,10 @@ def main():
     ap.add_argument("--lineages",
                     help="lineages.all.tsv: build the one-per-sublineage "
                          "background from the candidates")
+    ap.add_argument("--rank-by",
+                    help="with --lineages, required: accession<TAB>score, higher "
+                         "is a better background genome; the file "
+                         "snp_nonredundant.py --rank-by takes (D27, D32)")
     ap.add_argument("--background", "--panel-fasta", dest="background",
                     help="a PanSN-named background FASTA instead of --lineages")
     ap.add_argument("--max-background", type=int, default=120)
@@ -334,6 +364,9 @@ def main():
     a = ap.parse_args()
     if bool(a.lineages) == bool(a.background):
         ap.error("give exactly one of --lineages or --background")
+    if a.lineages and not a.rank_by:
+        ap.error("--lineages needs --rank-by: the background keeps the best "
+                 "genome of each sublineage (D32)")
 
     os.makedirs(a.workdir, exist_ok=True)
     accs = [l.strip() for l in open(a.accessions) if l.strip()]
@@ -343,7 +376,7 @@ def main():
         sys.exit(f"no assembly for {len(missing)} accession(s): {' '.join(missing[:10])}")
 
     if a.lineages:
-        bg_ids = background_from_lineages(accs, a.lineages)
+        bg_ids = background_from_lineages(accs, a.lineages, load_rank(a.rank_by))
         bg = os.path.join(a.workdir, "background.fasta")
         with open(bg + ".ids", "w") as fh:
             fh.write("\n".join(bg_ids) + "\n")

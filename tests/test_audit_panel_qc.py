@@ -236,8 +236,10 @@ class ForeignScreen(unittest.TestCase):
         d = tempfile.mkdtemp()
         write(f"{d}/lin.tsv", "accession\tstrain\nG1\tlineage4.1\nG2\tlineage4.1\n"
               "G3\tlineage2.2.1\nG4\t\n")
-        self.assertEqual(self.m.background_from_lineages(["G4", "G3", "G2", "G1"], f"{d}/lin.tsv"),
-                         ["G1", "G3", "G4"])
+        # G1 and G2 share a sublineage; G1 scores higher
+        self.assertEqual(self.m.background_from_lineages(
+            ["G4", "G3", "G2", "G1"], f"{d}/lin.tsv", {"G1": 5, "G2": 3}),
+            ["G1", "G3", "G4"])
         write(f"{d}/bare.fa", ">NC_000962.3\nACGT\n")
         with self.assertRaises(SystemExit):
             self.m.check_background(f"{d}/bare.fa", 100)
@@ -250,6 +252,51 @@ class ForeignScreen(unittest.TestCase):
 BLASTN = os.environ.get(
     "MTB_BLASTN", "/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/autocycler/bin/blastn")
 MAKEBLASTDB = os.path.join(os.path.dirname(BLASTN), "makeblastdb")
+
+
+class BackgroundByQuality(unittest.TestCase):
+    """The user's decision D32 (2026-10-07): each sublineage's background
+    genome is the best by D27's --rank-by rule, not the first accession."""
+
+    def setUp(self):
+        self.m = load("foreign_insertion_screen_bg", "bin/foreign_insertion_screen.py")
+        self.d = tempfile.mkdtemp()
+        write(f"{self.d}/lin.tsv", "accession\tstrain\nG1\tlineage4.1\n"
+              "G2\tlineage4.1\nG3\tlineage4.1\nG4\tlineage2.2.1\nG5\t\n")
+
+    def bg(self, score):
+        return self.m.background_from_lineages(["G1", "G2", "G3", "G4", "G5"],
+                                               f"{self.d}/lin.tsv", score)
+
+    def test_best_score_not_first_accession(self):
+        self.assertEqual(self.bg({"G1": 1, "G2": 9, "G3": 4}), ["G2", "G4", "G5"])
+
+    def test_tie_goes_to_larger_accession_as_in_snp_nonredundant(self):
+        self.assertEqual(self.bg({"G1": 4, "G2": 1, "G3": 4}), ["G3", "G4", "G5"])
+        s = open("bin/snp_nonredundant.py").read()
+        self.assertIn("max(members, key=lambda m: (score.get(m, 0), m))", s)
+
+    def test_unscored_competitor_is_fatal(self):
+        with self.assertRaises(SystemExit) as e:
+            self.bg({"G1": 4, "G2": 1})
+        self.assertIn("G3", str(e.exception))
+
+    def test_lone_member_needs_no_score(self):
+        self.assertEqual(self.bg({"G1": 1, "G2": 2, "G3": 3}), ["G3", "G4", "G5"])
+
+    def test_rank_file_read_like_snp_nonredundant(self):
+        write(f"{self.d}/r.tsv", "accession\tscore\nG1\t3\nG2\t7.5\n")
+        self.assertEqual(self.m.load_rank(f"{self.d}/r.tsv"), {"G1": 3.0, "G2": 7.5})
+
+    def test_lineages_without_rank_by_is_refused(self):
+        r = subprocess.run([sys.executable, "bin/foreign_insertion_screen.py",
+                            "--accessions", "x", "--assembly-dir", "x", "--ref", "x",
+                            "--lineages", f"{self.d}/lin.tsv", "--is6110", "x",
+                            "--univec", "x", "--minimap2", "x", "--k8", "x",
+                            "--paftools", "x", "--workdir", "x", "--out", "x"],
+                           capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("--lineages needs --rank-by", r.stderr)
 
 
 class UniVecCheck(unittest.TestCase):
