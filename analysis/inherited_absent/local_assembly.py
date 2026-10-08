@@ -11,10 +11,12 @@ For each event (make_events.py) in this sample:
 3. contigs >= 300 bp aligned to H37Rv with minimap2 -x asm5 -c;
 4. each contig classified against the region [start, end], with F = 300 bp
    of flank required on both sides:
-     present_here  one alignment runs from start - F to end + F with fewer
-                   than max(20, 10%) of the region's bases deleted
-     deleted_here  the same contig anchors both flanks (F bp each, same
-                   strand), and its alignments cover < 20% of the region
+     present_here  one alignment runs from start - F to end + F with at most
+                   10% of the region's bases deleted (counted over +-10 bp
+                   for regions under 50 bp)
+     deleted_here  that alignment deletes >= 80% of the region, or the same
+                   contig anchors both flanks (F bp each, same strand) and its
+                   alignments cover < 20% of the region
      complex       anchors both flanks, but neither of the above
      (no verdict)  a contig that does not anchor both flanks
    The event's verdict joins its contigs' verdicts: present_here,
@@ -111,11 +113,19 @@ def ref_cover(ts, cigar, s, e):
 
 def classify(alns, s, e):
     L = e - s + 1
+    # A short deletion can be placed a few bases off in a repeat or a
+    # homopolymer, so for regions under 50 bp the deleted bases are counted
+    # over the region +-10 bp. Present means at most 10% of the region
+    # deleted: none at all below 10 bp. (The first version allowed up to 20
+    # deleted bases, which called 1-22 bp deletions present.)
+    pad = 10 if L < 50 else 0
     for a in alns:
         if a["ts"] + 1 <= s - F and a["te"] >= e + F:
-            cov, dele, ins = ref_cover(a["ts"], a["cg"], s, e)
-            if dele < max(20, 0.1 * L) and ins == 0:
+            cov, dele, ins = ref_cover(a["ts"], a["cg"], s - pad, e + pad)
+            if dele <= 0.1 * L and ins == 0:
                 return "present_here"
+            if dele >= 0.8 * L:
+                return "deleted_here"
     for strand in "+-":
         sa = [a for a in alns if a["strand"] == strand]
         left = any(a["ts"] + 1 <= s - F and a["te"] >= s - 1 - 10 for a in sa)
@@ -138,6 +148,8 @@ def main():
     ap.add_argument("--minimap2", required=True)
     ap.add_argument("--workdir", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--reclassify", action="store_true",
+                    help="reuse each event's saved contigs.paf; no reassembly")
     a = ap.parse_args()
     evs = [r for r in csv.DictReader(open(a.events), delimiter="\t")
            if r["sample"] == a.sample]
@@ -152,6 +164,14 @@ def main():
                    contig_verdicts="", verdict="unresolved", note="")
         if e - s + 1 > MAX_REGION:
             rec["note"] = "region too large"
+            rows.append(rec)
+            continue
+        paf = os.path.join(d, "contigs.paf")
+        if a.reclassify and os.path.exists(paf):
+            rec["n_contigs"] = sum(1 for _ in pysam.FastxFile(
+                os.path.join(d, "contigs.fasta")))
+            rec["note"] = "reclassified"
+            classify_event(rec, paf, ctg, s, e)
             rows.append(rec)
             continue
         reads = collect_reads(bam, ctg, s - PAD, e + PAD)
@@ -183,11 +203,23 @@ def main():
             shutil.rmtree(sp)
         for f in (p1, p2, ps):
             os.remove(f)
-        paf = os.path.join(d, "contigs.paf")
         with open(paf, "w") as fo:
             subprocess.run([a.minimap2, "-x", "asm5", "-c", "--secondary=no",
                             a.h37rv_mmi, keep], stdout=fo,
                            stderr=subprocess.DEVNULL, check=True)
+        classify_event(rec, paf, ctg, s, e)
+        rows.append(rec)
+        print(a.sample, ev["event"], s, e, rec["verdict"], f"{npair}p/{nsing}s",
+              f"{n} contigs", file=sys.stderr)
+    cols = list(evs[0].keys()) + ["n_pairs", "n_single", "n_contigs",
+                                  "anchoring", "contig_verdicts", "verdict", "note"]
+    with open(a.out, "w") as fo:
+        w = csv.DictWriter(fo, fieldnames=cols, delimiter="\t")
+        w.writeheader()
+        w.writerows(rows)
+
+
+def classify_event(rec, paf, ctg, s, e):
         alns = {}
         for line in open(paf):
             c = line.rstrip("\n").split("\t")
@@ -213,15 +245,6 @@ def main():
             rec["verdict"] = "deleted_here"
         elif "complex" in vs:
             rec["verdict"] = "complex"
-        rows.append(rec)
-        print(a.sample, ev["event"], s, e, rec["verdict"], f"{npair}p/{nsing}s",
-              f"{n} contigs", file=sys.stderr)
-    cols = list(evs[0].keys()) + ["n_pairs", "n_single", "n_contigs",
-                                  "anchoring", "contig_verdicts", "verdict", "note"]
-    with open(a.out, "w") as fo:
-        w = csv.DictWriter(fo, fieldnames=cols, delimiter="\t")
-        w.writeheader()
-        w.writerows(rows)
 
 
 if __name__ == "__main__":

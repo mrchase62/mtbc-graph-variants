@@ -1,0 +1,2 @@
+event	sample	start	end	n_cells	expected	source	n_pairs	n_single	n_contigs	anchoring	contig_verdicts	verdict	note
+cal0002	SAMEA112800746	1078522	1078756	0	deleted_here	ctpV	803	0	1	0		unresolved	

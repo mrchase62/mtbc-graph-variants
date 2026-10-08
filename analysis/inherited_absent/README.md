@@ -114,3 +114,51 @@ Outputs: `out/scale200_fix/junction.tsv` and `junction.masked.tsv`.
 The first run failed on one sample: SAMEA7526648 is matched to H37Rv itself,
 which is not a column of the graph VCF. That case now returns no R deletions;
 the sample has no testable ABSENT cells.
+
+## Local reassembly (2026-10-08)
+
+**Scripts:**
+- `make_events.py`: groups cells into regions per sample.
+- `local_assembly.py`: for each region, collects reads within 1.5 kb plus
+  their mates, assembles them with SPAdes `--isolate`, aligns the contigs to
+  H37Rv with minimap2 `asm5`, and requires 300 bp of flank on both sides.
+- `annotate_complex.py`: blastn of the contig stretches that do not align to
+  H37Rv, against H37Rv, the matched reference and the accessory catalogue.
+- Run by `run_local_assembly.sbatch <set>`.
+- Tools from the lab `autocycler` env: SPAdes 4.3.0, minimap2 2.31.
+
+**Calibration** (128 regions, job 51392271, 10 min, about 1.4 billing-hours):
+- the 5 ctpV regions with known answers;
+- every core region the junction check called deleted_here (45);
+- a seeded random 49 of the core present_here regions;
+- 29 core zero-depth regions with junction reads.
+
+The first classification counted deletions of up to 20 bp as present. That
+called 22 deletions of 1-22 bp present, a bug in the rule, not a
+disagreement. Present now allows at most 10% of the region deleted, counted
+over the region +-10 bp when it is under 50 bp. Calibration was then
+reclassified from the saved alignments (`results.v2.tsv`), without
+reassembling:
+
+| junction verdict | assembly: deleted_here | present_here | unresolved |
+|---|---:|---:|---:|
+| contradicted / deleted_here (45) | 43 | 0 | 2 |
+| contradicted / present_here (49) | 0 | 48 | 1 |
+| supported / deleted_here (29) | 29 | 0 | 0 |
+
+- **Agreement:** all 120 decided regions agree with the junction check; none
+  contradict it.
+- **ctpV:** SAMEA2297133 is present_here at both regions; SAMEA5542103 is
+  deleted_here.
+- **The two 235-bp-deletion carriers come out unresolved**, because their next
+  event starts 55 bp after the deletion, which is less than the 300-bp flank.
+  `annotate_complex.py` resolves them. The contig reads H37Rv to 1,078,811,
+  then about 340 bp of other sequence, then H37Rv again from 1,080,104 at
+  99.9% identity. That is the 1,290-bp deletion with the graph's "337-bp
+  insertion" in its place.
+- **That insertion is not accessory.** It matches nothing in the accessory
+  catalogue, and is an 85% diverged copy of ctpV 1,079,759-1,080,109
+  containing a 97.7% match to 1,079,652-739. The H37Rv-frame SNP/indel cluster
+  at 1,079,879-927 comes from reads of this copy.
+
+The 109 unresolved core regions were then submitted (job 51395857).

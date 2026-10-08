@@ -2,8 +2,11 @@
 """What is the extra sequence in a complex local assembly?
 
 local_assembly.py calls a region complex when a contig anchors both flanks
-on H37Rv but is neither continuous H37Rv nor a clean deletion. This takes
-every such contig and finds the stretches of it, 50 bp or more, that its
+on H37Rv but is neither continuous H37Rv nor a clean deletion, and
+unresolved when no contig anchors both. This takes every complex contig,
+and for unresolved events every contig aligned within 1,500 bp of the
+region (typically one flank anchored, then sequence H37Rv does not
+continue), and finds the stretches of it, 50 bp or more, that its
 minimap2 asm5 alignments to H37Rv leave uncovered. Each stretch is blasted
 (blastn -task blastn) against three subjects:
   - H37Rv: short rearranged H37Rv pieces asm5 does not align;
@@ -21,6 +24,7 @@ import tempfile
 import pysam
 
 MIN_SEG = 50
+PAD = 1500
 
 
 def uncovered(qlen, spans):
@@ -65,17 +69,28 @@ def main():
               csv.DictReader(open(a.refmap), delimiter="\t")}
     rows = []
     for ev in csv.DictReader(open(a.results), delimiter="\t"):
-        cx = [x.split(":")[0] for x in ev["contig_verdicts"].split(",")
-              if x.endswith(":complex")]
-        if not cx:
+        if ev["verdict"] not in ("complex", "unresolved"):
             continue
         d = os.path.join(a.workdir, ev["event"])
-        spans, qlen = {}, {}
+        if not os.path.exists(os.path.join(d, "contigs.paf")):
+            continue
+        s0, e0 = int(ev["start"]), int(ev["end"])
+        spans, qlen, near = {}, {}, set()
         for line in open(os.path.join(d, "contigs.paf")):
             c = line.split("\t")
             name = c[0].split("_length")[0]
             qlen[name] = int(c[1])
             spans.setdefault(name, []).append((int(c[2]), int(c[3])))
+            if int(c[7]) < e0 + PAD and int(c[8]) > s0 - PAD:
+                near.add(name)
+        # complex contigs, or for an unresolved event any contig placed near
+        # the region (one flank anchored, the rest not H37Rv-continuous)
+        cx = [x.split(":")[0] for x in str(ev["contig_verdicts"]).split(",")
+              if x.endswith(":complex")]
+        if ev["verdict"] == "unresolved":
+            cx = sorted(near)
+        if not cx:
+            continue
         seqs = {c.name.split("_length")[0]: c.sequence
                 for c in pysam.FastxFile(os.path.join(d, "contigs.fasta"))}
         segs = []

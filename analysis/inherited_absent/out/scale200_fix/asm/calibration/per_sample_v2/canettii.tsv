@@ -1,0 +1,3 @@
+event	sample	start	end	n_cells	expected	source	n_pairs	n_single	n_contigs	anchoring	contig_verdicts	verdict	note
+cal0049	canettii	4078468	4079871	11	deleted_here	contradicted/deleted_here	0	0	17	1	NODE_1:deleted_here	deleted_here	reclassified
+cal0127	canettii	4107314	4107703	4	deleted_here	supported/deleted_here	0	0	1	1	NODE_1:deleted_here	deleted_here	reclassified

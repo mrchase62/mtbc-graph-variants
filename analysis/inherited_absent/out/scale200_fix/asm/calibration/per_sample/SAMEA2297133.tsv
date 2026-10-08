@@ -1,0 +1,3 @@
+event	sample	start	end	n_cells	expected	source	n_pairs	n_single	n_contigs	anchoring	contig_verdicts	verdict	note
+cal0000	SAMEA2297133	1078522	1078756	0	present_here	ctpV	1119	2	2	1	NODE_1:present_here	present_here	
+cal0001	SAMEA2297133	1078811	1080106	0	present_here	ctpV	1362	2	1	1	NODE_1:present_here	present_here	

@@ -1,0 +1,3 @@
+event	sample	start	end	n_cells	expected	source	n_pairs	n_single	n_contigs	anchoring	contig_verdicts	verdict	note
+cal0111	SAMEA95411668	2090364	2090443	4	deleted_here	supported/deleted_here	1329	0	1	1	NODE_1:deleted_here	deleted_here	
+cal0112	SAMEA95411668	2128378	2129581	7	deleted_here	supported/deleted_here	1802	1	1	1	NODE_1:deleted_here	deleted_here	
