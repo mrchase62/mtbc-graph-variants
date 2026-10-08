@@ -110,6 +110,16 @@ on boslogin06, which is not durable).
      - **SV and IS6110 burdens:** 0 survivors, as before.
      - **Every DR positive control the old run found is still found**, and
        katG, which narrowly missed before, now passes.
+   - **Durable copy (2026-10-08, user asked):**
+     `/n/boslfs02/LABS/sfortune_lab/Lab/mchase/MtbPangenome/results/cohorts/scale200/`
+     - `2026-10-01_original/` and `2026-10-08_audit_fixes/`, each with
+       calls, structural_variants, reference_choice, association,
+       accessory_presence and trees, plus `README.md` and `COMPARISON.md`.
+     - BAMs are not copied.
+     - Made by `analysis/rerun_scale200/archive_to_mirror.sh`; VCF and scan
+       checked with cmp.
+     - The user finds the `refbias` name meaningless; the durable copy uses
+       descriptive names, and the pipeline's own folders are unchanged.
    - **Full old vs new comparison done:** `analysis/rerun_scale200/COMPARISON.md`.
      - Calls are 98% unchanged cell for cell; about 245k more NOCALL, mostly
        PE/PPE and masked.

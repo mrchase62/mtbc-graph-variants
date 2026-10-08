@@ -1083,3 +1083,4 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - Then P1/P2, truth, callers, scoring.
 - The user asked where the scale200 outputs are; all are on netscratch
   (listed in the reply), with no durable copy.
+- **scale200 key outputs copied to the mirror**, `results/cohorts/scale200/{2026-10-01_original,2026-10-08_audit_fixes}` (178 MB, verified). Descriptive names, at the user's request.
