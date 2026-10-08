@@ -1015,3 +1015,13 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   are confidently wrong (bridging reads at both ends, no junction reads); 71
   are correctly ABSENT (junction reads, depth from a copy elsewhere); 435 are
   unresolved. 76% of all testable ABSENT cells are masked.
+- **Local assembly of the 109 undecided core regions:** 77 present (161
+  ABSENT calls wrong), 3 deleted, 6 complex, 23 unresolved. The leftover
+  sequence is IS6110 copies and canettii divergence; none is accessory loss.
+  The user lost track of the method because of loose terms ("realign", "local
+  reassembly", "accessory"), and I had dropped the proposed read-realignment
+  step without saying so. Now explained in standard terms: SPAdes local de
+  Bruijn assembly, then contigs aligned with minimap2. Saved as a working rule.
+- **ABS-1 added to the fix list** (HANDOFF). The user chose NOCALL with a
+  reason for masked sites. Open: whether the assembly step joins the
+  standard chain.

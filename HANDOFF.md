@@ -82,8 +82,59 @@ on boslogin06, which is not durable).
      the about 25 isolates whose reference changes: about 150-200. This is
      an explicit exception to D38, and needs a check first that no code
      producing those files changed after 2026-09-23.
+   **Status 2026-10-08:**
+   - The chain finished 11:10 with no failures. It cost **577 billing-hours by
+     sacct, over the approved 380**: P5 states took 362, because the new build
+     id starts with an empty projection store.
+   - The association tail is running. Its tree job 51338524 is building the
+     cohort + panel tree. After it, run `analysis/rerun_scale200/06_assoc_tail.sbatch`
+     again from `runroot` for the tests.
+   - Then the old vs new comparison.
 3. **Deadline:** the CRAM collection (`MTB_CRAM_ROOT`, dated 2026-07-28) falls
    under the same 90-day purge around 2026-10-26. The rerun needs it.
+
+### Fix list for the next rerun (added 2026-10-08)
+
+**ABS-1: inherited ABSENT is not checked against the sample's reads.** User
+approved adding it, with masked sites as NOCALL with a reason.
+
+- **Evidence:** `analysis/inherited_absent/README.md` and `analysis/ctpV_check.md`.
+- **The problem:** P5 calls a site ABSENT when the matched reference R lacks
+  it. Only the large SV intervals get the two-frame check against the
+  sample's H37Rv-frame reads; nested intervals and small-variant states do not.
+- **Size in scale200_fix:**
+  - 10,247 of 85,465 ABSENT calls that have an H37Rv span are covered at
+    normal depth;
+  - 73% of those are in repeat-masked sequence;
+  - in core sequence, 2,279 + 161 calls are wrong (breakpoint screen + local
+    assembly), confirmed by assembly on 48 of 49 sampled;
+  - one case is SAMEA2297133's intact ctpV.
+
+What to change:
+1. **P0:** a per-panel-genome table of its deletions from H37Rv, and of the
+   sites where it has no genotype, read from the collapsed graph VCF.
+2. **P5, masked sites:** a site, or either end of R's deletion within 150 bp,
+   that overlaps `repeat_mask.bed` becomes NOCALL with reason "masked".
+   The user chose NOCALL with a reason, not a new state.
+3. **P5, every inherited ABSENT:** check the P1 H37Rv BAM at MAPQ >= 20.
+   - Reads run across both deletion ends and fewer than 3 split or deletion
+     reads join them: use the sample's own H37Rv-frame call (REF/ALT).
+   - 3 or more join them: keep ABSENT.
+   - Anything else: NOCALL with its reason.
+
+   This generalises `p5_sv_genotype.py`'s two-frame check, and the scripts in
+   `analysis/inherited_absent/` are the reference version.
+4. **Evidence and flags:**
+   - each ABSENT/NOCALL cell's evidence as a FORMAT field in the merged VCF;
+   - per sample, the count of calls that rest only on the reference;
+   - a flag when R comes from a deeper sublineage than the sample's own
+     lineage call.
+5. **Tests:** the ctpV cases and the 120 calibration regions as regression
+   tests. Then rerun P5 onward for scale200_fix; P1 to P4 stay valid.
+
+Open: whether local de novo assembly (SPAdes, then minimap2) for the
+remaining undecided regions becomes a standard step after P5, or stays an
+audit run on request.
 
 **Netscratch purge, 2026-10-07 14:24.** FASRC's purge removed every working-tree
 file not modified for about 90 days. Only 5 folders changed: `containers/`,
