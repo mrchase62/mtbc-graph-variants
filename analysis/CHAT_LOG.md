@@ -981,3 +981,9 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   storing them. The estimate did not include this. P1 61, P2 89, P1g+P1i 39,
   P3 13, P4b 9, P4 3, rest under 1 each. Association tail waiting for the
   user's cost decision.
+- **ctpV check** (user asked whether the CX333 graph has the L1.2.1 ctpV
+  deletion of Nat Commun 2025, s41467-025-65779-9): yes. A 297-bp DEL at
+  1,078,519-815 over the ctpV start codon in all 5 L1.2.1.2 panel genomes
+  (the paper's confirmed deletion is 297 bp); the 9 L1.2.1.2.1 genomes carry
+  longer deletions over the start (235/239 bp plus 872-1,296 bp downstream,
+  or one of 1,536 bp); no other lineage-1 genome. `analysis/ctpV_check.md`.
