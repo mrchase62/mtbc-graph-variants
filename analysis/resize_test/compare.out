@@ -1,0 +1,9 @@
+source       alignments     calls                 reads    calls_n
+production   a4efe76063e5   26b20bc07380        4295916       1210
+old          a4efe76063e5   26b20bc07380        4295916       1210
+new8         a4efe76063e5   26b20bc07380        4295916       1210
+new4         a4efe76063e5   26b20bc07380        4295916       1210
+
+old: Maximum resident set size (kbytes): 1494988, Elapsed (wall clock) time (h:mm:ss or m:ss): 3:23.34
+new8: Maximum resident set size (kbytes): 1497352, Elapsed (wall clock) time (h:mm:ss or m:ss): 3:12.42
+new4: Maximum resident set size (kbytes): 1473380, Elapsed (wall clock) time (h:mm:ss or m:ss): 4:01.63

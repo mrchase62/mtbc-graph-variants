@@ -2,10 +2,10 @@
 #SBATCH --job-name=P1_select
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=4
 #SBATCH -t 0-02:00
 #SBATCH -p shared
-#SBATCH --mem=16000
+#SBATCH --mem=8000
 #SBATCH --output=slurm/P1_%A_%a.out
 #SBATCH --error=slurm/P1_%A_%a.err
 #
@@ -70,6 +70,8 @@ MTB_CRAM_ROOT="$CRAMROOT" mtb_require_cram_root || exit 1
 H37RV="${BUILD}/refs/GCF_000195955.fasta"
 PANEL_SNPS="${BUILD}/assets/panel_snps.vcf.gz"
 OUTDIR="${OUTDIR:-refbias/p1}"
+# bwa and HaplotypeCaller use the cores the job was given, as in P2
+THREADS="${SLURM_CPUS_PER_TASK:-4}"
 WORK="${WORK:-refbias/work/p1}"
 
 for f in "$H37RV" "$PANEL_SNPS" "$COHORT" "$CRAMMAP" "$CRAMREF"; do
@@ -161,7 +163,7 @@ echo "[P1] ${SAMPLE}: ${NR1} read pairs"
 
 # pass one: align to H37Rv and call, to get the SNP profile
 SIM_REQUIRE_FQ=1 SIM_FQ_PREFIX="${WORK}/${SAMPLE}" SIM_KEEP_FQ=1 SIM_BAM_SUFFIX=".h37rv" \
-    bash bin/simulate_and_call.sh "$H37RV" "$H37RV" "$WORK" "$SAMPLE" 1 150
+MTB_THREADS="$THREADS" bash bin/simulate_and_call.sh "$H37RV" "$H37RV" "$WORK" "$SAMPLE" 1 150
 mv -f "${WORK}/${SAMPLE}.vcf.gz" "${WORK}/${SAMPLE}.h37rv.vcf.gz"
 mv -f "${WORK}/${SAMPLE}.vcf.gz.tbi" "${WORK}/${SAMPLE}.h37rv.vcf.gz.tbi" 2>/dev/null || true
 

@@ -108,7 +108,11 @@ if [[ ! -f "${REF}.fai" || "$REF" -nt "${REF}.fai" ]]; then
     "$SAMTOOLS" faidx "$REF"
 fi
 
-"$BWA" mem -t "${MTB_THREADS:-8}" -R "@RG\tID:${PREFIX}\tSM:${PREFIX}\tPL:ILLUMINA" \
+# -K fixes bwa's batch size at what 8 threads used (10 Mb per thread). bwa
+# estimates the insert-size distribution per batch, so without -K the
+# alignments depend on the thread count; with it they are the same at any -t,
+# and match the alignments made before jobs were cut to 4 cores (2026-10-07).
+"$BWA" mem -t "${MTB_THREADS:-8}" -K 80000000 -R "@RG\tID:${PREFIX}\tSM:${PREFIX}\tPL:ILLUMINA" \
     "$REF" "$FQ1" "$FQ2" 2> "${OUTDIR}/${PREFIX}.bwa.log" \
   | "$SAMTOOLS" sort -@ 4 -o "$BAM" -
 "$SAMTOOLS" index "$BAM"
@@ -130,13 +134,15 @@ fi
 # covered this and agreed with the reference" or "nothing was observed here" --
 # a plain VCF cannot distinguish them, and conflating the two is what turns a
 # missed call into an inherited wrong call.
+# GATK's Java heap stays below the P1/P2 job's 8 GB (MTB_GATK_XMX overrides);
+# the heap limit changes no calls, only whether the job has room to run.
 if [[ -n "${SIM_GVCF:-}" ]]; then
-    gatk_run --java-options "-Xmx8g" HaplotypeCaller \
+    gatk_run --java-options "-Xmx${MTB_GATK_XMX:-6g}" HaplotypeCaller \
         -R "$REF" -I "$BAM" -O "${OUTDIR}/${PREFIX}.g.vcf.gz" \
         -ploidy 1 -ERC GVCF --native-pair-hmm-threads "${MTB_THREADS:-8}" \
         > "${OUTDIR}/${PREFIX}.gatk.gvcf.log" 2>&1
 fi
-gatk_run --java-options "-Xmx8g" HaplotypeCaller \
+gatk_run --java-options "-Xmx${MTB_GATK_XMX:-6g}" HaplotypeCaller \
     -R "$REF" -I "$BAM" -O "${OUTDIR}/${PREFIX}.vcf.gz" \
     -ploidy 1 --native-pair-hmm-threads "${MTB_THREADS:-8}" \
     > "${OUTDIR}/${PREFIX}.gatk.log" 2>&1

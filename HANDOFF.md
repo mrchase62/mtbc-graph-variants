@@ -52,9 +52,14 @@ on boslogin06, which is not durable).
    | tree and association | about 10-20 |
    | **total** | **about 500** |
 
-   Cheaper routes:
-   - right-size P1/P2 to 4 cores and 4 GB (option A in section 0c, a
-     request change only): about 350 in all;
+   **P1/P2 now request 4 cores and 8 GB (done 2026-10-07, user approved;
+   `analysis/resize_test/README.md`).** With `bwa mem -K` fixed, P1
+   passing its core count through and the GATK heap at 6 GB, the largest
+   scale200 sample gives alignments and calls identical to production's,
+   at about 40% less per sample. **Estimate now about 380 billing-hours**
+   (P1 + P2 about 180 instead of 300).
+
+   A further option:
    - reuse scale200's P1 H37Rv alignments and calls (dated 2026-09-23;
      only the selection step after them changed) and rerun P2 only for
      the about 25 isolates whose reference changes: about 150-200. This is

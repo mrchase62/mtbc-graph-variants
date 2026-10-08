@@ -2,10 +2,10 @@
 #SBATCH --job-name=P2_call
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=4
 #SBATCH -t 0-03:00
 #SBATCH -p shared
-#SBATCH --mem=16000
+#SBATCH --mem=8000
 #SBATCH --output=slurm/P2_%A_%a.out
 #SBATCH --error=slurm/P2_%A_%a.err
 #

@@ -309,7 +309,9 @@ class CollapseLeftAligns(unittest.TestCase):
             cmd += ["--ref", ref_fasta(os.path.join(d, "h.fa"),
                                        bases or self.BASES)]
         env = bcf_env()
-        env.pop("MTB_REF_FASTA", None)
+        # project_env.sh fills an unset MTB_REF_FASTA with the working tree's
+        # H37Rv, so "no reference" is a path that does not exist
+        env["MTB_REF_FASTA"] = os.path.join(d, "no_such_ref.fa")
         r = subprocess.run(cmd, capture_output=True, text=True, env=env)
         return r, (parse_vcf_text(gzip.open(out, "rt").read())
                    if r.returncode == 0 else None)

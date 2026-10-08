@@ -940,3 +940,15 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - **User:** "yes, restore the purged files from the mirror." Done: 13 files
   copied back, each identical to the mirror, with fresh dates; every
   configured path resolves.
+- **User:** "How are the jobs sized now? what does sized mean?" Explained:
+  the cores and memory each job reserves, which is what fairshare charges.
+  P1 and P2 reserved 8 cores / 16 GB and used about 2 cores / 1.4 GB.
+- **User:** resize P1 and P2 to 4 cores, 8 GB; "use slightly more detail in
+  your descriptions". Checking the tools found three needed companions
+  (bwa's thread-dependent batches, P1 not passing its core count, GATK's
+  8 GB Java heap). **User:** "make all three and run the test."
+- **Test:** scale200's largest sample at 4 cores / 8 GB gives alignments and
+  calls identical to production's September P1 output. Peak memory 2.2 GB,
+  20% longer, about 40% cheaper. Rerun estimate now about 380 billing-hours.
+  One test assumed the purged H37Rv file was absent; made independent of it.
+  369 tests pass.
