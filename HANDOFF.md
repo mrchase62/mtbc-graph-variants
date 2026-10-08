@@ -110,8 +110,13 @@ on boslogin06, which is not durable).
      - **SV and IS6110 burdens:** 0 survivors, as before.
      - **Every DR positive control the old run found is still found**, and
        katG, which narrowly missed before, now passes.
-   - **Next:** the full old vs new comparison (report only), covering calls
-     by class, NOCALL/ABSENT, IS6110, accessory, SV, AA and q_branch changes.
+   - **Full old vs new comparison done:** `analysis/rerun_scale200/COMPARISON.md`.
+     - Calls are 98% unchanged cell for cell; about 245k more NOCALL, mostly
+       PE/PPE and masked.
+     - Accessory presence 802 -> 204 records, by design.
+     - AA_INVERTED 6,451 -> 1,079.
+     - The q_branch drop is mostly SV intervals, plus 8 IS6110 fragments no
+       longer double-counted as small insertions.
 3. **Deadline:** the CRAM collection (`MTB_CRAM_ROOT`, dated 2026-07-28) falls
    under the same 90-day purge around 2026-10-26. The rerun needs it.
 

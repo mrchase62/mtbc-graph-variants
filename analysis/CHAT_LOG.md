@@ -1062,3 +1062,11 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - All DR controls found.
   - The tree cost 53 billing-hours; the rerun's total is about 631 against
     380 approved.
+- **Old vs new comparison** (`analysis/rerun_scale200/COMPARISON.md`):
+  - 98% of shared cells unchanged; NOCALL +245k, mostly PE/PPE and masked;
+  - accessory presence 802 -> 204 (unmeasurable loci, by design);
+  - 30 references changed, all closer;
+  - AA_INVERTED 6,451 -> 1,079;
+  - survivors 3 -> 6, burden 6 -> 8, all DR controls found;
+  - q_branch 137 -> 92, mostly SV intervals and IS6110 fragments no longer
+    double-counted.
