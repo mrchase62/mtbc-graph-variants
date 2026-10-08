@@ -1052,6 +1052,17 @@ step 3 above.
 The read-level code to start from is `analysis/inherited_absent/junction_check.py`.
 Benchmark it before use (step 1 above).
 
+**Raised in priority (user, 2026-10-08):** external SV callers are not
+working well, and novel events must be captured, so develop this soon,
+within the current testing. The plan, covering all novel event classes, not
+only insertions, is in `analysis/novel_events/PLAN.md`:
+- a breakpoint-evidence caller on the P2 alignments to the matched reference;
+- local assembly of each candidate;
+- testing on simulated reads from external assemblies already on disk
+  (Phase A), then on real reads (Phase B, needs a download).
+
+Not started; it needs the user's cost approval.
+
 ## 0f. External long-read truth sets: Marin 2024 and Behruznia 2024 (2026-10-04)
 
 Purpose: an independent check of assembly reliability, and later the

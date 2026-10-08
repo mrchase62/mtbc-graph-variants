@@ -1033,3 +1033,9 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - **Novel-insertion extension** (genome-wide two-sided clip scan, then blastn
   sorting): the user asked to keep it separate from ABS-1, on the
   insertion-gap plan (HANDOFF 0e). Not scheduled.
+- **Novel events raised in priority** by the user ("external SV callers are
+  not working very well ... we need to be able to capture novel events").
+  The plan is `analysis/novel_events/PLAN.md`: a breakpoint-evidence caller on
+  the P2 BAMs vs the matched reference, sharing a module with ABS-1. Phase A
+  uses simulated reads from about 40 external assemblies already on disk,
+  about 30 billing-hours. Waiting for approval.
