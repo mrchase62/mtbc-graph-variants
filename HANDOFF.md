@@ -182,6 +182,31 @@ cohort's calls. Proposed: `results/` or `out/`; the user decides at the time.
 - **Timing (user):** deal with it later, once the pipeline is stable. Not
   part of the next rerun.
 
+**OUT-1: canettii pseudo-isolate for event-state polarity** (added
+2026-10-08, user).
+
+- **The gap:** SNP ancestral alleles survive canettii leaving the graph.
+  Its rows come from direct alignment to H37Rv (the "kit"), with 99.98% the
+  same AA, the same root and the same survivors
+  (`analysis/outgroup_test/README.md`). IS6110, SV and accessory events
+  have no SNP row, so their polarity needs canettii's event states.
+- **Plan:** simulate reads from the two canettii assemblies (GCF_035581225
+  ET1291 and GCF_000253375): wgsim, 150 bp pairs, about 80x, as in
+  `analysis/is6110_simbench/`. Run them through P1 to P5 as pseudo-isolates
+  in their own registry row, and read their IS6110, SV and accessory states
+  as the outgroup's.
+- **Checks:**
+  - the read-based canettii isolate already in scale200 should agree with
+    the pseudo-isolate where both are called;
+  - the polarity of IS6110/SV events should match the in-graph canettii's,
+    on a build that still has it.
+- **Measured 2026-10-08 on build fix1:** canettii breaks the Fitch tie at the
+  MTBC ancestor at 1,134 of 73,256 SNP sites (1.5%; 68 of the 1,084
+  alt-ancestral). Its main role is rooting the panel tree.
+- **Relation to the hold:** needed before any graph without canettii. The
+  user put graph work on hold, so this is scheduled with it, but it can be
+  built and tested on the current CX333 graph.
+
 **Decided (user, 2026-10-08): local de novo assembly stays an audit run, on
 request.** It is SPAdes, then minimap2 contigs against H37Rv
 (`analysis/inherited_absent/local_assembly.py`), and is not part of the chain.

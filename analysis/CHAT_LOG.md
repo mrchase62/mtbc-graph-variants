@@ -1085,3 +1085,11 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   (listed in the reply), with no durable copy.
 - **scale200 key outputs copied to the mirror**, `results/cohorts/scale200/{2026-10-01_original,2026-10-08_audit_fixes}` (178 MB, verified). Descriptive names, at the user's request.
 - **NAME-1 added to the fix list:** rename the `refbias/` working folders (`results/` or `out/`), deferred by the user until the pipeline is stable.
+- **AA explained to the user:** Fitch parsimony on the CX333 panel tree,
+  reporting the MTBC ancestor (MRCA of non-canettii), with canettii breaking
+  ties nearest first.
+  - Measured: canettii decides 1,134 of 73,256 sites (1.5%); its main role is
+    rooting.
+  - The 7 Oct kit test gave 99.98% the same AA without canettii in the graph.
+- **OUT-1 added to the fix list:** a canettii pseudo-isolate (simulated reads
+  through P1-P5) for IS6110/SV/accessory polarity.
