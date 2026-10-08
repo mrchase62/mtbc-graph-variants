@@ -34,10 +34,11 @@ on boslogin06, which is not durable).
 
 **Decisions waiting on the user, in order:**
 
-1. **Restore the purged netscratch files** (below) from the durable mirror
-   into the working tree. Copy without keeping the old dates (or point the
-   config at the mirror copies), or the next purge deletes them again.
-   Nothing in the pipeline runs until this is done.
+1. **Done 2026-10-07 21:41 (user approved):** the 13 purged files listed
+   below were copied back from the mirror, each byte-identical (cmp), with
+   fresh dates so the next purge does not take them. Every `MTB_*` path in
+   the config resolves. Not restored: unknown older files in `data/fastas/`
+   (no mirror copy); nothing the code reads is missing.
 2. **The scale200 rerun: route and approval.** Estimate from gwas1000's
    measured per-sample costs:
 

@@ -937,3 +937,6 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - **User:** "Please hold off on the new graph comparisons until I get some
   data to evaluate the fixes. write this to handoff and we will get back to
   it." Written to HANDOFF "Start here (2026-10-07, evening)".
+- **User:** "yes, restore the purged files from the mirror." Done: 13 files
+  copied back, each identical to the mirror, with fresh dates; every
+  configured path resolves.
