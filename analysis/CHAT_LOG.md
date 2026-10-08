@@ -972,3 +972,12 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   fixed VCF; 73,256 ancestral sites.
 - **Chain submitted** (p1 to p5vcf, jobs 51285817-51285924). The association
   tail and the comparison follow when it finishes.
+- **Chain finished 11:10** (started 06:30), every task COMPLETED, no
+  failures or requeues. Measured cost of the chain by sacct billing weights:
+  **577 billing-hours**, over the approved 380. P5 states alone took 362
+  (median 49 min per sample, against 15 for both P5 submissions of the old
+  scale200): the new build id starts with an empty projection store, so 143
+  of the 200 tasks projected their reference's positions through odgi before
+  storing them. The estimate did not include this. P1 61, P2 89, P1g+P1i 39,
+  P3 13, P4b 9, P4 3, rest under 1 each. Association tail waiting for the
+  user's cost decision.
