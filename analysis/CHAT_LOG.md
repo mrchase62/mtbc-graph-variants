@@ -914,3 +914,26 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - gwas1000.
 
 **Compute:** 15.7 CPU-hours, above the roughly 11 estimated.
+
+## 2026-10-07 (evening): fixes first; graph work on hold
+
+- **User:** run the test-graph comparison; are there scale200 results with
+  CX333 before and after the fixes? "We don't need to do this with a new
+  graph now."
+- **Found:** netscratch was purged at 14:24 (files older than about 90
+  days): the pggb and vg containers, the H37Rv FASTAs, known_RDs beds and a
+  few data tables. All are on the mirror. Restoring them is the user's call.
+  The CRAMs (dated 2026-07-28) face the same purge around 2026-10-26.
+- **Answer:** no full fixed-code scale200 run exists yet. Rerun estimate
+  about 500 billing-hours (about 350 right-sized; about 150-200 reusing P1).
+- **User:** "How can I evaluate the fixes? ... I have not seen any output
+  yet." Published a page with what is measured:
+  https://claude.ai/artifact/S5zrD6Qzr5viBctJ3hGeRH. The association scan
+  with old vs fixed association code: the same 3 survivors and every DR
+  control in place; each earlier-step fix measured on its own.
+- **Test graphs A vs C:** canettii in the graph changes about 2-4% of the
+  other genomes' SNP calls, mostly near where canettii varies; 21 SNP
+  positions change base.
+- **User:** "Please hold off on the new graph comparisons until I get some
+  data to evaluate the fixes. write this to handoff and we will get back to
+  it." Written to HANDOFF "Start here (2026-10-07, evening)".

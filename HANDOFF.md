@@ -1,10 +1,100 @@
 # Handoff: one rerun to bring production data up to date
 
-Updated 2026-10-05. Repository `mtbc-graph-variants`, branch `main`
+Updated 2026-10-07 (evening). Repository `mtbc-graph-variants`, branch `main`
 (protected: no force-push, no deletion). `analysis/` and the paper PDF are
 untracked; `analysis/` lives on durable storage with the repository.
 
-## Start here (2026-10-05)
+## Start here (2026-10-07, evening): the one priority
+
+**The user's instruction (2026-10-07):** "Please hold off on the new graph
+comparisons until I get some data to evaluate the fixes."
+
+- **On hold:** all new-graph and test-graph work: the arm A vs C follow-up,
+  the B vs D sparse-mapping check, the canettii pseudo-isolate, and the new
+  lineage 1-4 panel. Do not start any of it until the user reopens it.
+- **The goal now:** data the user can use to evaluate the fixes, which means
+  **one scale200 rerun on the fixed code, on the existing CX333 graph** (the
+  user: "We don't need to do this with a new graph now"), into new output
+  folders, then a full old vs new comparison.
+
+**What the user has seen so far:** the page
+https://claude.ai/artifact/S5zrD6Qzr5viBctJ3hGeRH (private). It has:
+
+- the association scan with old vs fixed association code on today's scale200
+  calls: the same 3 survivors, branch-null passes 137 → 139, every DR control
+  in place;
+- each earlier-step fix measured on its own (from
+  `analysis/audit/FIX_EFFECTS.md` and section 0o);
+- a plain statement that no run yet has all fixes acting together.
+
+The source of the page is the session scratchpad; its content comes from
+FIX_EFFECTS.md, section 0o and a comparison of `assoc/scale200/scan.tsv` with
+review 2's `rr2/assoc/scale200/scan.tsv` (in `/tmp/claude-12043/review2_trees`
+on boslogin06, which is not durable).
+
+**Decisions waiting on the user, in order:**
+
+1. **Restore the purged netscratch files** (below) from the durable mirror
+   into the working tree. Copy without keeping the old dates (or point the
+   config at the mirror copies), or the next purge deletes them again.
+   Nothing in the pipeline runs until this is done.
+2. **The scale200 rerun: route and approval.** Estimate from gwas1000's
+   measured per-sample costs:
+
+   | part | billing-hours |
+   |---|---:|
+   | P1 + P2 for 200 samples at today's 8-core / 16 GB requests | about 300 |
+   | IS6110 stage 1 (P1g, P1i) | about 40 |
+   | SV projection for the new build | about 60 |
+   | P3 to P5, the rest | about 50-70 |
+   | new build steps on the CX333 graph (graph VCF with fix 4, panel tree, ancestral, intervals, node_occ) | about 30-50 |
+   | tree and association | about 10-20 |
+   | **total** | **about 500** |
+
+   Cheaper routes:
+   - right-size P1/P2 to 4 cores and 4 GB (option A in section 0c, a
+     request change only): about 350 in all;
+   - reuse scale200's P1 H37Rv alignments and calls (dated 2026-09-23;
+     only the selection step after them changed) and rerun P2 only for
+     the about 25 isolates whose reference changes: about 150-200. This is
+     an explicit exception to D38, and needs a check first that no code
+     producing those files changed after 2026-09-23.
+3. **Deadline:** the CRAM collection (`MTB_CRAM_ROOT`, dated 2026-07-28) falls
+   under the same 90-day purge around 2026-10-26. The rerun needs it.
+
+**Netscratch purge, 2026-10-07 14:24.** FASRC's purge removed every working-tree
+file not modified for about 90 days. Only 5 folders changed: `containers/`,
+`data/`, `data/ref/`, `data/fastas/`, `data/annotation/`. Gone, and all present
+on the mirror (`/n/boslfs02/LABS/sfortune_lab/Lab/mchase/MtbPangenome`):
+
+- `containers/pggb_latest.sif`, `containers/vg_v1.69.0.sif`;
+- `data/ref/H37Rv.fasta`, `data/ref/GCF_000195955.pansn.fasta` (+ .fai). The
+  second is `MTB_REF_FASTA`;
+- `data/annotation/known_RDs.bed`, `known_RDs_L1L2L4bovis.bed`,
+  `H37Rv_repeat_mask.measured.bed`;
+- `data/collinearity_synteny_summary.tsv`, `lineage_defs.tsv`, `list.tsv`,
+  `tbprofiler.txt`, `tbprof_lineages.csv`;
+- `data/fastas/`: some older files (the mirror has no `fastas/` to compare;
+  `mtb.complex333.fasta.gz` is still there).
+
+The CX333 graph (`graphs/CX333.s10k.k23.K15`), the build `7713a8d71d8e` and all
+cohort outputs are intact. The CRAMs survived.
+
+**Done this session, recorded for later (no action needed):**
+
+- Outgroup test: `analysis/outgroup_test/README.md` (canettii can stay out of
+  the graph and remain the tree outgroup).
+- Test graphs arm A vs C, genotype comparison (on hold after this):
+  `analysis/graph_tests/compare_A_C.out`, script `compare_arms.py`, VCFs
+  decomposed with `decompose_arm.sbatch` (jobs 51202368/71, about 1
+  billing-hour; containers read from the mirror). Over 49 shared genomes:
+  SNP calls 69,517 in both, 1,129 only without canettii, 574 only with;
+  indels 8,925 / 1,031 / 467; SVs 4,668 / 275 / 385. Most differences lie
+  within 50 bp of a site where canettii varies (bubble reshaping); only 21
+  SNP positions change base. Which arm is right is not tested (next step
+  would score both against direct alignments).
+
+## Earlier start-here (2026-10-05)
 
 **Audit (section 0m): 97 findings, and the current association results are
 provisional.** Steps 1-3 (code into the repository, then the section A and B
