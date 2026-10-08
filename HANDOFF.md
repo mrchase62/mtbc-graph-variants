@@ -86,10 +86,32 @@ on boslogin06, which is not durable).
    - The chain finished 11:10 with no failures. It cost **577 billing-hours by
      sacct, over the approved 380**: P5 states took 362, because the new build
      id starts with an empty projection store.
-   - The association tail is running. Its tree job 51338524 is building the
-     cohort + panel tree. After it, run `analysis/rerun_scale200/06_assoc_tail.sbatch`
-     again from `runroot` for the tests.
-   - Then the old vs new comparison.
+   - **Association tail done 18:21.**
+     - The tree (51338524: 24 cores, 2 h 58 min) cost 53.3 billing-hours,
+       and the tests 1.0, so the rerun's total is **about 631
+       billing-hours** against the approved 380.
+     - The chain audit passes, with the usual small/masked drop warning (2%).
+   - **Headline, same phenotype file (57 RRDR carriers of 202 tips):**
+
+     | | old scale200 | scale200_fix |
+     |---|---:|---:|
+     | variants tested | 2,602 | 2,690 |
+     | q_branch < 0.05 | 137 | 92 |
+     | variant-level survivors | 3 | 6 |
+     | small-variant burden survivors | 6 | 8 |
+
+     - **Variant survivors:**
+       - old: rpoB S450L (761155), embB M306 (4247429), embB G406 (4247730);
+       - new: those three, plus katG S315T (2155168, 28 gains), rpsL K43R
+         (781687) and embB 4247431.
+       - rpoB S450L gains go from 16 to 23.
+     - **Burden survivors:** katG and rpsL join rpoB, rpoC, embB, gyrA, pncA
+       and ethA.
+     - **SV and IS6110 burdens:** 0 survivors, as before.
+     - **Every DR positive control the old run found is still found**, and
+       katG, which narrowly missed before, now passes.
+   - **Next:** the full old vs new comparison (report only), covering calls
+     by class, NOCALL/ABSENT, IS6110, accessory, SV, AA and q_branch changes.
 3. **Deadline:** the CRAM collection (`MTB_CRAM_ROOT`, dated 2026-07-28) falls
    under the same 90-day purge around 2026-10-26. The rerun needs it.
 

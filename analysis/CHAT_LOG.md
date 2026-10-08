@@ -1056,3 +1056,9 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     leave no clipped reads (need a depth scan).
   - Next options: local assembly of candidates, a depth scan, Phase B real
     reads.
+- **scale200_fix association done.**
+  - Variant survivors 3 -> 6 (adds katG S315T, rpsL K43R, embB 4247431);
+    burden survivors 6 -> 8 (adds katG, rpsL); q_branch passes 137 -> 92.
+  - All DR controls found.
+  - The tree cost 53 billing-hours; the rerun's total is about 631 against
+    380 approved.
