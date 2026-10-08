@@ -182,6 +182,41 @@ cohort's calls. Proposed: `results/` or `out/`; the user decides at the time.
 - **Timing (user):** deal with it later, once the pipeline is stable. Not
   part of the next rerun.
 
+**AA-1: flag unreliable ancestral alleles** (added 2026-10-08, user).
+
+- **The gap:** `AA_FLAG` marks only TIED (17 sites) and NODATA. Homoplastic
+  sites, and sites decided by the canettii tie-break, carry an AA that looks
+  as certain as any other.
+- **Measured on build fix1** (Fitch changes on the panel tree; this counts
+  changes on the canettii branches too, so it slightly overstates homoplasy
+  within the MTBC):
+  - 1,741 of 73,256 panel SNP sites (2.4%) need 2 or more changes, and 494
+    need 5 or more;
+  - 196 of the 1,084 alt-ancestral sites are homoplastic;
+  - 1,134 sites were decided by canettii, 111 of them homoplastic.
+- **Homoplasy in the association:** per variant on the cohort tree
+  (`assoc/<cohort>/events/variants.tsv`: n_gain, n_loss), with the region
+  null matched on homoplasy rate. 38,244 records have no AA and are polarised
+  ALT-as-derived by assumption; this shows in `events/summary.txt`, not in
+  the VCF.
+
+What to change, in `bin/ancestral_alleles.py`, `assets/ancestral.tsv` and the
+merged VCF:
+1. **`AA_CHANGES`:** the Fitch change count on the panel tree.
+2. **`AA_FLAG` values:**
+   - `HOMOPLASTIC` when changes >= 2 (threshold to confirm with the user);
+   - `OUTGROUP` when canettii decided the MTBC ancestor's state;
+   - the two can combine with TIED.
+3. **`AA_SOURCE`:** reconstructed, or assumed (ALT = derived), on every
+   record, so assumed polarity is visible in the VCF.
+4. **Optional:** the probabilistic reconstruction (the share of all equally
+   good reconstructions putting each base at the MTBC ancestor), which the
+   script already names as the possible upgrade.
+
+The counting code used for the numbers above is a modified copy of
+`ancestral_alleles.py` in the 2026-10-08 session scratchpad. Rebuild it in
+the repository.
+
 **OUT-1: canettii pseudo-isolate for event-state polarity** (added
 2026-10-08, user).
 

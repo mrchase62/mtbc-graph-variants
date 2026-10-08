@@ -1093,3 +1093,4 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - The 7 Oct kit test gave 99.98% the same AA without canettii in the graph.
 - **OUT-1 added to the fix list:** a canettii pseudo-isolate (simulated reads
   through P1-P5) for IS6110/SV/accessory polarity.
+- **AA-1 added to the fix list:** AA_CHANGES (Fitch count), AA_FLAG HOMOPLASTIC/OUTGROUP, AA_SOURCE for assumed polarity. Measured: 1,741 panel sites (2.4%) homoplastic, 196 of 1,084 alt-ancestral.
