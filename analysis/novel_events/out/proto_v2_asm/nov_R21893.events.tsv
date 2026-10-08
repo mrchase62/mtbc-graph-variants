@@ -1,0 +1,20 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_R21893	BND	369039	369039	0	9	0	9		lclip;not assembled
+nov_R21893	BND	369132	369132	0	16	16	0		rclip;not assembled
+nov_R21893	INS	369457	369477	0	35	15	20		clip;one_end=0;not assembled
+nov_R21893	DEL	899022	1542696	643675					assembled
+nov_R21893	DEL	1188570	1188791	222					assembled
+nov_R21893	DEL	1395116	1397473	2358					assembled
+nov_R21893	BND	2145123	2145123	0	105	0	105		lclip;not assembled
+nov_R21893	INS	2145174	2145174	69	150	203	86		clip;tandem_dup;not assembled
+nov_R21893	BND	2145187	2145187	0	23	23	0		rclip;not assembled
+nov_R21893	INS	2614771	2614771	364314					assembled
+nov_R21893	INV	3042172	3361778	319606					assembled
+nov_R21893	INS	3042175	3042175	3040580					assembled
+nov_R21893	INS	3716482	3716501	0	51	25	26		clip;one_end=8;not assembled
+nov_R21893	BND	3716693	3716693	0	63	0	63		lclip;not assembled
+nov_R21893	BND	3717802	3717802	0	58	58	0		rclip;not assembled
+nov_R21893	BND	3723862	3723862	0	17	17	0		rclip;not assembled
+nov_R21893	BND	3723887	3723887	0	19	0	19		lclip;not assembled
+nov_R21893	BND	3747124	3747124	0	37	0	37		lclip;not assembled
+nov_R21893	BND	3747160	3747160	0	39	39	0		rclip;not assembled

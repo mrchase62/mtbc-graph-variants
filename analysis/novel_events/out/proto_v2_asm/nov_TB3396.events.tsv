@@ -1,0 +1,70 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_TB3396	INS	336845	336845	60					assembled
+nov_TB3396	BND	422355	422355	0	24	0	24		lclip;not assembled
+nov_TB3396	BND	422486	422486	0	29	29	0		rclip;not assembled
+nov_TB3396	BND	471000	471000	0	8	0	8		lclip;not assembled
+nov_TB3396	BND	579057	579057	0	11	11	0		rclip;not assembled
+nov_TB3396	BND	579079	579079	0	11	0	11		lclip;not assembled
+nov_TB3396	INS	801325	801325	108					assembled
+nov_TB3396	DEL	835643	835726	84					assembled
+nov_TB3396	BND	884726	884726	0	8	8	0		rclip;not assembled
+nov_TB3396	REARR	922234	922506	272	3	27	0		clip;not assembled
+nov_TB3396	BND	922489	922489	0	39	0	39		lclip;not assembled
+nov_TB3396	REPL	1089463	1089514	64					assembled
+nov_TB3396	INS	1184591	1184611	0	26	12	14		clip;one_end=0;not assembled
+nov_TB3396	INS	1187107	1187107	54					assembled
+nov_TB3396	INS	1207702	1207716	0	32	17	15		clip;one_end=0;not assembled
+nov_TB3396	INS	1382205	1382207	0	31	15	16		clip;one_end=0;not assembled
+nov_TB3396	BND	1448842	1448842	0	9	0	9		lclip;not assembled
+nov_TB3396	INS	1487883	1487884	0	29	13	16		clip;one_end=0;not assembled
+nov_TB3396	BND	1529626	1529626	0	32	0	32		lclip;not assembled
+nov_TB3396	DEL	1529629	1541923	12295	26	29	36	0.90	clip;not assembled
+nov_TB3396	DEL	1540571	1541923	1353	79	42	36	0.58	clip;not assembled
+nov_TB3396	BND	1542588	1542588	0	31	0	31		lclip;not assembled (window > 20 kb)
+nov_TB3396	DEL	1542592	1634978	92387	25	41	85	1.00	clip;not assembled (window > 20 kb)
+nov_TB3396	BND	1635012	1635012	0	89	89	0		rclip;not assembled (window > 20 kb)
+nov_TB3396	REPL	1635954	1636092	145					assembled
+nov_TB3396	INS	1897935	1897935	56					assembled
+nov_TB3396	INV	1980173	2363065	382892	17	24	0		clip;not assembled (window > 20 kb)
+nov_TB3396	BND	1981304	1981304	0	35	0	35		lclip;not assembled (window > 20 kb)
+nov_TB3396	BND	2146123	2146123	0	8	0	8		lclip;not assembled (window > 20 kb)
+nov_TB3396	BND	2146250	2146250	0	12	12	0		rclip;not assembled (window > 20 kb)
+nov_TB3396	BND	2146331	2146331	0	9	9	0		rclip;not assembled (window > 20 kb)
+nov_TB3396	BND	2150765	2150765	0	13	0	13		lclip;not assembled (window > 20 kb)
+nov_TB3396	DEL	2316805	2317461	657	0	72	64	0.00	clip;depth_joined;not assembled (window > 20 kb)
+nov_TB3396	DEL	2361348	2362692	1345	46	30	32	0.75	clip;not assembled (window > 20 kb)
+nov_TB3396	BND	2362814	2362814	0	40	0	40		lclip;not assembled (window > 20 kb)
+nov_TB3396	DEL	2362820	2363129	310	3	50	35	1.06	clip;not assembled (window > 20 kb)
+nov_TB3396	DEL	2363133	2368359	5227	10	28	19	1.02	clip;not assembled (window > 20 kb)
+nov_TB3396	BND	2368483	2368483	0	11	11	0		rclip;not assembled (window > 20 kb)
+nov_TB3396	BND	2397739	2397739	0	41	0	41		lclip;not assembled
+nov_TB3396	BND	2397849	2397849	0	46	46	0		rclip;not assembled
+nov_TB3396	DEL	2426039	2427396	1358					assembled
+nov_TB3396	DEL	2531301	2531375	75					assembled
+nov_TB3396	DEL	2545300	2546657	1358					assembled
+nov_TB3396	BND	2629856	2629856	0	26	26	0		rclip;not assembled
+nov_TB3396	DEL	2967129	2968486	1358					assembled
+nov_TB3396	BND	2991082	2991082	0	9	0	9		lclip;not assembled
+nov_TB3396	BND	2991246	2991246	0	10	10	0		rclip;not assembled
+nov_TB3396	DEL	3547022	3548374	1353					assembled
+nov_TB3396	DEL	3548502	3549859	1358					assembled
+nov_TB3396	DEL	3794472	3795829	1358					assembled
+nov_TB3396	BND	3821209	3821209	0	13	0	13		lclip;not assembled
+nov_TB3396	BND	3842451	3842451	0	20	0	20		lclip;not assembled
+nov_TB3396	INS	3849384	3849384	2433					assembled
+nov_TB3396	DEL	3893006	3894363	1358					assembled
+nov_TB3396	INS	3931240	3931240	81					assembled
+nov_TB3396	INS	3934944	3934944	75					assembled
+nov_TB3396	REPL	3937970	3938241	566					assembled
+nov_TB3396	BND	3943165	3943165	0	36	0	36		lclip;not assembled
+nov_TB3396	BND	3943177	3943177	0	46	0	46		lclip;not assembled
+nov_TB3396	BND	3943226	3943226	0	8	0	8		lclip;not assembled
+nov_TB3396	INS	3943481	3943482	0	126	53	73		clip;one_end=0;not assembled
+nov_TB3396	BND	3943643	3943643	0	80	80	0		rclip;not assembled
+nov_TB3396	INS	3944856	3944856	117					assembled
+nov_TB3396	INS	3946062	3946062	32	3	23	20		clip;tandem_dup;not assembled
+nov_TB3396	REPL	3948791	3949691	901					assembled
+nov_TB3396	REARR	4121023	4121375	352	10	97	0		clip;not assembled
+nov_TB3396	BND	4121239	4121239	0	85	0	85		lclip;not assembled
+nov_TB3396	BND	4232200	4232200	0	11	0	11		lclip;not assembled
+nov_TB3396	INS	4349082	4349082	99	2	19	17		clip;tandem_dup;not assembled

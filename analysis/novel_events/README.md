@@ -88,3 +88,66 @@ Plan: `PLAN.md`. The user approved Phase A at 30 billing-hours. Used: **24.5**
   tandem-repeat expansions and contractions.
 - Phase B with real reads. Simulated reads are cleaner than real ones, and
   dysgu did worse on real ctpV reads than here.
+
+## Steps 1 and 2 (2026-10-08; job 51415882, 41 min)
+
+Phase A's total is now **30.0 billing-hours**, the approved budget.
+
+**Step 1: local assembly of each prototype v2 candidate**
+(`assemble_candidates.py` -> `out/proto_v2_asm`).
+- Candidates within 500 bp share a window.
+- Reads within 1.5 kb of the window, plus their mates, come from the P2 BAM
+  and are assembled with SPAdes `--isolate`.
+- Contigs of 300 bp or more are aligned to the matched reference with
+  minimap2 `asm5`.
+- Events are read off the contigs with the truth-set rules.
+- Windows that give no events keep the prototype's calls.
+
+**Step 2: read-depth scan** (`depth_scan.py` -> `out/depth`).
+- samtools depth with all mapping qualities, in 100 bp windows, against the
+  sample's median window depth.
+- 2 or more windows at 1.4x or above is a gain (INS); 2 or more at 0.6x or
+  below is a loss (DEL).
+- A true event matches when it lies within the run +-200 bp. Long runs do not
+  inflate this: 20 runs over 5 kb hold 14 events, and recall without them is
+  0.373 against 0.386.
+
+| caller | typed recall | breakpoint found | precision |
+|---|---:|---:|---:|
+| prototype v2 | 0.33 | 0.56 | 0.62 |
+| prototype v2 + assembly | 0.38 | 0.58 | 0.67 |
+| depth scan | 0.36 | 0.39 | 0.44 |
+| prototype + assembly + depth | 0.61 | 0.76 | 0.54 |
+| dysgu PASS | 0.51 | 0.53 | 0.65 |
+| prototype + assembly + dysgu PASS | 0.60 | 0.66 | 0.66 |
+| **prototype + assembly + depth + dysgu PASS** | **0.77** | **0.81** | **0.58** |
+
+**By size** (all four together; in brackets, dysgu PASS alone):
+
+| size | typed recall |
+|---|---|
+| 50-150 bp | 0.64 (0.48) |
+| 150-500 bp | 0.80 (0.45) |
+| 500-2,000 bp | 0.91 (0.60) |
+| > 2 kb | 0.91 (0.55) |
+
+**What each step adds:**
+- **The depth scan** carries the 150-500 bp and > 2 kb classes, which are the
+  tandem copy-number changes: recall 0.64 and 0.68 alone. It is weak below
+  150 bp (0.13).
+- **Assembly** raises precision (0.62 -> 0.67) and types more 50-150 bp events
+  (0.24 -> 0.36). It does not yet type IS6110-sized insertions: their
+  contigs end inside the element, so the breakpoint is found (0.93) but the
+  event is not sized.
+  - dysgu types those (0.90), so the union is 0.92.
+
+**Precision:**
+- The depth scan's 0.44 is the main false-call source: 488 of 866 runs match
+  no true event. Some may be events the truth set misses, but most are
+  probably depth noise.
+- Real reads add GC bias, which makes depth calls noisier.
+
+**Next:** Phase B, scored with real reads. The 63 Marin Illumina runs are
+downloading. Running P1/P2 on them needs the user's approval: about 30
+billing-hours at the novelA40 rate (P1 + P2 about 0.6 per sample), plus about
+6 for the callers.

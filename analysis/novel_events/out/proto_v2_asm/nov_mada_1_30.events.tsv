@@ -1,0 +1,25 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_mada_1_30	INV	1653	1995621	1993968					assembled
+nov_mada_1_30	DEL	1656	3125666	3124011					assembled
+nov_mada_1_30	REARR	104065	1786100	1682035	5	21	0		clip;not assembled (window > 20 kb)
+nov_mada_1_30	BND	198750	198750	0	12	12	0		rclip;not assembled (window > 20 kb)
+nov_mada_1_30	BND	198976	198976	0	15	0	15		lclip;not assembled (window > 20 kb)
+nov_mada_1_30	BND	199078	199078	0	43	43	0		rclip;not assembled (window > 20 kb)
+nov_mada_1_30	INS	691070	691071	0	112	52	60		clip;one_end=44;not assembled (window > 20 kb)
+nov_mada_1_30	DEL	844626	845183	558	41	29	31	0.00	clip;not assembled (window > 20 kb)
+nov_mada_1_30	REARR	1637778	1998260	360482	4	10	0		clip;not assembled (window > 20 kb)
+nov_mada_1_30	BND	1786100	1786100	0	21	0	21		lclip;not assembled (window > 20 kb)
+nov_mada_1_30	BND	1786134	1786134	0	21	21	0		rclip;not assembled (window > 20 kb)
+nov_mada_1_30	BND	1998277	1998277	0	8	0	8		lclip;not assembled (window > 20 kb)
+nov_mada_1_30	DEL	2082835	2082890	56					assembled
+nov_mada_1_30	INS	2131842	2131842	7369	23	32	32		clip;tandem_dup;not assembled
+nov_mada_1_30	DEL	2141350	2141447	98					assembled
+nov_mada_1_30	DEL	2344899	2345779	881					assembled
+nov_mada_1_30	BND	2647472	2647472	0	63	63	0		rclip;not assembled
+nov_mada_1_30	BND	2648814	2648814	0	28	0	28		lclip;not assembled
+nov_mada_1_30	BND	2650562	2650562	0	11	0	11		lclip;not assembled
+nov_mada_1_30	BND	2650587	2650587	0	18	18	0		rclip;not assembled
+nov_mada_1_30	DEL	3313354	3313408	55					assembled
+nov_mada_1_30	DEL	3326317	3327675	1359					assembled
+nov_mada_1_30	DEL	3724378	3724828	451					assembled
+nov_mada_1_30	INS	4374751	4374751	57					assembled

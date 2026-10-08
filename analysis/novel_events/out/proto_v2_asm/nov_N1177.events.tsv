@@ -1,0 +1,19 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_N1177	BND	1312	1312	0	44	0	44		lclip;not assembled (window > 20 kb)
+nov_N1177	DEL	1315	38688	37374	38	40	11	1.01	clip;not assembled (window > 20 kb)
+nov_N1177	BND	38715	38715	0	19	19	0		rclip;not assembled (window > 20 kb)
+nov_N1177	DEL	328821	331646	2826	56	29	20	0.00	clip;not assembled (window > 20 kb)
+nov_N1177	INV	331411	834863	503452	3	54	0		clip;not assembled (window > 20 kb)
+nov_N1177	BND	621773	621773	0	43	0	43		lclip;not assembled (window > 20 kb)
+nov_N1177	BND	621804	621804	0	58	58	0		rclip;not assembled (window > 20 kb)
+nov_N1177	BND	834848	834848	0	49	0	49		lclip;not assembled (window > 20 kb)
+nov_N1177	INS	838883	838883	93					assembled
+nov_N1177	INS	1374117	1374117	567					assembled
+nov_N1177	DEL	1635522	1636022	501					assembled
+nov_N1177	REPL	1637117	1637178	65					assembled
+nov_N1177	INS	1840216	1840216	114					assembled
+nov_N1177	BND	2167577	2167577	0	11	0	11		lclip;not assembled
+nov_N1177	REPL	3098989	3099166	178					assembled
+nov_N1177	DEL	3099168	3099318	151					assembled
+nov_N1177	BND	3929653	3929653	0	19	19	0		rclip;not assembled
+nov_N1177	BND	3929684	3929684	0	29	0	29		lclip;not assembled

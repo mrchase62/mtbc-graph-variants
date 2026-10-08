@@ -1,0 +1,13 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_mada_2_46	BND	511818	511818	0	16	0	16		lclip;not assembled
+nov_mada_2_46	DEL	634672	634764	93					assembled
+nov_mada_2_46	DEL	804709	812904	8196					assembled
+nov_mada_2_46	BND	910649	910649	0	10	10	0		rclip;not assembled
+nov_mada_2_46	BND	1004173	1004173	0	8	8	0		rclip;not assembled
+nov_mada_2_46	DEL	1945565	1945624	60					assembled
+nov_mada_2_46	INS	1958518	1958518	171					assembled
+nov_mada_2_46	BND	2004013	2004013	0	10	0	10		lclip;not assembled
+nov_mada_2_46	REPL	2150803	2151492	690					assembled
+nov_mada_2_46	BND	3817422	3817422	0	9	9	0		rclip;not assembled
+nov_mada_2_46	INS	3956075	3956076	0	20	11	9		clip;one_end=0;not assembled
+nov_mada_2_46	INS	4108306	4108316	0	19	9	10		clip;one_end=0;not assembled

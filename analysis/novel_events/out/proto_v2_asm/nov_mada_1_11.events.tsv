@@ -1,0 +1,4 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_mada_1_11	DEL	849924	851281	1358					assembled
+nov_mada_1_11	DEL	2729171	2730528	1358					assembled
+nov_mada_1_11	DEL	3367173	3370200	3028					assembled

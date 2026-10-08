@@ -1,0 +1,25 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_mada_151	INS	338216	338223	0	46	23	23		clip;one_end=0;not assembled
+nov_mada_151	BND	339651	339651	0	12	0	12		lclip;not assembled
+nov_mada_151	INS	920125	920125	91					assembled
+nov_mada_151	INS	1217778	1217786	0	65	32	33		clip;one_end=0;not assembled
+nov_mada_151	INS	1448602	1448602	56					assembled
+nov_mada_151	INS	1457055	1457055	102	7	55	50		clip;tandem_dup;not assembled
+nov_mada_151	INS	1633891	1633902	0	20	11	9		clip;one_end=0;not assembled
+nov_mada_151	BND	1639022	1639022	0	13	0	13		lclip;not assembled
+nov_mada_151	BND	1908470	1908470	0	31	0	31		lclip;not assembled (window > 20 kb)
+nov_mada_151	DEL	1908475	1990235	81761	4	39	54	1.03	clip;not assembled (window > 20 kb)
+nov_mada_151	BND	1990266	1990266	0	45	45	0		rclip;not assembled (window > 20 kb)
+nov_mada_151	INS	2162728	2162728	83	7	12	8		clip;tandem_dup;not assembled
+nov_mada_151	INS	2168721	2168721	78					assembled
+nov_mada_151	DEL	2219426	3706885	1487460					assembled
+nov_mada_151	INS	3113614	3113614	71					assembled
+nov_mada_151	DEL	3117504	3117800	297					assembled
+nov_mada_151	INS	3118452	3118452	73					assembled
+nov_mada_151	DEL	3153382	3706885	553504					assembled
+nov_mada_151	INS	3546910	3546910	1830014					assembled
+nov_mada_151	BND	3882849	3882849	0	15	0	15		lclip;not assembled
+nov_mada_151	INS	3944922	3944922	270					assembled
+nov_mada_151	DEL	4028425	4028496	72					assembled
+nov_mada_151	INS	4090866	4090885	0	19	9	10		clip;one_end=0;not assembled
+nov_mada_151	INS	4201876	4201883	0	78	29	49		clip;one_end=0;not assembled

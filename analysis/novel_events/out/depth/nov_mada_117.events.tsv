@@ -1,0 +1,16 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_mada_117	DEL	136301	137000	516				0.26	depth
+nov_mada_117	DEL	537301	540700	3343				0.02	depth
+nov_mada_117	DEL	1477001	1477600	359				0.40	depth
+nov_mada_117	DEL	1942101	1942300	110				0.45	depth
+nov_mada_117	INS	1953401	1953600	124				1.62	depth
+nov_mada_117	DEL	2003501	2004000	303				0.39	depth
+nov_mada_117	DEL	2040701	2048100	7112				0.04	depth
+nov_mada_117	DEL	2138401	2138600	128				0.36	depth
+nov_mada_117	INS	2140101	2140500	239				1.60	depth
+nov_mada_117	INS	2771601	2773000	2575				2.84	depth
+nov_mada_117	DEL	2816301	2818600	2273				0.01	depth
+nov_mada_117	DEL	3017701	3017900	82				0.59	depth
+nov_mada_117	INS	3270901	3271100	152				1.76	depth
+nov_mada_117	INS	3271201	3271400	92				1.46	depth
+nov_mada_117	INS	4108301	4108600	193				1.64	depth

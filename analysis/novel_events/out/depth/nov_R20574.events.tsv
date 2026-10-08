@@ -1,0 +1,4 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_R20574	INS	2801	3000	105				1.53	depth
+nov_R20574	INS	2146501	2146800	531				2.77	depth
+nov_R20574	INS	3716701	3717800	1246				2.13	depth

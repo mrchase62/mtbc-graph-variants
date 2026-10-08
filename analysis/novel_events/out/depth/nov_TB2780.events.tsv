@@ -1,0 +1,9 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_TB2780	INS	887601	887800	149				1.74	depth
+nov_TB2780	DEL	963801	964000	146				0.27	depth
+nov_TB2780	DEL	1331801	1332600	795				0.01	depth
+nov_TB2780	INS	1976201	1976400	202				2.01	depth
+nov_TB2780	DEL	2791601	2792000	334				0.16	depth
+nov_TB2780	INS	3220901	3221100	241				2.21	depth
+nov_TB2780	INS	3817801	3818100	430				2.43	depth
+nov_TB2780	INS	4121701	4121900	277				2.38	depth

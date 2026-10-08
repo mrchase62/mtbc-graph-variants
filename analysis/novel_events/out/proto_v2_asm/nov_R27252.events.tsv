@@ -1,0 +1,102 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_R27252	REPL	104879	104951	73					assembled
+nov_R27252	INS	335093	335093	114					assembled
+nov_R27252	BND	354339	354339	0	45	0	45		lclip;not assembled
+nov_R27252	BND	354567	354567	0	12	12	0		rclip;not assembled
+nov_R27252	BND	354611	354611	0	24	0	24		lclip;not assembled
+nov_R27252	BND	354714	354714	0	10	10	0		rclip;not assembled
+nov_R27252	BND	354736	354736	0	13	0	13		lclip;not assembled
+nov_R27252	BND	354907	354907	0	9	9	0		rclip;not assembled
+nov_R27252	BND	388031	388031	0	21	21	0		rclip;not assembled
+nov_R27252	BND	388075	388075	0	17	0	17		lclip;not assembled
+nov_R27252	INS	574391	574404	0	16	8	8		clip;one_end=0;not assembled
+nov_R27252	DEL	929956	930045	90					assembled
+nov_R27252	DEL	1094293	1094358	66					assembled
+nov_R27252	DEL	1094542	1095124	583					assembled
+nov_R27252	INS	1095595	1095595	1672					assembled
+nov_R27252	INS	1211627	1211637	0	21	10	11		clip;one_end=0;not assembled
+nov_R27252	INS	1388908	1388908	56					assembled
+nov_R27252	DEL	1403966	1404091	126					assembled
+nov_R27252	BND	1414160	1414160	0	73	0	73		lclip;not assembled
+nov_R27252	DEL	1414383	1414543	161	3	42	57	1.01	clip;not assembled
+nov_R27252	BND	1415482	1415482	0	70	70	0		rclip;not assembled
+nov_R27252	DEL	1616761	1616820	60					assembled
+nov_R27252	BND	1629246	1629246	0	8	8	0		rclip;not assembled
+nov_R27252	INS	1642763	1642763	53					assembled
+nov_R27252	BND	1777615	1777615	0	64	64	0		rclip;not assembled
+nov_R27252	BND	1778614	1778614	0	12	12	0		rclip;not assembled
+nov_R27252	INS	1950666	1950666	149					assembled
+nov_R27252	BND	2021452	2021452	0	12	0	12		lclip;not assembled
+nov_R27252	BND	2084129	2084129	0	8	8	0		rclip;not assembled
+nov_R27252	BND	2158784	2158784	0	10	0	10		lclip;not assembled
+nov_R27252	BND	2159009	2159009	0	27	0	27		lclip;not assembled
+nov_R27252	BND	2159136	2159136	0	17	17	0		rclip;not assembled
+nov_R27252	INS	2221728	2221728	313	26	38	37		clip;tandem_dup;not assembled
+nov_R27252	INS	2233696	2233696	0	22	11	11		clip;one_end=0;not assembled
+nov_R27252	BND	2270724	2270724	0	35	0	35		lclip;not assembled (window > 20 kb)
+nov_R27252	REARR	2270726	3124005	853279	29	39	0		clip;not assembled (window > 20 kb)
+nov_R27252	BND	2321245	2321245	0	11	11	0		rclip;not assembled (window > 20 kb)
+nov_R27252	INS	2358015	2358020	0	100	57	43		clip;one_end=0;not assembled (window > 20 kb)
+nov_R27252	BND	2410659	2410659	0	31	0	31		lclip;not assembled (window > 20 kb)
+nov_R27252	REARR	2410661	3124005	713344	24	31	0		clip;not assembled (window > 20 kb)
+nov_R27252	BND	2869739	2869739	0	34	0	34		lclip;not assembled (window > 20 kb)
+nov_R27252	BND	2869766	2869766	0	52	52	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	2948800	2948800	0	8	0	8		lclip;not assembled (window > 20 kb)
+nov_R27252	BND	2955686	2955686	0	11	11	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	2955715	2955715	0	9	0	9		lclip;not assembled (window > 20 kb)
+nov_R27252	DEL	2975903	2976005	103	4	54	61	1.84	clip;not assembled (window > 20 kb)
+nov_R27252	BND	2975956	2975956	0	81	81	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	2976023	2976023	0	36	0	36		lclip;not assembled (window > 20 kb)
+nov_R27252	INS	2976088	2976088	230	10	109	146		clip;tandem_dup;not assembled (window > 20 kb)
+nov_R27252	BND	2976413	2976413	0	22	0	22		lclip;not assembled (window > 20 kb)
+nov_R27252	BND	2976443	2976443	0	29	29	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	2976613	2976613	0	9	0	9		lclip;not assembled (window > 20 kb)
+nov_R27252	BND	2976707	2976707	0	25	0	25		lclip;not assembled (window > 20 kb)
+nov_R27252	BND	2976729	2976729	0	31	31	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	2976794	2976794	0	49	0	49		lclip;not assembled (window > 20 kb)
+nov_R27252	BND	2976904	2976904	0	64	64	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	2977021	2977021	0	51	0	51		lclip;not assembled (window > 20 kb)
+nov_R27252	BND	2977086	2977086	0	58	58	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	2977153	2977153	0	56	0	56		lclip;not assembled (window > 20 kb)
+nov_R27252	BND	2977658	2977658	0	11	0	11		lclip;not assembled (window > 20 kb)
+nov_R27252	BND	2977878	2977878	0	34	34	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	2978009	2978009	0	57	0	57		lclip;not assembled (window > 20 kb)
+nov_R27252	INS	2978065	2978078	0	21	11	10		clip;one_end=33;not assembled (window > 20 kb)
+nov_R27252	INS	2978438	2978445	0	33	23	10		clip;one_end=39;not assembled (window > 20 kb)
+nov_R27252	BND	2978696	2978696	0	54	54	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	2981464	2981464	0	24	0	24		lclip;not assembled (window > 20 kb)
+nov_R27252	BND	2981495	2981495	0	13	13	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	2981574	2981574	0	16	16	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	2981653	2981653	0	56	0	56		lclip;not assembled (window > 20 kb)
+nov_R27252	BND	2981784	2981784	0	53	53	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	3122537	3122537	0	29	29	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	3122574	3122574	0	23	0	23		lclip;not assembled (window > 20 kb)
+nov_R27252	DEL	3122763	3122873	111	13	28	26	0.00	clip;not assembled (window > 20 kb)
+nov_R27252	INV	3125310	3482257	356947	31	42	0		clip;not assembled (window > 20 kb)
+nov_R27252	DEL	3125360	3130147	4788	61	139	36	0.97	clip;not assembled (window > 20 kb)
+nov_R27252	BND	3126924	3126924	0	29	29	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	3126958	3126958	0	17	0	17		lclip;not assembled (window > 20 kb)
+nov_R27252	INS	3130150	3130150	6145	19	28	128		clip;tandem_dup;not assembled (window > 20 kb)
+nov_R27252	DEL	3175826	3175882	57	0	31	19	0.00	clip;depth_joined;not assembled (window > 20 kb)
+nov_R27252	BND	3243773	3243773	0	13	0	13		lclip;not assembled (window > 20 kb)
+nov_R27252	BND	3243864	3243864	0	9	9	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	3381578	3381578	0	61	0	61		lclip;not assembled (window > 20 kb)
+nov_R27252	INS	3381939	3381951	0	26	13	13		clip;one_end=75;not assembled (window > 20 kb)
+nov_R27252	BND	3382008	3382008	0	50	50	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	3382303	3382303	0	73	0	73		lclip;not assembled (window > 20 kb)
+nov_R27252	DEL	3382924	3383125	202	6	65	55	1.16	clip;not assembled (window > 20 kb)
+nov_R27252	BND	3383231	3383231	0	56	56	0		rclip;not assembled (window > 20 kb)
+nov_R27252	BND	3482255	3482255	0	36	0	36		lclip;not assembled (window > 20 kb)
+nov_R27252	BND	3529594	3529594	0	21	0	21		lclip;not assembled
+nov_R27252	BND	3529645	3529645	0	20	20	0		rclip;not assembled
+nov_R27252	DEL	3664929	3665063	135					assembled
+nov_R27252	INS	3740076	3740096	0	21	9	12		clip;one_end=0;not assembled
+nov_R27252	DEL	3743120	3743215	96					assembled
+nov_R27252	INS	3782913	3782913	81					assembled
+nov_R27252	INS	3893408	3893408	64					assembled
+nov_R27252	INS	3934398	3934398	81					assembled
+nov_R27252	REPL	3947320	3948246	927					assembled
+nov_R27252	INS	3951485	3951485	264					assembled
+nov_R27252	INS	4063297	4063297	588					assembled
+nov_R27252	INS	4121055	4121055	57					assembled
+nov_R27252	INS	4380481	4380481	84					assembled

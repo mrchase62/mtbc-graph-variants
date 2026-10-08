@@ -1,0 +1,10 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_TB2780	BND	336868	336868	0	10	0	10		lclip;not assembled
+nov_TB2780	DEL	758346	887649	129304					assembled
+nov_TB2780	INS	924719	924719	99					assembled
+nov_TB2780	DEL	1331806	1332618	813					assembled
+nov_TB2780	INS	1530363	1530363	268783					assembled
+nov_TB2780	INS	2366956	2366959	0	81	38	43		clip;one_end=0;not assembled
+nov_TB2780	DEL	2791653	2791997	345					assembled
+nov_TB2780	BND	2798278	2798278	0	11	11	0		rclip;not assembled
+nov_TB2780	BND	3949464	3949464	0	9	0	9		lclip;not assembled

@@ -1,0 +1,15 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_QC_9	DEL	842501	842700	139				0.31	depth
+nov_QC_9	DEL	1081001	1081400	255				0.36	depth
+nov_QC_9	DEL	1082001	1082400	206				0.49	depth
+nov_QC_9	INS	1797201	1797900	523				1.75	depth
+nov_QC_9	INS	1823001	1823200	219				2.10	depth
+nov_QC_9	DEL	1997201	2006900	9232				0.05	depth
+nov_QC_9	DEL	2279301	2279500	116				0.42	depth
+nov_QC_9	INS	2659601	2659800	157				1.79	depth
+nov_QC_9	INS	2660201	2660900	632				1.90	depth
+nov_QC_9	DEL	3271801	3273200	1321				0.06	depth
+nov_QC_9	DEL	3571101	3571400	196				0.35	depth
+nov_QC_9	DEL	3572101	3572500	231				0.42	depth
+nov_QC_9	DEL	3909601	3910200	479				0.20	depth
+nov_QC_9	DEL	4181201	4181400	104				0.48	depth

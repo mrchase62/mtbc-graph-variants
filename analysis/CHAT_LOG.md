@@ -1070,3 +1070,9 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - survivors 3 -> 6, burden 6 -> 8, all DR controls found;
   - q_branch 137 -> 92, mostly SV intervals and IS6110 fragments no longer
     double-counted.
+- **Novel events steps 1-2 done** (Phase A total 30.0 billing-hours).
+  - prototype + assembly + depth + dysgu PASS: typed recall 0.77, breakpoints
+    0.81, precision 0.58 (dysgu alone 0.51 / 0.65).
+  - The depth scan carries the tandem copy-number classes; assembly raises
+    precision.
+  - Phase B compute awaits approval; the download is running.

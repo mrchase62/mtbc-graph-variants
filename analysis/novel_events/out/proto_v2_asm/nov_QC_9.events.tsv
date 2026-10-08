@@ -1,0 +1,28 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_QC_9	BND	310413	310413	0	9	0	9		lclip;not assembled
+nov_QC_9	REPL	842547	842701	155					assembled
+nov_QC_9	DEL	1081008	1082365	1358					assembled
+nov_QC_9	BND	1269815	1269815	0	25	0	25		lclip;not assembled (window > 20 kb)
+nov_QC_9	REARR	1269909	2659650	1389741	9	29	0		clip;not assembled (window > 20 kb)
+nov_QC_9	BND	1822974	1822974	0	43	0	43		lclip;not assembled (window > 20 kb)
+nov_QC_9	BND	1823249	1823249	0	20	20	0		rclip;not assembled (window > 20 kb)
+nov_QC_9	BND	1823829	1823829	0	11	11	0		rclip;not assembled (window > 20 kb)
+nov_QC_9	BND	2006842	2006842	0	29	0	29		lclip;not assembled (window > 20 kb)
+nov_QC_9	BND	2659650	2659650	0	36	0	36		lclip;not assembled (window > 20 kb)
+nov_QC_9	BND	2659791	2659791	0	73	73	0		rclip;not assembled (window > 20 kb)
+nov_QC_9	BND	2659866	2659866	0	30	0	30		lclip;not assembled (window > 20 kb)
+nov_QC_9	BND	2659877	2659877	0	21	0	21		lclip;not assembled (window > 20 kb)
+nov_QC_9	BND	2659909	2659909	0	17	17	0		rclip;not assembled (window > 20 kb)
+nov_QC_9	INS	2659939	2659958	0	26	10	16		clip;one_end=48;not assembled (window > 20 kb)
+nov_QC_9	BND	2659976	2659976	0	17	17	0		rclip;not assembled (window > 20 kb)
+nov_QC_9	BND	2660238	2660238	0	55	0	55		lclip;not assembled (window > 20 kb)
+nov_QC_9	INV	2660865	4078221	1417356	22	69	0		clip;not assembled (window > 20 kb)
+nov_QC_9	BND	3191408	3191408	0	9	9	0		rclip;not assembled (window > 20 kb)
+nov_QC_9	DEL	3271846	3273156	1311	0	54	55	0.00	clip;depth_joined;not assembled (window > 20 kb)
+nov_QC_9	DEL	3571102	3572454	1353	61	24	33	0.60	clip;not assembled (window > 20 kb)
+nov_QC_9	BND	3683988	3683988	0	14	14	0		rclip;not assembled (window > 20 kb)
+nov_QC_9	BND	3684009	3684009	0	9	0	9		lclip;not assembled (window > 20 kb)
+nov_QC_9	BND	4077799	4077799	0	8	0	8		lclip;not assembled (window > 20 kb)
+nov_QC_9	BND	4078146	4078146	0	16	16	0		rclip;not assembled (window > 20 kb)
+nov_QC_9	BND	4078221	4078221	0	31	0	31		lclip;not assembled (window > 20 kb)
+nov_QC_9	BND	4078261	4078261	0	23	23	0		rclip;not assembled (window > 20 kb)

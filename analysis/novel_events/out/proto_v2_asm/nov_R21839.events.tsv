@@ -1,0 +1,7 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_R21839	DEL	397891	399172	1282					assembled
+nov_R21839	INS	599722	599722	57					assembled
+nov_R21839	DEL	1950995	1951051	57					assembled
+nov_R21839	BND	2162959	2162959	0	11	0	11		lclip;not assembled
+nov_R21839	BND	2163106	2163106	0	8	8	0		rclip;not assembled
+nov_R21839	DEL	3119789	3119865	77					assembled

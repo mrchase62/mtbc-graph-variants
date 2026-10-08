@@ -1,0 +1,5 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_N0153	BND	336453	336453	0	17	0	17		lclip;not assembled
+nov_N0153	BND	339230	339230	0	19	19	0		rclip;not assembled
+nov_N0153	DEL	837659	840794	3136	0	23	22	0.00	clip;depth_joined;not assembled
+nov_N0153	BND	3736127	3736127	0	20	20	0		rclip;not assembled

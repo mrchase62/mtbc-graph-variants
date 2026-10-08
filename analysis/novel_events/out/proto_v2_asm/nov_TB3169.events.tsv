@@ -1,0 +1,36 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_TB3169	BND	337438	337438	0	19	0	19		lclip;not assembled (window > 20 kb)
+nov_TB3169	INV	337468	845155	507687	5	12	0		clip;not assembled (window > 20 kb)
+nov_TB3169	INS	338216	338223	0	34	15	19		clip;one_end=0;not assembled (window > 20 kb)
+nov_TB3169	DEL	341480	341545	66	0	10	25	0.23	clip;depth_joined;not assembled (window > 20 kb)
+nov_TB3169	BND	341516	341516	0	11	11	0		rclip;not assembled (window > 20 kb)
+nov_TB3169	BND	341726	341726	0	10	0	10		lclip;not assembled (window > 20 kb)
+nov_TB3169	INS	341785	341785	68	8	36	9		clip;tandem_dup;not assembled (window > 20 kb)
+nov_TB3169	INS	920125	920125	91					assembled
+nov_TB3169	BND	968451	968451	0	8	8	0		rclip;not assembled
+nov_TB3169	INS	1217778	1217786	0	75	33	42		clip;one_end=0;not assembled
+nov_TB3169	BND	1310666	1310666	0	8	0	8		lclip;not assembled
+nov_TB3169	INS	1448602	1448602	56					assembled
+nov_TB3169	INS	1457055	1457055	102	11	92	103		clip;tandem_dup;not assembled
+nov_TB3169	INS	1488468	1488469	0	71	34	37		clip;one_end=0;not assembled
+nov_TB3169	BND	1639022	1639022	0	13	0	13		lclip;not assembled
+nov_TB3169	DEL	1716811	1716896	86					assembled
+nov_TB3169	DEL	1836605	1836661	57					assembled
+nov_TB3169	BND	1948570	1948570	0	10	0	10		lclip;not assembled
+nov_TB3169	BND	1948717	1948717	0	11	11	0		rclip;not assembled
+nov_TB3169	INS	1990251	1990251	90					assembled
+nov_TB3169	DEL	1990565	1990648	84					assembled
+nov_TB3169	INS	2168721	2168721	78					assembled
+nov_TB3169	INS	2375463	2375463	1092084					assembled
+nov_TB3169	BND	2632848	2632848	0	8	0	8		lclip;not assembled
+nov_TB3169	INV	2679507	3707374	1027867					assembled
+nov_TB3169	INS	2679510	2679510	962615					assembled
+nov_TB3169	BND	3113651	3113651	0	52	52	0		rclip;not assembled
+nov_TB3169	BND	3113690	3113690	0	46	0	46		lclip;not assembled
+nov_TB3169	DEL	3117591	3117667	77					assembled
+nov_TB3169	INS	3118452	3118452	73					assembled
+nov_TB3169	DEL	3185029	3185085	57					assembled
+nov_TB3169	INS	3587212	3587214	0	55	16	39		clip;one_end=0;not assembled
+nov_TB3169	INS	3944703	3944703	65					assembled
+nov_TB3169	DEL	3944775	3944840	66					assembled
+nov_TB3169	DEL	4090839	4090901	63					assembled

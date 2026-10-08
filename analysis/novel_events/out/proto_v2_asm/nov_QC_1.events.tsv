@@ -1,0 +1,72 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_QC_1	INS	28468	28468	87					assembled
+nov_QC_1	BND	62755	62755	0	33	0	33		lclip;not assembled (window > 20 kb)
+nov_QC_1	DEL	62758	92714	29957	21	38	58	0.95	clip;not assembled (window > 20 kb)
+nov_QC_1	BND	92727	92727	0	64	64	0		rclip;not assembled (window > 20 kb)
+nov_QC_1	BND	337798	337798	0	25	0	25		lclip;not assembled
+nov_QC_1	BND	337823	337823	0	20	20	0		rclip;not assembled
+nov_QC_1	BND	375567	375567	0	12	0	12		lclip;not assembled
+nov_QC_1	BND	375619	375619	0	8	8	0		rclip;not assembled
+nov_QC_1	BND	426260	426260	0	13	0	13		lclip;not assembled
+nov_QC_1	BND	426391	426391	0	12	12	0		rclip;not assembled
+nov_QC_1	DEL	674938	675003	66					assembled
+nov_QC_1	DEL	755420	755498	79					assembled
+nov_QC_1	REARR	795628	802706	7078	2	31	0		clip;not assembled
+nov_QC_1	BND	802580	802580	0	25	0	25		lclip;not assembled
+nov_QC_1	BND	888967	888967	0	63	0	63		lclip;not assembled
+nov_QC_1	INS	965052	965052	66					assembled
+nov_QC_1	INS	1091796	1091796	259					assembled
+nov_QC_1	DEL	1190398	1190580	183					assembled
+nov_QC_1	DEL	1213425	1213520	96					assembled
+nov_QC_1	INS	1219206	1219206	81					assembled
+nov_QC_1	BND	1417469	1417469	0	45	0	45		lclip;not assembled
+nov_QC_1	BND	1417513	1417513	0	46	46	0		rclip;not assembled
+nov_QC_1	INV	1470744	4236570	2765826	5	14	0		clip;not assembled (window > 20 kb)
+nov_QC_1	DEL	1520187	1521539	1353	69	35	32	1.42	clip;not assembled (window > 20 kb)
+nov_QC_1	DEL	1529154	1531800	2647	76	40	34	0.00	clip;not assembled (window > 20 kb)
+nov_QC_1	BND	1535439	1535439	0	53	53	0		rclip;not assembled (window > 20 kb)
+nov_QC_1	BND	1535486	1535486	0	54	0	54		lclip;not assembled (window > 20 kb)
+nov_QC_1	DEL	1544832	1546184	1353	61	28	30	1.41	clip;not assembled (window > 20 kb)
+nov_QC_1	BND	2419147	2419147	0	47	0	47		lclip;not assembled (window > 20 kb)
+nov_QC_1	DEL	2419172	2419538	367	0	43	21	0.04	clip;depth_joined;not assembled (window > 20 kb)
+nov_QC_1	DEL	2419231	2419538	308	27	34	21	0.00	clip;not assembled (window > 20 kb)
+nov_QC_1	BND	2624281	2624281	0	8	0	8		lclip;not assembled (window > 20 kb)
+nov_QC_1	BND	2625694	2625694	0	28	0	28		lclip;not assembled (window > 20 kb)
+nov_QC_1	BND	2625768	2625768	0	55	55	0		rclip;not assembled (window > 20 kb)
+nov_QC_1	BND	2625875	2625875	0	19	0	19		lclip;not assembled (window > 20 kb)
+nov_QC_1	BND	2625928	2625928	0	11	11	0		rclip;not assembled (window > 20 kb)
+nov_QC_1	BND	2626034	2626034	0	9	0	9		lclip;not assembled (window > 20 kb)
+nov_QC_1	BND	2626088	2626088	0	10	0	10		lclip;not assembled (window > 20 kb)
+nov_QC_1	BND	2626146	2626146	0	45	45	0		rclip;not assembled (window > 20 kb)
+nov_QC_1	INS	2688873	2688889	0	124	63	61		clip;one_end=2;not assembled (window > 20 kb)
+nov_QC_1	DEL	3112608	3114695	2088	7	36	52	1.36	clip;not assembled (window > 20 kb)
+nov_QC_1	BND	3112622	3112622	0	29	0	29		lclip;not assembled (window > 20 kb)
+nov_QC_1	DEL	3117047	3118401	1355	52	44	39	1.41	clip;not assembled (window > 20 kb)
+nov_QC_1	BND	3118482	3118482	0	33	0	33		lclip;not assembled (window > 20 kb)
+nov_QC_1	DEL	3118485	3119101	617	4	42	32	0.09	clip;not assembled (window > 20 kb)
+nov_QC_1	DEL	3118577	3119101	525	36	39	32	0.00	clip;not assembled (window > 20 kb)
+nov_QC_1	INS	3189869	3189873	0	75	36	39		clip;one_end=0;not assembled (window > 20 kb)
+nov_QC_1	BND	3330370	3330370	0	130	0	130		lclip;not assembled (window > 20 kb)
+nov_QC_1	BND	3330487	3330487	0	119	119	0		rclip;not assembled (window > 20 kb)
+nov_QC_1	INS	3344847	3344847	67	22	25	28		clip;tandem_dup;not assembled (window > 20 kb)
+nov_QC_1	INS	3370632	3370635	0	23	15	8		clip;one_end=0;not assembled (window > 20 kb)
+nov_QC_1	BND	3471525	3471525	0	14	0	14		lclip;not assembled (window > 20 kb)
+nov_QC_1	BND	3471550	3471550	0	15	15	0		rclip;not assembled (window > 20 kb)
+nov_QC_1	INS	3471857	3471876	0	64	30	34		clip;one_end=0;not assembled (window > 20 kb)
+nov_QC_1	BND	3472091	3472091	0	30	0	30		lclip;not assembled (window > 20 kb)
+nov_QC_1	BND	3472114	3472114	0	29	29	0		rclip;not assembled (window > 20 kb)
+nov_QC_1	BND	3472327	3472327	0	20	0	20		lclip;not assembled (window > 20 kb)
+nov_QC_1	BND	3472359	3472359	0	19	19	0		rclip;not assembled (window > 20 kb)
+nov_QC_1	INS	3539113	3539115	0	57	30	27		clip;one_end=0;not assembled (window > 20 kb)
+nov_QC_1	BND	3586616	3586616	0	12	12	0		rclip;not assembled (window > 20 kb)
+nov_QC_1	BND	3662567	3662567	0	15	15	0		rclip;not assembled (window > 20 kb)
+nov_QC_1	DEL	3702897	3732047	29151	5	34	71	0.87	clip;not assembled (window > 20 kb)
+nov_QC_1	BND	3732063	3732063	0	63	63	0		rclip;not assembled (window > 20 kb)
+nov_QC_1	INS	3732089	3732109	0	28	14	14		clip;one_end=0;not assembled (window > 20 kb)
+nov_QC_1	BND	3733151	3733151	0	8	8	0		rclip;not assembled (window > 20 kb)
+nov_QC_1	BND	3758189	3758189	0	9	0	9		lclip;not assembled (window > 20 kb)
+nov_QC_1	DEL	3917333	3928147	10815	41	36	21	0.91	clip;not assembled (window > 20 kb)
+nov_QC_1	DEL	3928094	3928147	54	13	33	21	0.00	clip;not assembled (window > 20 kb)
+nov_QC_1	INS	3932203	3932219	0	36	17	19		clip;one_end=0;not assembled (window > 20 kb)
+nov_QC_1	INS	4035772	4035772	134	125	172	173		clip;tandem_dup;not assembled (window > 20 kb)
+nov_QC_1	BND	4057905	4057905	0	36	36	0		rclip;not assembled (window > 20 kb)

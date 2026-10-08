@@ -20,6 +20,9 @@ any call within 50 bp, including the prototype's untyped BND calls.
 Precision: typed calls (BND excluded) that match any true event within
 50 bp, over all typed calls.
 
+Depth-scan calls (step 2) match when the true event lies within the call's
+run +-200 bp, since read-depth boundaries are only window-precise.
+
 Truth events are split by size (50-150, 150-500, 500-2,000, >2,000 bp) and
 by whether an insertion is IS6110-sized (1,340-1,370 bp).
 """
@@ -60,14 +63,16 @@ def read_vcf(path, pass_only):
     return out
 
 
-def read_proto(path):
+def read_proto(path, depth=False):
     if not os.path.exists(path):
         return []
-    return [dict(type=r["type"], start=int(r["start"]), end=int(r["end"]))
+    return [dict(type=r["type"], start=int(r["start"]), end=int(r["end"]), depth=depth)
             for r in csv.DictReader(open(path), delimiter="\t")]
 
 
 def near(c, t):
+    if c.get("depth"):  # depth runs have fuzzy ends: the event within the run +-200 bp
+        return c["start"] - 200 <= t["start"] <= c["end"] + 200
     if abs(c["start"] - t["start"]) <= TOL:
         return True
     if t["type"] in ("DEL", "REPL") and c["type"] == "DEL":
@@ -85,6 +90,8 @@ def main():
     ap.add_argument("--truth", required=True)
     ap.add_argument("--proto-dir", required=True)
     ap.add_argument("--p2-dir", required=True)
+    ap.add_argument("--asm-dir", help="assemble_candidates.py tables (step 1)")
+    ap.add_argument("--depth-dir", help="depth_scan.py tables (step 2)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     truth = collections.defaultdict(list)
@@ -103,6 +110,15 @@ def main():
     calls = {k: {s: f(s) for s in truth} for k, f in callers.items()}
     calls["dysgu+delly_pass"] = {s: calls["dysgu_pass"][s] + calls["delly_pass"][s] for s in truth}
     calls["prototype+dysgu_pass"] = {s: calls["prototype"][s] + calls["dysgu_pass"][s] for s in truth}
+    if a.asm_dir:
+        calls["proto_asm"] = {s: read_proto(os.path.join(a.asm_dir, f"{s}.events.tsv")) for s in truth}
+        calls["proto_asm+dysgu_pass"] = {s: calls["proto_asm"][s] + calls["dysgu_pass"][s] for s in truth}
+    if a.depth_dir:
+        calls["depth"] = {s: read_proto(os.path.join(a.depth_dir, f"{s}.events.tsv"), True) for s in truth}
+    if a.asm_dir and a.depth_dir:
+        calls["proto_asm+depth"] = {s: calls["proto_asm"][s] + calls["depth"][s] for s in truth}
+        calls["proto_asm+depth+dysgu_pass"] = {s: calls["proto_asm+depth"][s] + calls["dysgu_pass"][s]
+                                               for s in truth}
 
     rows = []
     for name, by_s in calls.items():

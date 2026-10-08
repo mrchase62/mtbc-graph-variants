@@ -1,0 +1,52 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_mada_1_12	DEL	428108	428179	72					assembled
+nov_mada_1_12	DEL	442294	442485	192					assembled
+nov_mada_1_12	DEL	818337	819694	1358					assembled
+nov_mada_1_12	DEL	819696	2662961	1843266					assembled
+nov_mada_1_12	BND	1063601	1063601	0	50	0	50		lclip;not assembled (window > 20 kb)
+nov_mada_1_12	DEL	1063604	1126491	62888	24	39	13	1.06	clip;not assembled (window > 20 kb)
+nov_mada_1_12	BND	1126583	1126583	0	10	10	0		rclip;not assembled (window > 20 kb)
+nov_mada_1_12	BND	1133580	1133580	0	12	0	12		lclip;not assembled
+nov_mada_1_12	BND	1173981	1173981	0	12	0	12		lclip;not assembled
+nov_mada_1_12	BND	1174135	1174135	0	10	10	0		rclip;not assembled
+nov_mada_1_12	DEL	1243124	1243194	71					assembled
+nov_mada_1_12	DEL	1244290	1244365	76					assembled
+nov_mada_1_12	INV	1251158	2461956	1210798					assembled
+nov_mada_1_12	BND	1734722	1734722	0	39	0	39		lclip;not assembled
+nov_mada_1_12	BND	1734780	1734780	0	17	17	0		rclip;not assembled
+nov_mada_1_12	BND	1734940	1734940	0	10	0	10		lclip;not assembled
+nov_mada_1_12	BND	1734993	1734993	0	12	12	0		rclip;not assembled
+nov_mada_1_12	BND	1735100	1735100	0	59	0	59		lclip;not assembled
+nov_mada_1_12	BND	1735174	1735174	0	35	35	0		rclip;not assembled
+nov_mada_1_12	BND	1735331	1735331	0	22	0	22		lclip;not assembled
+nov_mada_1_12	BND	1735356	1735356	0	21	21	0		rclip;not assembled
+nov_mada_1_12	BND	1735626	1735626	0	8	0	8		lclip;not assembled
+nov_mada_1_12	BND	1735881	1735881	0	12	12	0		rclip;not assembled
+nov_mada_1_12	BND	1736587	1736587	0	18	18	0		rclip;not assembled
+nov_mada_1_12	BND	1737396	1737396	0	32	0	32		lclip;not assembled
+nov_mada_1_12	BND	1737463	1737463	0	25	25	0		rclip;not assembled
+nov_mada_1_12	BND	1737811	1737811	0	9	0	9		lclip;not assembled
+nov_mada_1_12	BND	1737832	1737832	0	8	8	0		rclip;not assembled
+nov_mada_1_12	BND	1738681	1738681	0	8	0	8		lclip;not assembled
+nov_mada_1_12	BND	1739149	1739149	0	15	0	15		lclip;not assembled
+nov_mada_1_12	DEL	1739740	1741098	1359					assembled
+nov_mada_1_12	DEL	1959758	1961115	1358					assembled
+nov_mada_1_12	BND	2336213	2336213	0	16	0	16		lclip;not assembled
+nov_mada_1_12	BND	2339282	2339282	0	24	24	0		rclip;not assembled
+nov_mada_1_12	DEL	2366557	3504573	1138017					assembled
+nov_mada_1_12	INS	2374313	2374313	116	5	26	21		clip;tandem_dup;not assembled
+nov_mada_1_12	BND	2662962	2662962	0	38	0	38		lclip;not assembled (window > 20 kb)
+nov_mada_1_12	DEL	2662965	2720076	57112	10	40	10	1.00	clip;not assembled (window > 20 kb)
+nov_mada_1_12	BND	2720063	2720063	0	16	16	0		rclip;not assembled (window > 20 kb)
+nov_mada_1_12	INS	2875413	2875413	1674					assembled
+nov_mada_1_12	BND	2876170	2876170	0	44	44	0		rclip;not assembled
+nov_mada_1_12	BND	2876361	2876361	0	32	0	32		lclip;not assembled
+nov_mada_1_12	BND	2876387	2876387	0	28	28	0		rclip;not assembled
+nov_mada_1_12	BND	2876928	2876928	0	12	0	12		lclip;not assembled
+nov_mada_1_12	BND	2876954	2876954	0	15	15	0		rclip;not assembled
+nov_mada_1_12	INS	2937177	2937177	0	117	54	63		clip;one_end=74;not assembled
+nov_mada_1_12	INS	3041961	3041961	120					assembled
+nov_mada_1_12	INS	3424154	3424154	0	48	22	26		clip;one_end=0;not assembled
+nov_mada_1_12	DEL	3664817	3664870	54					assembled
+nov_mada_1_12	BND	3779389	3779389	0	9	0	9		lclip;not assembled
+nov_mada_1_12	DEL	3873289	3874646	1358					assembled
