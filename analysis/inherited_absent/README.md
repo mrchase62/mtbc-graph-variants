@@ -54,3 +54,63 @@ it. In ctpV they did: 0 junction reads in SAMEA2297133, against 30-65 per
 breakpoint in the carriers.
 
 Cost: one 4-core job, a few minutes.
+
+## Junctions and mappability (2026-10-08)
+
+`junction_check.py`, run by `run_junction_scale200_fix.sbatch` in 2 minutes.
+For each ABSENT cell it finds the matched reference R's deletion over the cell
+in the build's collapsed graph VCF. It then counts, in the sample's H37Rv BAM
+(MAPQ >= 20):
+- reads that run across each end of the deletion;
+- reads clipped at each end;
+- reads that join the two ends (split reads, or a CIGAR deletion).
+
+Verdicts:
+- present_here: reads run across both ends and fewer than 3 join them;
+- deleted_here: 3 or more reads join the ends;
+- mixed: both;
+- unresolved: neither;
+- R_no_genotype: R has no genotype at the site (its path does not cross it in
+  place);
+- no_R_deletion: nothing in R explains the call.
+
+**Masking.** A cell counts as masked when its span, or either end of R's
+deletion within 150 bp (a read length), overlaps the build's
+`repeat_mask.bed`: 594 kb of PE/PPE, paralog, tandem and IS-element sequence,
+which includes all PE/PPE. In masked sequence, depth, clips and split reads
+are all unreliable, so these cells cannot be called either way and are kept
+apart.
+
+Outputs: `out/scale200_fix/junction.tsv` and `junction.masked.tsv`.
+
+**All testable ABSENT cells:** 64,713 of 85,465 (76%) are masked.
+
+**The 10,247 contradicted cells:**
+
+| junction verdict | core | masked |
+|---|---:|---:|
+| present_here (ABSENT is wrong) | **2,279** | 4,760 |
+| deleted_here (sequence is elsewhere; ABSENT is right at this locus) | 71 | 375 |
+| mixed | 1 | 24 |
+| unresolved | 109 | 561 |
+| R_no_genotype | 151 | 880 |
+| no_R_deletion | 175 | 861 |
+| **total** | **2,786** | **7,461** |
+
+- **Masked:** 73% of the contradicted cells. They should become "not callable"
+  rather than ABSENT or REF.
+- **Confident errors in core sequence:** 2,279 cells in 110 samples, from 94
+  distinct R deletions.
+  - median 5 per affected sample, maximum 212;
+  - these include the four ctpV cells of SAMEA2297133;
+  - the biggest clusters are 4.212 Mb (Rv3766-70, 5 samples), 2.786 Mb (7.5 kb
+    R deletion, 4 samples), 0.660 Mb (8.4 kb, 1 sample), 1.536 Mb (5.2 kb, 3
+    samples) and 1.332 Mb (2.8 kb, 3 samples).
+- **Correctly ABSENT despite the depth:** 71 core cells. The locus is deleted
+  and the reads come from a copy elsewhere.
+- **Not resolved in core:** 435 cells (R_no_genotype, no_R_deletion,
+  unresolved). They need local reassembly.
+
+The first run failed on one sample: SAMEA7526648 is matched to H37Rv itself,
+which is not a column of the graph VCF. That case now returns no R deletions;
+the sample has no testable ABSENT cells.

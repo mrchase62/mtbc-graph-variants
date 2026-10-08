@@ -1008,3 +1008,10 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   fragments of the carriers' differences from their references. Neither sees
   SAMEA2297133's ~1.5 kb of extra sequence relative to GCF_040208995: an
   insertion longer than a read.
+- **Junction check of contradicted ABSENT cells** (`analysis/inherited_absent/`).
+  73% (7,461 of 10,247) are in repeat-masked sequence (PE/PPE, paralog,
+  tandem, IS) and cannot be called either way; the user asked that these be
+  distinguished. In core sequence: 2,279 cells (110 samples, 94 R deletions)
+  are confidently wrong (bridging reads at both ends, no junction reads); 71
+  are correctly ABSENT (junction reads, depth from a copy elsewhere); 435 are
+  unresolved. 76% of all testable ABSENT cells are masked.
