@@ -1,0 +1,50 @@
+== G (canettii from the graph): 533 tips; MTBC clade 530 tips (support 100); outside it: GCF_000253375, GCF_035581225, canettii  OK
+   La1.2         5 tips  monophyletic  support 100
+   La1.7.1       2 tips  monophyletic  support 100
+   La1.8.1       7 tips  monophyletic  support 100
+   La1.8.2       5 tips  monophyletic  support 100
+   La2           2 tips  monophyletic  support 100
+   lineage1     67 tips  monophyletic  support 100
+   lineage2    140 tips  monophyletic  support 100
+   lineage3     51 tips  monophyletic  support 100
+   lineage4    215 tips  monophyletic  support 100
+   lineage5     11 tips  monophyletic  support 100
+   lineage6      9 tips  monophyletic  support 100
+   lineage7      6 tips  monophyletic  support 100
+   lineage9      3 tips  monophyletic  support 100
+   lineages 1-4,7: 479 tips; one clade  support 100
+   first split inside lineages 1-4,7: lineage2+lineage3+lineage4+lineage7 | lineage1
+== K (canettii by direct alignment): 533 tips; MTBC clade 530 tips (support 100); outside it: GCF_000253375, GCF_035581225, canettii  OK
+   La1.2         5 tips  monophyletic  support 100
+   La1.7.1       2 tips  monophyletic  support 100
+   La1.8.1       7 tips  monophyletic  support 100
+   La1.8.2       5 tips  monophyletic  support 100
+   La2           2 tips  monophyletic  support 100
+   lineage1     67 tips  monophyletic  support 100
+   lineage2    140 tips  monophyletic  support 100
+   lineage3     51 tips  monophyletic  support 100
+   lineage4    215 tips  monophyletic  support 100
+   lineage5     11 tips  monophyletic  support 100
+   lineage6      9 tips  monophyletic  support 100
+   lineage7      6 tips  monophyletic  support 100
+   lineage9      3 tips  monophyletic  support 100
+   lineages 1-4,7: 479 tips; one clade  support 100
+   first split inside lineages 1-4,7: lineage2+lineage3+lineage4+lineage7 | lineage1
+
+Robinson-Foulds (unrooted): 12 of 1062 possible (1.13%)
+  splits only in G: 6; UFBoot median 39; >= 95: 0
+  splits only in K: 6; UFBoot median 41; >= 95: 0
+
+where the differing splits are (smaller side):
+  only in G: support 43; 4 tips; lineages {'lineage4': 4}
+  only in G: support 39; 2 tips; lineages {'lineage4': 2}
+  only in G: support 37; 3 tips; lineages {'lineage4': 3}
+  only in G: support 40; 10 tips; lineages {'lineage4': 10}
+  only in G: support 19; 9 tips; lineages {'lineage4': 9}
+  only in G: support 19; 8 tips; lineages {'lineage4': 8}
+  only in K: support 36; 3 tips; lineages {'lineage4': 3}
+  only in K: support 75; 2 tips; lineages {'lineage4': 2}
+  only in K: support 16; 6 tips; lineages {'lineage4': 6}
+  only in K: support 79; 4 tips; lineages {'lineage4': 4}
+  only in K: support 17; 9 tips; lineages {'lineage4': 9}
+  only in K: support 41; 14 tips; lineages {'lineage4': 14}

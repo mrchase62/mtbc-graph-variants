@@ -875,3 +875,42 @@ conflicts, and 369 tests pass on main.
 
 **Next:** the new lineage 1-4 panel and graph build, then the scale200
 rerun into new output folders, with a cost estimate first.
+
+## 2026-10-07: can canettii stay out of the graph? The outgroup test
+
+**User:** "I need to be convinced that we can do this without canettii in the
+graph as this will be the outgroup in the tree." Then "yes, run the test" and
+"write up the results when the trees finish".
+
+**Full write-up:** `analysis/outgroup_test/README.md`.
+
+**The test:** two arms that differ only in where the two canettii genomes'
+rows come from, the graph (G) or each assembly aligned straight to H37Rv
+(K). Columns where only canettii varies are dropped in K.
+
+**Results:**
+
+- **Canettii's rows:** ET1291 is identical at 92,468 of 94,383 columns.
+  Only 317 (0.34%) have the opposite allele; the rest differ only in which
+  route leaves a site uncalled.
+- **Trees** (scale200 + CX333, production IQ-TREE settings):
+  - the same root (MTBC clade at 100% support with the canettii outside);
+  - every lineage monophyletic;
+  - lineages 1-4,7 one clade, with lineage 1 the first split.
+  - Robinson-Foulds distance 12 of 1,062 splits (1.1%). All 12 are inside
+    lineage 4, with support 16-79.
+- **Ancestral alleles:** 49,168 of 49,179 identical (99.98%).
+- **Association (scale200):**
+  - the same 3 survivors (rpoB 761155, embB 4247429, embB 4247730);
+  - every drug-resistance control unchanged;
+  - testable variants 3,679 → 3,682.
+
+**Not covered yet:**
+
+- IS6110, SV and accessory polarity, which needs a simulated canettii
+  pseudo-isolate;
+- whether a graph without canettii calls the other genomes differently
+  (test graph arms A vs C, a cheap local comparison);
+- gwas1000.
+
+**Compute:** 15.7 CPU-hours, above the roughly 11 estimated.

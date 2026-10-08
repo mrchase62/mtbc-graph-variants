@@ -57,6 +57,15 @@ fixes, with tests) were approved on 2026-10-05.
   run once and `--rank-by` for the foreign screen (`docs/PANEL_BUILD.md`).
 - **Then:** the new panel, graph and build, then scale200 first.
 
+**Outgroup test (2026-10-07, `analysis/outgroup_test/README.md`):** canettii
+read from its assembly aligned to H37Rv instead of from the graph gives the
+same root and lineage structure (RF 1.1%, all 12 differing splits inside
+lineage 4 at UFBoot ≤ 79), 99.98% of the same AA, and the same scale200
+survivors and DR controls. So canettii can stay out of the new graph and
+remain the tree outgroup. Not yet covered: IS6110/SV/accessory polarity (a
+simulated canettii pseudo-isolate) and the arm A vs C genotype comparison
+from the test graphs.
+
 **Before anything else after downtime:**
 
 1. **Check that netscratch survived.** The working tree and the colleague's
