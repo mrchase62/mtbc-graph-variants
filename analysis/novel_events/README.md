@@ -148,6 +148,7 @@ Phase A's total is now **30.0 billing-hours**, the approved budget.
 - Real reads add GC bias, which makes depth calls noisier.
 
 **Next:** Phase B, scored with real reads. The 63 Marin Illumina runs are
-downloading. Running P1/P2 on them needs the user's approval: about 30
-billing-hours at the novelA40 rate (P1 + P2 about 0.6 per sample), plus about
+downloading. Running P1/P2 on them needs the user's approval: about 38
+billing-hours at the novelA40 rate (P1 + P2 about 0.6 per sample, 63 samples; more
+if the real reads are deeper than 80x), plus about
 6 for the callers.
