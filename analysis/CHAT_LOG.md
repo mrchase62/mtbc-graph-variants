@@ -966,3 +966,9 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   4,652 SV records; no duplicate keys; indels left-aligned.
 - **Accessory candidates:** the same 1,643 insertions, but D22 moves most of
   them 1-14 bp left, so accessory locus ids change between old and new.
+- **Build `7713a8d71d8e-fix1` complete:** references and frame table
+  identical to the old build's; IS6110 crossmaps reproduce (0 of 1,000 files
+  differ); accessory panel 806 loci (old 802); panel tree rebuilt from the
+  fixed VCF; 73,256 ancestral sites.
+- **Chain submitted** (p1 to p5vcf, jobs 51285817-51285924). The association
+  tail and the comparison follow when it finishes.

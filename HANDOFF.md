@@ -39,7 +39,24 @@ on boslogin06, which is not durable).
    fresh dates so the next purge does not take them. Every `MTB_*` path in
    the config resolves. Not restored: unknown older files in `data/fastas/`
    (no mirror copy); nothing the code reads is missing.
-2. **The scale200 rerun: route and approval.** Estimate from gwas1000's
+2. **Approved and running (2026-10-08, the user: "yes, run the scale200
+   rerun at 380 billing-hours").** Plan, scripts and findings:
+   `analysis/rerun_scale200/README.md`.
+   - New build `refbias/build/7713a8d71d8e-fix1` on the CX333 graph,
+     complete (manifest 369 assets). Its refs and frame table are
+     identical to the old build's; the shared IS6110 crossmaps reproduce
+     (1,000 files, 0 differ).
+   - Registry row `scale200_fix` (the registry is now
+     `refbias/cohorts.tsv` in the repository; `runroot` links to it).
+   - Chain submitted 2026-10-08 06:3x from `runroot` with
+     `MTB_BUILD_DIR=refbias/build/7713a8d71d8e-fix1`: p1 array 51285817
+     to p5vcf 51285924 (all ids in
+     `analysis/rerun_scale200/logs/chain_submit_*.txt`).
+   - Then: `assoc/bin/cohort_assoc_tail.sh scale200_fix` with
+     `assoc/scale200/rrdr_carriers.txt` copied in unchanged, then the old
+     vs new comparison (report only).
+
+   The estimate, as approved. From gwas1000's
    measured per-sample costs:
 
    | part | billing-hours |
