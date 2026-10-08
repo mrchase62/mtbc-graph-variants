@@ -177,7 +177,7 @@ cohort's calls. Proposed: `results/` or `out/`; the user decides at the time.
 - **Scope:** every pass script's default paths, `bin/refbias_run.sh`, the
   cohort registry (`refbias/cohorts.tsv` and its outroot and workprefix
   columns), `refbias/io_contract.tsv` and `refbias/bin/io_contract.py`, the build folders
-  (`refbias/build/...`), runroot links, docs and tests. In 2026-10-08,
+  (`refbias/build/...`), runroot links, docs and tests. On 2026-10-08,
   36 scripts in `bin/` named a `refbias/` path.
 - **Timing (user):** deal with it later, once the pipeline is stable. Not
   part of the next rerun.
