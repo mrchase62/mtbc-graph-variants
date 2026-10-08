@@ -10,7 +10,8 @@ Evidence (MAPQ >= 20, primary alignments):
   pairs           wrong orientation, or more than --max-insert apart, or the
                   mate unmapped (the read anchors one side of new sequence)
 Clustering: clip positions within 5 bp on the same side form a cluster. It
-needs max(4, 10% of median depth) reads.
+needs max(4, 10% of median depth) reads, and must lie more than 200 bp from
+either contig end (the circular origin; v2).
 Events:
   DEL   right-clip cluster at A, left-clip cluster at B > A + 50, joined by
         >= 2 split reads or >= 3 pairs spanning A..B; or >= 2 reads with a
@@ -19,8 +20,14 @@ Events:
         joined to each other; or >= 2 reads with a CIGAR insertion there.
         The size is unknown here, and comes from local assembly.
   INV   split reads joining two places on opposite strands
+  INS   (tandem duplication) reads clipped at A continue at a left-clip
+        cluster B < A on the same strand: the segment B..A is repeated;
+        scored as an insertion of A - B bp
+  DEL   (depth-joined, v2) a right-clip cluster at A and a left-clip cluster
+        at B within 5 kb, with no split reads but depth between them below
+        30% of the median: a deletion in sequence too repetitive for SA tags
   REARR split reads joining two places on the same strand out of order
-        (B < A), or more than 100 kb apart: duplication or relocation
+        (B < A), or more than 100 kb apart, not explained above
   BND   one clip cluster with no partner: unresolved breakpoint
 Depth: for DEL the mean depth between A and B, against the sample median,
 is reported, not used as a filter.
@@ -109,9 +116,18 @@ def main():
             c["n"] = len(c["reads"])
             c["pos"] = c["start"] if c["end"] - c["start"] < 1 else \
                 max(range(c["start"], c["end"] + 1), key=lambda q: len(d.get(q, [])))
-        return [c for c in out if c["n"] >= minr]
+        # the circular origin: every read that crosses it is clipped at the
+        # contig ends, so clusters within 200 bp of either end are dropped
+        return [c for c in out if c["n"] >= minr and 200 < c["pos"] < L - 200]
 
     R, Lc = clusters(rclip), clusters(lclip)
+
+    def depth_ratio(s, e):
+        if not med or e < s:
+            return None
+        pts = [(s + e) // 2] if e - s < 40 else \
+            range(s + 10, e - 10, max(1, (e - s - 20) // 20))
+        return statistics.mean(bam.count(ctg, x - 1, x) for x in pts) / med
     used_r, used_l = set(), set()
     events = []
 
@@ -150,6 +166,45 @@ def main():
             events.append(dict(type="INV", start=min(A, q), end=max(A, q), size=abs(q - A),
                                support=len(opp), left=c["n"], right=0, source="clip"))
             used_r.add(i)
+            continue
+        # tandem duplication: reads clipped at the copy's end (A) continue at
+        # its start (a left-clip cluster at B < A); scored as an insertion of
+        # A - B bp at A
+        dup = None
+        for j, d in enumerate(Lc):
+            B = d["pos"]
+            if j in used_l or not (A - 100000 < B < A - 30):
+                continue
+            k = sum(1 for p in same if abs(p - B) <= JOIN_TOL + 150)
+            if k >= 2 and (dup is None or k > dup[1]):
+                dup = (j, k)
+        if dup is not None:
+            j = dup[0]
+            B = Lc[j]["pos"]
+            events.append(dict(type="INS", start=A, end=A, size=A - B, support=dup[1],
+                               left=c["n"], right=Lc[j]["n"], source="clip;tandem_dup"))
+            used_r.add(i)
+            used_l.add(j)
+            continue
+        # deletion in a repeat: no split reads, but a left-clip cluster within
+        # 5 kb after A with the depth between them below 30% of the median
+        dd = None
+        for j, d in enumerate(Lc):
+            B = d["pos"]
+            if j in used_l or not (A + 50 <= B <= A + 5000):
+                continue
+            dr = depth_ratio(A + 1, B - 1)
+            if dr is not None and dr < 0.3:
+                dd = (j, dr)
+                break
+        if dd is not None:
+            j = dd[0]
+            B = Lc[j]["pos"]
+            events.append(dict(type="DEL", start=A + 1, end=B - 1, size=B - A - 1,
+                               support=0, left=c["n"], right=Lc[j]["n"],
+                               source="clip;depth_joined"))
+            used_r.add(i)
+            used_l.add(j)
             continue
         back = [p for p in same if p < A - 50 or p > A + 100000]
         if len(back) >= 2:

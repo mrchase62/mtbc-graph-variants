@@ -1047,3 +1047,12 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - Prototype `breakpoint_caller.py` and `score.py` written.
   - Spend 17.5 billing-hours with P2 running; expected about 35-40, over the
     approved 30. Reported to the user.
+- **Phase A first results** (`analysis/novel_events/README.md`, 24.5
+  billing-hours).
+  - On simulated reads: dysgu PASS typed recall 0.51 / precision 0.65; delly
+    0.26 / 0.49; prototype v2 0.33 / 0.62.
+  - Prototype + dysgu finds 0.65 of breakpoints.
+  - Misses: 40% repeats (MAPQ), about a third tandem copy-number changes that
+    leave no clipped reads (need a depth scan).
+  - Next options: local assembly of candidates, a depth scan, Phase B real
+    reads.

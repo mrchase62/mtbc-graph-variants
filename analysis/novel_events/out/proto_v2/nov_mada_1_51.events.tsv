@@ -1,0 +1,13 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_mada_1_51	BND	907067	907067	0	11	11	0		rclip
+nov_mada_1_51	BND	910649	910649	0	9	9	0		rclip
+nov_mada_1_51	BND	1141452	1141452	0	8	0	8		lclip
+nov_mada_1_51	DEL	1956089	1956145	57	8	0	0	0.10	cigar
+nov_mada_1_51	BND	1956101	1956101	0	29	29	0		rclip
+nov_mada_1_51	BND	1956146	1956146	0	32	0	32		lclip
+nov_mada_1_51	INS	1958519	1958534	0	121	60	61		clip;one_end=2
+nov_mada_1_51	DEL	2961052	2961247	196	14	26	31	0.00	clip
+nov_mada_1_51	BND	3422796	3422796	0	28	0	28		lclip
+nov_mada_1_51	BND	3422917	3422917	0	27	27	0		rclip
+nov_mada_1_51	BND	3727709	3727709	0	11	11	0		rclip
+nov_mada_1_51	BND	3956075	3956075	0	12	0	12		lclip

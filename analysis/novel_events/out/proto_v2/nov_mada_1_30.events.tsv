@@ -1,0 +1,26 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_mada_1_30	INS	1644	1655	0	49	24	25		clip;one_end=0
+nov_mada_1_30	REARR	104065	1786100	1682035	5	21	0		clip
+nov_mada_1_30	BND	198750	198750	0	12	12	0		rclip
+nov_mada_1_30	BND	198976	198976	0	15	0	15		lclip
+nov_mada_1_30	BND	199078	199078	0	43	43	0		rclip
+nov_mada_1_30	INS	691070	691071	0	112	52	60		clip;one_end=44
+nov_mada_1_30	DEL	844626	845183	558	41	29	31	0.00	clip
+nov_mada_1_30	REARR	1637778	1998260	360482	4	10	0		clip
+nov_mada_1_30	BND	1786100	1786100	0	21	0	21		lclip
+nov_mada_1_30	BND	1786134	1786134	0	21	21	0		rclip
+nov_mada_1_30	BND	1998277	1998277	0	8	0	8		lclip
+nov_mada_1_30	BND	2082891	2082891	0	9	0	9		lclip
+nov_mada_1_30	BND	2082920	2082920	0	9	9	0		rclip
+nov_mada_1_30	INS	2131842	2131842	7369	23	32	32		clip;tandem_dup
+nov_mada_1_30	DEL	2141352	2141447	96	17	25	36	0.00	clip
+nov_mada_1_30	DEL	2344902	2345779	878	64	39	35	0.00	clip
+nov_mada_1_30	BND	2647472	2647472	0	63	63	0		rclip
+nov_mada_1_30	BND	2648814	2648814	0	28	0	28		lclip
+nov_mada_1_30	BND	2650562	2650562	0	11	0	11		lclip
+nov_mada_1_30	BND	2650587	2650587	0	18	18	0		rclip
+nov_mada_1_30	DEL	3313354	3313408	55	11	28	29	0.11	clip
+nov_mada_1_30	DEL	3313354	3313408	55	9	0	0	0.11	cigar
+nov_mada_1_30	DEL	3326321	3327675	1355	66	40	30	0.78	clip
+nov_mada_1_30	INS	3724375	3724377	0	64	31	33		clip;one_end=0
+nov_mada_1_30	INS	4374752	4374759	0	89	47	42		clip;one_end=0

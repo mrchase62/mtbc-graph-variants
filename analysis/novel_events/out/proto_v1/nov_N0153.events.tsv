@@ -1,0 +1,8 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_N0153	REARR	1	4403638	4403637	14	17	0		clip
+nov_N0153	BND	1	1	0	21	0	21		lclip
+nov_N0153	BND	336453	336453	0	17	0	17		lclip
+nov_N0153	BND	339230	339230	0	19	19	0		rclip
+nov_N0153	BND	837658	837658	0	23	23	0		rclip
+nov_N0153	BND	840795	840795	0	22	0	22		lclip
+nov_N0153	BND	3736127	3736127	0	20	20	0		rclip

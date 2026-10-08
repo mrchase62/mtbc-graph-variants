@@ -1,0 +1,18 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_mada_122	BND	662639	662639	0	35	35	0		rclip
+nov_mada_122	BND	662661	662661	0	28	0	28		lclip
+nov_mada_122	BND	910649	910649	0	9	9	0		rclip
+nov_mada_122	INS	1326242	1326259	0	79	38	41		clip;one_end=0
+nov_mada_122	REARR	1941775	1957046	15271	8	10	0		clip
+nov_mada_122	INS	1958519	1958534	0	135	68	67		clip;one_end=0
+nov_mada_122	BND	2346104	2346104	0	18	18	0		rclip
+nov_mada_122	BND	2346151	2346151	0	14	0	14		lclip
+nov_mada_122	BND	2653221	2653221	0	10	0	10		lclip
+nov_mada_122	BND	2653407	2653407	0	10	10	0		rclip
+nov_mada_122	DEL	2773167	2774322	1156	56	25	25	0.00	clip
+nov_mada_122	BND	3422796	3422796	0	37	0	37		lclip
+nov_mada_122	BND	3422917	3422917	0	22	22	0		rclip
+nov_mada_122	INS	3956075	3956076	0	20	11	9		clip;one_end=0
+nov_mada_122	DEL	4094459	4095158	700	0	60	49	0.00	clip;depth_joined
+nov_mada_122	DEL	4095245	4095359	115	0	45	54	0.00	clip;depth_joined
+nov_mada_122	INS	4108306	4108316	0	18	9	9		clip;one_end=0

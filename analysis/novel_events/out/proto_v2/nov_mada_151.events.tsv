@@ -1,0 +1,33 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_mada_151	INS	338216	338223	0	46	23	23		clip;one_end=0
+nov_mada_151	BND	339651	339651	0	12	0	12		lclip
+nov_mada_151	INS	920126	920127	0	114	54	60		clip;one_end=0
+nov_mada_151	INS	1217778	1217786	0	65	32	33		clip;one_end=0
+nov_mada_151	INS	1448659	1448659	66	14	23	41		clip;tandem_dup
+nov_mada_151	INS	1457055	1457055	102	7	55	50		clip;tandem_dup
+nov_mada_151	INS	1633891	1633902	0	20	11	9		clip;one_end=0
+nov_mada_151	BND	1639022	1639022	0	13	0	13		lclip
+nov_mada_151	BND	1908470	1908470	0	31	0	31		lclip
+nov_mada_151	DEL	1908475	1990235	81761	4	39	54	1.03	clip
+nov_mada_151	BND	1990266	1990266	0	45	45	0		rclip
+nov_mada_151	INS	2162728	2162728	83	7	12	8		clip;tandem_dup
+nov_mada_151	BND	2168685	2168685	0	17	0	17		lclip
+nov_mada_151	BND	2168722	2168722	0	16	0	16		lclip
+nov_mada_151	BND	2168774	2168774	0	14	14	0		rclip
+nov_mada_151	BND	2168821	2168821	0	21	21	0		rclip
+nov_mada_151	INS	2219422	2219425	0	68	37	31		clip;one_end=0
+nov_mada_151	BND	3109231	3109231	0	35	0	35		lclip
+nov_mada_151	DEL	3109234	3113614	4381	5	42	40	0.95	clip
+nov_mada_151	BND	3113651	3113651	0	47	47	0		rclip
+nov_mada_151	DEL	3117540	3117800	261	12	25	15	0.00	clip
+nov_mada_151	INS	3118489	3118489	36	5	53	40		clip;tandem_dup
+nov_mada_151	INS	3153377	3153381	0	63	30	33		clip;one_end=0
+nov_mada_151	INS	3546907	3546909	0	60	33	27		clip;one_end=0
+nov_mada_151	BND	3882849	3882849	0	15	0	15		lclip
+nov_mada_151	DEL	3944824	3945017	194	5	13	35	1.70	clip
+nov_mada_151	BND	3944839	3944839	0	10	0	10		lclip
+nov_mada_151	DEL	3944945	3945017	73	27	41	35	1.30	clip
+nov_mada_151	DEL	3945180	3945738	559	23	9	11	0.74	clip
+nov_mada_151	DEL	4028436	4028496	61	25	28	30	0.00	clip
+nov_mada_151	INS	4090866	4090885	0	19	9	10		clip;one_end=0
+nov_mada_151	INS	4201876	4201883	0	78	29	49		clip;one_end=0

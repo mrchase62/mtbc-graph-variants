@@ -1,0 +1,59 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_mada_126	INS	69598	69598	0	112	46	66		clip;one_end=0
+nov_mada_126	DEL	626095	626588	494	20	13	37	0.00	clip
+nov_mada_126	BND	633990	633990	0	8	0	8		lclip
+nov_mada_126	BND	892330	892330	0	24	24	0		rclip
+nov_mada_126	BND	928887	928887	0	10	10	0		rclip
+nov_mada_126	BND	1185616	1185616	0	53	0	53		lclip
+nov_mada_126	INV	1185617	3627515	2441898	7	47	0		clip
+nov_mada_126	INS	1621925	1621925	104	10	28	25		clip;tandem_dup
+nov_mada_126	DEL	1636911	1636989	79	0	42	28	0.10	clip;depth_joined
+nov_mada_126	BND	1637026	1637026	0	12	0	12		lclip
+nov_mada_126	BND	1782728	1782728	0	62	62	0		rclip
+nov_mada_126	INS	1837841	1837841	68	32	37	33		clip;tandem_dup
+nov_mada_126	DEL	1991370	2068582	77213	16	10	25	0.93	clip
+nov_mada_126	DEL	2068501	2068582	82	13	23	25	0.00	clip
+nov_mada_126	REARR	2159624	2159730	106	28	35	0		clip
+nov_mada_126	INS	2159721	2159721	97	57	63	85		clip;tandem_dup
+nov_mada_126	BND	2258578	2258578	0	9	0	9		lclip
+nov_mada_126	BND	2577597	2577597	0	28	28	0		rclip
+nov_mada_126	BND	2882069	2882069	0	35	0	35		lclip
+nov_mada_126	DEL	2882072	2972136	90065	17	38	128	0.97	clip
+nov_mada_126	DEL	2972182	2972284	103	4	50	76	2.00	clip
+nov_mada_126	BND	2972235	2972235	0	77	77	0		rclip
+nov_mada_126	BND	2972331	2972331	0	9	0	9		lclip
+nov_mada_126	INS	2972367	2972367	65	11	131	50		clip;tandem_dup
+nov_mada_126	BND	2972692	2972692	0	27	0	27		lclip
+nov_mada_126	BND	2972722	2972722	0	27	27	0		rclip
+nov_mada_126	BND	2972921	2972921	0	10	10	0		rclip
+nov_mada_126	BND	2972986	2972986	0	28	0	28		lclip
+nov_mada_126	BND	2973008	2973008	0	33	33	0		rclip
+nov_mada_126	BND	2973073	2973073	0	48	0	48		lclip
+nov_mada_126	BND	2973183	2973183	0	71	71	0		rclip
+nov_mada_126	BND	2973300	2973300	0	67	0	67		lclip
+nov_mada_126	BND	2973365	2973365	0	38	38	0		rclip
+nov_mada_126	BND	2973432	2973432	0	46	0	46		lclip
+nov_mada_126	INS	2973920	2973937	0	23	10	13		clip;one_end=3
+nov_mada_126	BND	2974157	2974157	0	45	45	0		rclip
+nov_mada_126	BND	2974288	2974288	0	70	0	70		lclip
+nov_mada_126	INS	2974344	2974357	0	27	12	15		clip;one_end=27
+nov_mada_126	BND	2974717	2974717	0	17	17	0		rclip
+nov_mada_126	BND	2974975	2974975	0	54	54	0		rclip
+nov_mada_126	BND	2977743	2977743	0	25	0	25		lclip
+nov_mada_126	BND	2977774	2977774	0	12	12	0		rclip
+nov_mada_126	BND	2977853	2977853	0	8	8	0		rclip
+nov_mada_126	BND	2977932	2977932	0	56	0	56		lclip
+nov_mada_126	BND	2978063	2978063	0	64	64	0		rclip
+nov_mada_126	BND	3058990	3058990	0	11	11	0		rclip
+nov_mada_126	BND	3162586	3162586	0	11	11	0		rclip
+nov_mada_126	DEL	3715865	3716097	233	26	37	30	0.00	clip
+nov_mada_126	INS	3730675	3730694	0	44	22	22		clip;one_end=5
+nov_mada_126	BND	3730886	3730886	0	35	0	35		lclip
+nov_mada_126	BND	3731994	3731994	0	59	59	0		rclip
+nov_mada_126	DEL	3739040	3739093	54	20	0	0	0.25	cigar
+nov_mada_126	BND	3739055	3739055	0	20	20	0		rclip
+nov_mada_126	BND	3739094	3739094	0	20	0	20		lclip
+nov_mada_126	DEL	3739661	3739814	154	29	37	32	0.00	clip
+nov_mada_126	BND	3923768	3923768	0	24	24	0		rclip
+nov_mada_126	BND	3929857	3929857	0	15	0	15		lclip
+nov_mada_126	INS	4034598	4034598	134	68	94	101		clip;tandem_dup

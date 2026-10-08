@@ -1,0 +1,4 @@
+sample	type	start	end	size	support	left	right	depth_ratio	source
+nov_mada_115	REARR	1	4415120	4415119	24	40	0		clip
+nov_mada_115	BND	1	1	0	34	0	34		lclip
+nov_mada_115	DEL	3718146	3720895	2750	57	32	28	0.00	clip
