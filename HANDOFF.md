@@ -1035,6 +1035,23 @@ Full notes: `analysis/insertions/INSERTION_GAP_ASSESSMENT.md`, assessing
 Nothing reaches the chain before it is prototyped, benchmarked and approved
 under the one-rerun rule.
 
+**Added 2026-10-08 (user: keep it separate from ABS-1, on this plan).** The
+ABS-1 breakpoint diagnosis can be extended to insertions. This belongs under
+step 3 above.
+
+1. **Scan:** each sample's H37Rv BAM, genome-wide, for single positions with
+   clip piles from both sides, no reads joining the two sides, and clipped
+   sequence or unmapped mates that are not H37Rv.
+2. **Sort:** blastn the clipped sequence against IS6110, the accessory
+   catalogue and the matched reference, giving known element, known
+   accessory, already in R, or novel.
+3. **Genotype:** recurrent sites, with REF/ALT junctions in every sample (step 4).
+4. **Full sequence:** from the audit assembly
+   (`analysis/inherited_absent/local_assembly.py`), on request.
+
+The read-level code to start from is `analysis/inherited_absent/junction_check.py`.
+Benchmark it before use (step 1 above).
+
 ## 0f. External long-read truth sets: Marin 2024 and Behruznia 2024 (2026-10-04)
 
 Purpose: an independent check of assembly reliability, and later the

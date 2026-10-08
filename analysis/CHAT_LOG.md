@@ -1026,3 +1026,10 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   reason for masked sites. Open: whether the assembly step joins the
   standard chain.
 - ABS-1: the user decided local assembly stays an audit run on request.
+- **ABS-1 diagnosis step specified:**
+  - evidence: depth, crossing reads and joining reads at R's deletion ends;
+  - calls: ABSENT confirmed / no reads, own REF/ALT call when contradicted,
+    NOCALL masked / mixed / unresolved / R has no genotype.
+- **Novel-insertion extension** (genome-wide two-sided clip scan, then blastn
+  sorting): the user asked to keep it separate from ABS-1, on the
+  insertion-gap plan (HANDOFF 0e). Not scheduled.
