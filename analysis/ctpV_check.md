@@ -185,3 +185,63 @@ The same false-ABSENT pattern across all 200 scale200_fix samples is counted in
 `analysis/inherited_absent/README.md`. Of the testable ABSENT cells, 12% (an
 upper bound) are covered at normal depth; they concentrate in phiRv1,
 plcA/plcB, PPE57/58, Rv3766-70 and wag22.
+
+## Accessory sequence lost in L1.2.1.2.1 (2026-10-08)
+
+**ctpV is not accessory.** H37Rv carries the whole gene, and the ctpV
+deletions are deletions from H37Rv. The build's accessory catalogue
+(`assets/accessory_catalogue.tsv`, 806 loci) holds only insertions of 500 bp or
+more relative to H37Rv, and has no locus in 1,077,000-1,082,000. The 337-bp
+insertion at 1,078,811 is below that cutoff.
+
+**Method.**
+
+Panel groups, from `analysis/pangenome_compare/cx333_panel_lineages.tsv`:
+
+| group | genomes |
+|---|---:|
+| L1.2.1.2.1 (T) | 9 |
+| L1.2.1.2, no deeper call | 5 |
+| L1.2.1.1 | 2 |
+| other L1 | 32 |
+| non-L1 | 284 |
+
+Two searches:
+- **Catalogue:** loci that no T genome carries, but that at least 60% of
+  L1.2.1.2 or of other L1 carry.
+- **Graph VCF:** every insertion bubble of 50 bp or more where T's median
+  inserted length is less than half that of the other L1 carriers.
+
+**Result:** no novel (non-H37Rv) accessory sequence is lost in L1.2.1.2.1.
+
+| locus (H37Rv) | what it is | T | L1.2.1.2 | L1.2.1.1 | other L1 | non-L1 | lost in |
+|---|---|---|---|---|---|---|---|
+| ACC_2866882, 1,312 bp (graph insert ~656 bp at 2,866,829) | extra copy of H37Rv sequence (copy_number) in lppA/lppB (Rv2543/Rv2544) | 0/9 | 0/5 | 2/2 | 72% | 21% (graph: 158/284) | L1.2.1.2 as a whole, T included |
+| ACC_3690950, 927 bp | copy_number, between lpdA (Rv3303c) and Rv3304 | 0/9 | 0/5 | 0/2 | 94% | 71% | all of L1.2.1 |
+| ACC_3941491, 699 bp | copy_number in PE_PGRS55 (Rv3511) | 0/9 | 0/5 | 0/2 | 78% | 1% | all of L1.2.1 |
+
+- **None of these is specific to L1.2.1.2.1:** all are lost at L1.2.1.2 or L1.2.1.
+- **All are duplications of sequence H37Rv already has** (copy_number, H37Rv
+  coverage ~1.0).
+- **ACC_3941491 is in PE_PGRS:** read-level calls there are unreliable.
+
+**Not counted as losses:**
+- Three 1,358-bp "reference_gap" loci (481,308, 2,627,727 and 3,193,285) carried by 3 of the
+  5 L1.2.1.2 genomes and no T genome. 1,358 bp is the length of IS6110, so
+  these are IS6110 insertion sites, which the IS6110 arm covers.
+- ACC_2209604, 4,403 bp of novel sequence at yrbE3B/mce3A: in all 5 L1.2.1.2
+  genomes and nothing else in the panel. That fits a gain on that branch
+  better than a loss in T, though the tree is needed to be sure.
+
+**Reads in scale200_fix** (`accessory/scale200_fix/*.presence.tsv`), for the
+three L1.2.1.2.1 isolates and the 16 other lineage-1 isolates:
+- **ACC_2866882:** ABSENT in all three L1.2.1.2.1 isolates. The other L1
+  isolates are mostly UNCERTAIN, as expected for a copy of H37Rv sequence.
+- **ACC_3690950:** UNMEASURABLE everywhere. The read route cannot see
+  sequence that H37Rv already has.
+- **ACC_3941491:** not informative. It is ABSENT in most lineage-1 isolates
+  whatever their sublineage.
+- **ACC_2209604 disagrees with the panel.** It is PRESENT in all 19 lineage-1
+  isolates, although only 5 panel genomes carry it. Either the panel carrier
+  list misses copies, or the read route overcalls this locus. Not resolved
+  here.
