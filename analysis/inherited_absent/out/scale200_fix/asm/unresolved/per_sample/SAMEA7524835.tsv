@@ -1,0 +1,10 @@
+event	sample	start	end	n_cells	expected	source	n_pairs	n_single	n_contigs	anchoring	contig_verdicts	verdict	note
+unr0008	SAMEA7524835	1989332	1989719	1		contradicted/R_no_genotype	932	2	1	1	NODE_1:present_here	present_here	
+unr0009	SAMEA7524835	1993072	1995384	1		contradicted/R_no_genotype	1370	2	2	1	NODE_1:present_here	present_here	
+unr0010	SAMEA7524835	3125087	3125094	1		contradicted/R_no_genotype	677	0	1	1	NODE_1:present_here	present_here	
+unr0046	SAMEA7524835	1989268	1989268	1		contradicted/no_R_deletion	825	2	1	1	NODE_1:present_here	present_here	
+unr0047	SAMEA7524835	1989822	1989822	1		contradicted/no_R_deletion	873	2	1	1	NODE_1:present_here	present_here	
+unr0048	SAMEA7524835	1993114	1993688	1		contradicted/no_R_deletion	975	2	1	1	NODE_1:present_here	present_here	
+unr0049	SAMEA7524835	1994418	1994827	1		contradicted/no_R_deletion	989	0	2	1	NODE_1:present_here	present_here	
+unr0050	SAMEA7524835	1995636	1995636	1		contradicted/no_R_deletion	776	1	2	1	NODE_1:present_here	present_here	
+unr0051	SAMEA7524835	3124689	3125080	1		contradicted/no_R_deletion	744	7	2	1	NODE_1:present_here	present_here	

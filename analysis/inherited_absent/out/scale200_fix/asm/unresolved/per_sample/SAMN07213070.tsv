@@ -1,0 +1,3 @@
+event	sample	start	end	n_cells	expected	source	n_pairs	n_single	n_contigs	anchoring	contig_verdicts	verdict	note
+unr0071	SAMN07213070	1955648	1955652	1		contradicted/no_R_deletion	680	0	1	1	NODE_1:complex	complex	
+unr0072	SAMN07213070	1987288	1987288	1		contradicted/no_R_deletion	718	0	1	1	NODE_1:present_here	present_here	

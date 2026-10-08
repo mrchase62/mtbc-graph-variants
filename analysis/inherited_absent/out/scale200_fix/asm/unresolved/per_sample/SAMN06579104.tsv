@@ -1,0 +1,6 @@
+event	sample	start	end	n_cells	expected	source	n_pairs	n_single	n_contigs	anchoring	contig_verdicts	verdict	note
+unr0017	SAMN06579104	1992694	1993683	1		contradicted/R_no_genotype	2158	3	1	1	NODE_1:present_here	present_here	
+unr0018	SAMN06579104	3248308	3248308	1		contradicted/R_no_genotype	1897	1	1	1	NODE_1:present_here	present_here	
+unr0066	SAMN06579104	1992675	1993688	1		contradicted/no_R_deletion	2167	3	1	1	NODE_1:present_here	present_here	
+unr0067	SAMN06579104	1995636	1995636	1		contradicted/no_R_deletion	2025	1	2	1	NODE_1:present_here	present_here	
+unr0068	SAMN06579104	1998689	1998689	1		contradicted/no_R_deletion	1748	9	2	1	NODE_1:present_here	present_here	

@@ -1,0 +1,8 @@
+event	sample	start	end	n_cells	expected	source	n_pairs	n_single	n_contigs	anchoring	contig_verdicts	verdict	note
+unr0022	canettii	3134839	3135272	1		contradicted/R_no_genotype	630	2	3	0		unresolved	
+unr0088	canettii	55546	55546	1		contradicted/no_R_deletion	610	3	1	1	NODE_1:present_here	present_here	
+unr0089	canettii	1804410	1804410	1		contradicted/no_R_deletion	656	0	3	0		unresolved	
+unr0090	canettii	3135115	3135134	1		contradicted/no_R_deletion	593	2	2	0		unresolved	
+unr0091	canettii	4384554	4384554	1		contradicted/no_R_deletion	641	6	1	0		unresolved	
+unr0107	canettii	3131233	3131469	1		contradicted/unresolved	678	2	2	0		unresolved	
+unr0108	canettii	4386772	4388914	1		contradicted/unresolved	718	5	3	0		unresolved	

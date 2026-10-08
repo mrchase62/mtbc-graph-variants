@@ -1,0 +1,3 @@
+event	sample	start	end	n_cells	expected	source	n_pairs	n_single	n_contigs	anchoring	contig_verdicts	verdict	note
+unr0003	SAMEA2534226	3707639	3707639	1		contradicted/R_no_genotype	1533	0	1	1	NODE_1:present_here	present_here	
+unr0094	SAMEA2534226	4371018	4371500	10		contradicted/unresolved	1615	0	1	1	NODE_1:present_here	present_here	

@@ -1,0 +1,2 @@
+event	sample	start	end	n_cells	expected	source	n_pairs	n_single	n_contigs	anchoring	contig_verdicts	verdict	note
+unr0093	SAMEA112800958	2238847	2239360	12		contradicted/unresolved	1417	0	1	1	NODE_1:present_here	present_here	

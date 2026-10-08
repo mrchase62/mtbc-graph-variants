@@ -162,3 +162,31 @@ reassembling:
   at 1,079,879-927 comes from reads of this copy.
 
 The 109 unresolved core regions were then submitted (job 51395857).
+
+### Unresolved set: results (job 51395857, 9 min, about 1.2 billing-hours)
+
+These are 109 core regions (201 ABSENT calls) that the breakpoint screen could
+not decide.
+
+| what the screen had | present_here | deleted_here | complex | unresolved |
+|---|---:|---:|---:|---:|
+| reference has no genotype (23) | 19 | 0 | 0 | 4 |
+| no reference deletion (69) | 45 | 3 | 6 | 15 |
+| breakpoints undecided (17) | 13 | 0 | 0 | 4 |
+| **regions** | **77** | **3** | **6** | **23** |
+| ABSENT calls | 161 | 6 | (6 complex + 31 unresolved) | |
+
+- **Present:** 77 of the 109 regions (161 calls) have the sequence present at
+  the locus, so those ABSENT calls are wrong.
+- **Deleted:** 3 regions are correctly ABSENT.
+- **Leftover sequence** (`unresolved/complex_segments.tsv`: 28 stretches in 17
+  regions) is mostly two things:
+  - **IS6110 copies.** For example, 1,359 bp at 99.9% identity to H37Rv's
+    IS6110 at 889,021-890,379, sitting in contigs at 1,987,288-1,987,469 in
+    several samples, and at 3,378,697 in one. These are IS6110 insertion
+    sites, which belong to the IS6110 arm.
+  - **The M. canettii isolate's diverged sequence.** It matches its matched
+    reference NC_015848 at 99.8-100%, but H37Rv at only 85-91%.
+
+  A few stretches match H37Rv at only 76-79%, around 2,631,401-2,632,003.
+  None of the leftover sequence is accessory sequence lost by a lineage.

@@ -1,0 +1,2 @@
+event	sample	start	end	n_cells	expected	source	n_pairs	n_single	n_contigs	anchoring	contig_verdicts	verdict	note
+unr0106	SAMEA2534843	1875727	1881425	1		contradicted/unresolved	715	0	2	0		unresolved	

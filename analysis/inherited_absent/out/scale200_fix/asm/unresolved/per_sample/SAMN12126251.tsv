@@ -1,0 +1,2 @@
+event	sample	start	end	n_cells	expected	source	n_pairs	n_single	n_contigs	anchoring	contig_verdicts	verdict	note
+unr0083	SAMN12126251	1987288	1987288	1		contradicted/no_R_deletion	1614	8	4	0		unresolved	
