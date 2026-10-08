@@ -57,3 +57,54 @@ the start codon.
 these deletions. An earlier cross-check, `analysis/rd_crossref/novel_stable_gwas1000.tsv`,
 lists the 297, 1,587 and 872-bp deletions as graph-only (not in the published
 RD list), all in lineage 1.
+
+## Calls in scale200_fix (2026-10-08)
+
+The cohort has 19 lineage-1 isolates. Four of them are in L1.2.1:
+SAMEA112800746, SAMEA5542103 and SAMN07766100 (lineage caller 1.2.1.2.1),
+and SAMEA2297133 (lineage caller only 1.2.1). All four were mapped in P2 to
+an L1.2.1.2.1 panel genome that lacks the ctpV start: GCF_040208995 for three
+of them and GCF_040209325 for SAMEA5542103.
+
+**The cohort catalogue clusters the panel deletions.** It has no separate
+297-bp interval. The 297, 239 and 235-bp deletions form one interval,
+`svi:DEL:1078518:239` (13 panel carriers), the "start-codon" interval. The
+1,536, 1,296 and 1,290-bp deletions form another, `svi:DEL:1078519:1536`
+(6 panel carriers).
+
+**Read depth on H37Rv:** mean depth and zero-depth positions per segment, from
+the P1 H37Rv BAM, MAPQ>=20.
+
+| sample | start-codon segment 1,078,519-756 | 1,078,814-1,079,742 | merged VCF: 239 interval | 1536 interval | 872 / 82 intervals |
+|---|---|---|---|---|---|
+| SAMEA5542103 | 0x (236/238 zero) | 4x (847/929 zero) | ALT | ALT | ABSENT |
+| SAMEA112800746 | 1x (228/238 zero) | 4x (845/929 zero) | ALT | NOCALL | ABSENT |
+| SAMN07766100 | 2x (14/238 zero) | 4x (426/929 zero) | ALT | NOCALL | ABSENT |
+| SAMEA2297133 | 72x (0 zero) | 107x (0 zero) | REF | REF | **ABSENT (wrong)** |
+| SAMEA1119809 (L1.2.2.2, control) | 56x | 67x | REF | REF | REF |
+
+**Results:**
+
+- **The three L1.2.1.2.1 isolates are correctly called ALT for the deletion
+  over the ctpV start codon.** Their reads cover neither the start codon nor
+  most of the gene, which fits the 235-bp plus 1,290-bp haplotype of their
+  matched references.
+- **SAMEA2297133 has an intact ctpV.** It has full depth with no gaps across
+  the whole gene. It is probably a basal L1.2.1 isolate, the branch the paper
+  excludes. Its start-codon and 1536 intervals are correctly REF, from the
+  two-frame check ("inherited_reference_contradicted").
+- **Its 872 and 82-bp intervals are wrongly ABSENT.** They lie inside the
+  1,296-bp deletion of its matched reference, so no probe projects and
+  `p5_sv_genotype.py` calls ABSENT. Unlike the enclosing interval, these are
+  not checked against H37Rv-frame depth.
+- **Its small variants have the same problem in part.** P4b also places the
+  reference's 1,296-bp deletion in this sample as INHERITED. Small-variant
+  states are mostly NOCALL inside it (27 NOCALL, 1 ALT). Two small records in
+  the start-codon segment, 1,078,644 and 1,078,715, are ABSENT although the
+  reads cover them at 72x.
+- **The other 15 lineage-1 isolates (L1.1.x, L1.2.2.x) are REF on every ctpV
+  interval.**
+
+**Not looked at:** whether other samples get the same wrong ABSENT where their
+matched reference has a deletion the sample does not. In the comparison, this
+belongs with the NOCALL/ABSENT counts.

@@ -987,3 +987,10 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   (the paper's confirmed deletion is 297 bp); the 9 L1.2.1.2.1 genomes carry
   longer deletions over the start (235/239 bp plus 872-1,296 bp downstream,
   or one of 1,536 bp); no other lineage-1 genome. `analysis/ctpV_check.md`.
+- **ctpV in scale200_fix:** the three L1.2.1.2.1 isolates are correctly ALT
+  for the deletion over the start codon (depth 0-2x there). SAMEA2297133
+  (basal L1.2.1, matched to GCF_040208995) has an intact ctpV at 72-107x but
+  is ABSENT on two intervals nested in its reference's 1,296-bp deletion, and
+  on two small records. Inherited absence is not checked against H37Rv-frame
+  depth for nested intervals and small states. Reported, not fixed; details
+  in `analysis/ctpV_check.md`.
