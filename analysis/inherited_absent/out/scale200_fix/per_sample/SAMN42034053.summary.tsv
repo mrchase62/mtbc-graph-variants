@@ -1,0 +1,2 @@
+sample	baseline_depth	absent_total	contradicted	partial	supported	not_testable	small:contradicted	small:partial	small:supported	sv:contradicted	sv:partial	sv:supported	other:not_testable
+SAMN42034053	86	11276	98	25	62	11091	98	25	61	0	0	1	11091

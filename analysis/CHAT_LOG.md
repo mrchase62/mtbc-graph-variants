@@ -994,3 +994,11 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   on two small records. Inherited absence is not checked against H37Rv-frame
   depth for nested intervals and small states. Reported, not fixed; details
   in `analysis/ctpV_check.md`.
+- **Inherited ABSENT checked cohort-wide** (`analysis/inherited_absent/`).
+  Of the 85,465 ABSENT cells in scale200_fix that have an H37Rv span, 83%
+  are supported by the sample's own depth, 12% (10,247; 3,197 sites; 199 of
+  200 samples) are covered at normal depth, and 5% are partial. They cluster
+  in phiRv1, plcA/B, PPE57/58, Rv3766-70 and wag22, and rise with distance to
+  the matched reference. 12% is an upper bound: relocated sequence also gives
+  depth, so the junction clips and split reads decide. 2.2M node-frame
+  ABSENT cells are not testable this way.
