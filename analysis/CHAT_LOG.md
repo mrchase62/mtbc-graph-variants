@@ -1002,3 +1002,9 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   the matched reference. 12% is an upper bound: relocated sequence also gives
   depth, so the junction clips and split reads decide. 2.2M node-frame
   ABSENT cells are not testable this way.
+- **ctpV read evidence** added to `analysis/ctpV_check.md`: HaplotypeCaller,
+  clip/split-read clusters and delly/dysgu on the matched reference. delly
+  calls nothing over ctpV in the four L1.2.1 samples. dysgu finds PASS
+  fragments of the carriers' differences from their references. Neither sees
+  SAMEA2297133's ~1.5 kb of extra sequence relative to GCF_040208995: an
+  insertion longer than a read.

@@ -108,3 +108,80 @@ the P1 H37Rv BAM, MAPQ>=20.
 **Not looked at:** whether other samples get the same wrong ABSENT where their
 matched reference has a deletion the sample does not. In the comparison, this
 belongs with the NOCALL/ABSENT counts.
+
+## Read-level evidence in the four L1.2.1 samples (2026-10-08)
+
+### HaplotypeCaller on H37Rv (P1 VCF, 1,078,500-1,081,100)
+
+- **SAMEA2297133:** two SNPs, both outside the start-codon segment:
+  1,079,927 C>A (DP 117) and 1,080,192 G>A (DP 126). No deletion. Nothing at
+  1,078,644 or 1,078,715, so REF at about 72x. This agrees with an intact gene.
+- **SAMEA5542103:** only 1,080,192 G>A, past the deletion; no reads inside it.
+- **SAMEA112800746 and SAMN07766100:**
+  - 14 SNPs and 1-12 bp indels at 1,079,879-1,079,927, at depth 4 rising to
+    50, inside the "deleted" segment;
+  - these look like reads from rearranged ctpV pieces (below) forced onto H37Rv;
+  - HaplotypeCaller's local reassembly spans about one read length and cannot
+    represent the event.
+
+### Soft clips (>= 5 bp, piles of >= 3 reads) and split reads (SA) on H37Rv
+
+| breakpoint | SAMEA5542103 | SAMEA112800746 | SAMN07766100 | SAMEA2297133 | SAMEA1119809 (control) |
+|---|---|---|---|---|---|
+| ~1,078,519-522 | 65 | 51 | 42 | **0** | 4 |
+| 1,078,757 | - | 12 | 24 | **0** | 0 |
+| 1,078,811 | - | 12 | 24 | **0** | 0 |
+| 1,079,652 / 1,079,733 | 42 / 38 | 42 / 45 | 29 / 27 | **0** | 0 |
+| 1,079,759 / 1,079,827 / 1,079,921 | - | 39 / 39 / 33 | 33 / 39 / 37 | **0** | 0 |
+| ~1,080,103-104 | 56 | 49 / 47 | 35 / 31 | **0** | 0 |
+
+- **The carriers have sharp two-sided clusters with split-read partners.**
+  - In SAMEA112800746 and SAMN07766100, the 235-bp deletion joins 1,078,522 to
+    1,078,757: clips at one breakpoint have their SA at the other.
+  - SAMEA5542103 joins 1,078,519 straight to about 1,080,104, a single larger
+    deletion like the panel's 1,536 bp, not its reference's two-piece version.
+  - In all three, the "1,290-bp deletion" is not clean. Pieces at about
+    1,079,652-733, 1,079,759-827 and 1,079,921-1,080,103 remain, joined in a
+    different order. These are probably what the graph records as the 337-bp
+    insertion.
+- **SAMEA2297133 has no cluster at any breakpoint.** Its only pile is about 27
+  one-sided clips spread over 1,079,080-1,079,163, with no SA partners. The
+  control shows the same at 1,079,080, so it is background.
+- **Together:** SAMEA2297133's reads (even depth, no junctions, HaplotypeCaller
+  REF) say ctpV is intact. Its four ABSENT cells come only from the reference.
+
+### delly and dysgu (P2, against each sample's matched reference)
+
+P2 calls SVs against the matched reference R, not H37Rv. On R, ctpV is at about
+2,814,000-2,819,600 in GCF_040208995 (reverse strand; csoR at 2,818,290-649)
+and about 2,470,000-2,475,500 in GCF_040209325.
+
+| sample (R) | delly | dysgu |
+|---|---|---|
+| SAMEA2297133 (GCF_040208995) | INV 2,816,189-3,869,989 and INV 2,817,770-811, both LowQual, GT 0/0 | DEL 42 bp, INS 111 bp, INV 33 bp at 2,818,015; all lowProb |
+| SAMEA112800746 (GCF_040208995) | none | INS 270 bp at 2,818,015, PASS, 1/1 |
+| SAMN07766100 (GCF_040208995) | none | INS 173 bp at 2,818,015, PASS, 0/1 |
+| SAMEA5542103 (GCF_040209325) | INV 2,474,533-559, LowQual, GT 0/0 | DEL 179 bp at 2,471,469-648, PASS, 1/1; INV 86 bp lowProb |
+
+- **delly finds none of it.** Its calls are low-quality inversions with
+  genotype 0/0.
+- **dysgu finds fragments of the carriers' differences from R.**
+  - The PASS insertions at 2,818,015, the junction of R's two deletions, are
+    most likely a partial view of the 337-bp insertion the two carriers have
+    and GCF_040208995 lacks.
+  - SAMEA5542103's PASS 179-bp deletion fits it losing more of the gene than
+    its reference does.
+- **Neither sees SAMEA2297133's real difference from R.** Relative to
+  GCF_040208995, SAMEA2297133 carries about 1.5 kb more sequence: the 235-bp
+  and 1,296-bp segments its reference lacks. On R that is an insertion longer
+  than a read. Short-read callers rarely call insertions that long, and delly
+  hardly at all; dysgu reports only lowProb noise near the junction.
+- **By design, a deletion the sample shares with R is invisible to both.**
+  Showing it is the job of the H37Rv frame and the graph.
+
+### Cohort-wide
+
+The same false-ABSENT pattern across all 200 scale200_fix samples is counted in
+`analysis/inherited_absent/README.md`. Of the testable ABSENT cells, 12% (an
+upper bound) are covered at normal depth; they concentrate in phiRv1,
+plcA/plcB, PPE57/58, Rv3766-70 and wag22.
