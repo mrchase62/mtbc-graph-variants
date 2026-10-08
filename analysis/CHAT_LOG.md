@@ -1039,3 +1039,11 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   the P2 BAMs vs the matched reference, sharing a module with ABS-1. Phase A
   uses simulated reads from about 40 external assemblies already on disk,
   about 30 billing-hours. Waiting for approval.
+- **Novel events Phase A started** (user approved 30 billing-hours).
+  - 40 external assemblies, simulated with wgsim at 80x, run through P1/P2 as
+    test cohort `novelA40` (registry row; outputs `refbias/novelA40/run`).
+  - Truth set: 993 events of 50 bp or more, assembly vs matched reference
+    (minimap2 asm5 + paftools).
+  - Prototype `breakpoint_caller.py` and `score.py` written.
+  - Spend 17.5 billing-hours with P2 running; expected about 35-40, over the
+    approved 30. Reported to the user.
