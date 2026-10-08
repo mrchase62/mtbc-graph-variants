@@ -169,6 +169,18 @@ What to change:
 5. **Tests:** the ctpV cases and the 120 calibration regions as regression
    tests. Then rerun P5 onward for scale200_fix; P1 to P4 stay valid.
 
+**NAME-1: rename the pipeline's `refbias/` working folders** (added
+2026-10-08). The user: "refbias doesn't make sense". The name dates from the
+project's start as a reference-bias study, and the folders hold every
+cohort's calls. Proposed: `results/` or `out/`; the user decides at the time.
+
+- **Scope:** every pass script's default paths, `bin/refbias_run.sh`, the
+  cohort registry (`refbias/cohorts.tsv` and its outroot and workprefix
+  columns), `config/io_contract.tsv`, the build folders
+  (`refbias/build/...`), runroot links, docs and tests.
+- **Timing (user):** deal with it later, once the pipeline is stable. Not
+  part of the next rerun.
+
 **Decided (user, 2026-10-08): local de novo assembly stays an audit run, on
 request.** It is SPAdes, then minimap2 contigs against H37Rv
 (`analysis/inherited_absent/local_assembly.py`), and is not part of the chain.
