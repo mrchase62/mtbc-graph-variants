@@ -132,9 +132,9 @@ What to change:
 5. **Tests:** the ctpV cases and the 120 calibration regions as regression
    tests. Then rerun P5 onward for scale200_fix; P1 to P4 stay valid.
 
-Open: whether local de novo assembly (SPAdes, then minimap2) for the
-remaining undecided regions becomes a standard step after P5, or stays an
-audit run on request.
+**Decided (user, 2026-10-08): local de novo assembly stays an audit run, on
+request.** It is SPAdes, then minimap2 contigs against H37Rv
+(`analysis/inherited_absent/local_assembly.py`), and is not part of the chain.
 
 **Netscratch purge, 2026-10-07 14:24.** FASRC's purge removed every working-tree
 file not modified for about 90 days. Only 5 folders changed: `containers/`,

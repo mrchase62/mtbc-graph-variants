@@ -1025,3 +1025,4 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - **ABS-1 added to the fix list** (HANDOFF). The user chose NOCALL with a
   reason for masked sites. Open: whether the assembly step joins the
   standard chain.
+- ABS-1: the user decided local assembly stays an audit run on request.
