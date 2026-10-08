@@ -1076,3 +1076,10 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - The depth scan carries the tandem copy-number classes; assembly raises
     precision.
   - Phase B compute awaits approval; the download is running.
+- **Phase B approved at 45 billing-hours.**
+  - Cohort `marinB63` (63 Marin isolates, real Illumina, subsampled to about
+    120x; 28 runs were deeper, up to 1,150x).
+  - Read preparation 51425836 is queued after download 51420772.
+  - Then P1/P2, truth, callers, scoring.
+- The user asked where the scale200 outputs are; all are on netscratch
+  (listed in the reply), with no durable copy.
