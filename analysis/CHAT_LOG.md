@@ -952,3 +952,17 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   20% longer, about 40% cheaper. Rerun estimate now about 380 billing-hours.
   One test assumed the purged H37Rv file was absent; made independent of it.
   369 tests pass.
+
+## 2026-10-08
+
+- **User:** "yes, run the scale200 rerun at 380 billing-hours."
+- **Setup** (`analysis/rerun_scale200/README.md`): a new build,
+  `7713a8d71d8e-fix1`, on the same CX333 graph, and a new registry row,
+  `scale200_fix`, with new output folders. The old run is untouched for the
+  comparison. The registry is now a repository file that `runroot` links to,
+  as `io_contract.tsv` already was. `vcf_split_classes.sh` gained `--outdir`,
+  so the build's files do not replace those in the graph folder.
+- **Graph VCF with the fixed collapse:** 79,474 SNP/MNP, 9,027 indel and
+  4,652 SV records; no duplicate keys; indels left-aligned.
+- **Accessory candidates:** the same 1,643 insertions, but D22 moves most of
+  them 1-14 bp left, so accessory locus ids change between old and new.

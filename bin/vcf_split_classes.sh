@@ -2,7 +2,10 @@
 # Split the collapsed graph VCF into SNP / indel / SV views that share one
 # coordinate system and one set of genotypes.
 #
-#   bin/vcf_split_classes.sh <graph-dir-name> [--sv-min 50] [--in FILE]
+#   bin/vcf_split_classes.sh <graph-dir-name> [--sv-min 50] [--in FILE] [--outdir DIR]
+#
+# --outdir writes the four files somewhere other than the graph's directory,
+# so a rebuild on an existing graph does not replace the files beside it.
 #
 # Because all three come from the same graph VCF, an SV and a SNP in the
 # same genome are directly comparable and can go into the same downstream
@@ -35,15 +38,19 @@ SV_MIN=50
 # the collapsed product, never the decomposed intermediate, whose duplicate
 # keys split each allele's carriers (audit PGB-9)
 IN="${GRAPH_DIR}/all_variants.collapsed.vcf.gz"
+OUTDIR="$GRAPH_DIR"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --sv-min) SV_MIN="$2"; shift 2 ;;
         --in)     IN="$2";     shift 2 ;;
+        --outdir) OUTDIR="$2"; shift 2 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
 mtb_require_file "$IN"
-cd "$GRAPH_DIR"
+IN="$(readlink -f "$IN")"     # absolute before the cd below
+mkdir -p "$OUTDIR"
+cd "$OUTDIR"
 
 # What counts as "large" needs care. Sizing a record by the LENGTH DIFFERENCE
 # alone -- abs(strlen(REF)-strlen(ALT)) -- misses every length-preserving change:

@@ -1,0 +1,24 @@
+# Cohort registry for bin/refbias_run.sh.
+#
+# The output roots differ by cohort for historical reasons -- the pilot was
+# first and wrote to refbias/p<n> directly, later cohorts got their own
+# subtree. Declaring them here rather than deriving them from the cohort name
+# is deliberate: a guessed path is how one cohort's calls get scored against
+# another cohort's outputs, and that mistake has been made in this project.
+#
+# passes: which passes this cohort has been or should be run through.
+# workprefix: scratch path prefix; a pass appends its own name, so
+#   'refbias/work/' gives refbias/work/p1 and 'refbias/work/scale_' gives
+#   refbias/work/scale_p1. Declared, not derived, because the two existing
+#   cohorts do not share a convention and guessing invented a path that does
+#   not exist.
+cohort	cohort_table	crams_table	outroot	passes	note	workprefix
+pilot	refbias/cohort.pilot.tsv	refbias/cohort.crams.tsv	refbias	p1,p2,p3,p4,p4b,p5,p1g,p1i,p1iv,p1is,p5svgt,p5vcf	23 isolates, the original two-pass pilot	refbias/work/
+scale100	refbias/cohort.scale100.tsv	refbias/scale100.crams.tsv	refbias/scale	p1,p2,p3,p4,p4b,p5,p1g,p1i,p1iv,p1is,p5svgt,p5vcf	100 isolates, the cohort-scale run	refbias/work/scale_
+l49	refbias/cohort.l49.tsv	refbias/l49.crams.tsv	refbias/l49	p1g	20 sublineage 4.9, near-identity control, IS6110 arm only	refbias/work/l49_
+l7	refbias/cohort.l7.tsv	refbias/l7.crams.tsv	refbias/l7	p1,p2,p3,p4,p4b,p5,p1g,p1i,p1iv,p1is,p5svgt,p5vcf	34 lineage 7, the single-copy calibration anchor; p1g arm already run, full chain added 2026-09-22	refbias/work/l7_
+pilot_rerun	refbias/cohort.pilot.tsv	refbias/cohort.crams.tsv	refbias/rerun	p1,p2,p3,p4,p4b,p5,p5svgt,p5vcf	the pilot again into a clean root, to diff two generations and test reproducibility	refbias/work/pilot_rerun_
+scale200	refbias/cohort.scale200.tsv	refbias/scale200.crams.tsv	refbias/scale200	p1,p2,p3,p4,p4b,p5,p1g,p1i,p1iv,p1is,p5svgt,p5vcf	the 100 scale100 isolates plus 100 new, to test key-set stability under cohort growth	refbias/work/scale200_
+scale100_h37rv	refbias/cohort.scale100.tsv	refbias/scale100.crams.tsv	refbias/scale_h37rv	p2,p3,p4,p4b,p5,p5svgt,p5vcf	the scale100 isolates pinned to H37Rv, for the two-reference comparison; p1 is not run, and work/scaleh37_p1 is a symlink to work/scale_p1 because P4 needs P1 H37Rv-frame calls, which are a property of the sample rather than of the matched reference	refbias/work/scaleh37_
+gwas1000	refbias/cohort.gwas1000.tsv	refbias/gwas1000.crams.tsv	refbias/gwas1000	p1,p2,p3,p4,p4b,p5,p1g,p1i,p1iv,p1is,p5svgt,p5vcf	997 isolates stratified by lineage AND RRDR status for the association scan; phenotype in refbias/gwas1000.phenotype.tsv	refbias/work/gwas1000_
+scale200_fix	refbias/cohort.scale200.tsv	refbias/scale200.crams.tsv	refbias/scale200_fix	p1,p2,p3,p4,p4b,p5,p1g,p1i,p1iv,p1is,p5svgt,p5vcf	scale200 again on all audit fixes, build 7713a8d71d8e-fix1 (the CX333 graph), into new folders, for the before/after comparison (2026-10-08)	refbias/work/scale200fix_
