@@ -1143,3 +1143,15 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   option 1: run it, report it separately)**: job 51557679,
   `phaseB/06_full_v3b.sbatch`, outputs in `phaseB/out/v3b/` (the 5 test
   isolates copied in).
+- **User decision: call novel events only in mappable sequence and flag the
+  rest as uncallable.** Written (not yet run):
+  - `analysis/novel_events/callable_mask.py`: a mask in each matched
+    reference's own coordinates. It unions two sources:
+    - R's own repeats, measured with build_repeat_mask.py's tests (50-mer
+      paralogy and 9-mer tandem recurrence);
+    - the H37Rv repeat mask lifted to R (minimap2 asm5 + paftools liftover).
+    The gene extension and name list are dropped for R (no annotation) and
+    come in only through the lift.
+  - `score.py --refmap --mask-dir`: true events and calls within 50 bp of the
+    mask are uncallable. Recall is measured over callable events, uncallable
+    calls are flagged, and both counts are reported.

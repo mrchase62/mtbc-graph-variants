@@ -25,10 +25,17 @@ run +-200 bp, since read-depth boundaries are only window-precise.
 
 Truth events are split by size (50-150, 150-500, 500-2,000, >2,000 bp) and
 by whether an insertion is IS6110-sized (1,340-1,370 bp).
+
+Callable sequence (--mask-dir with --refmap; Phase B): a true event or a call
+whose span +-50 bp touches the matched reference's uncallable mask
+(callable_mask.py) is uncallable. Recall is then measured over callable true
+events only, and uncallable calls are flagged, not counted in precision.
+n_true_uncallable and calls_uncallable report how many were set aside.
 """
 import argparse
 import collections
 import csv
+import bisect
 import os
 
 TOL = 50
@@ -85,6 +92,27 @@ def near(c, t):
     return False
 
 
+def load_masks(refmap, mask_dir):
+    ref = {}
+    for r in csv.DictReader(open(refmap), delimiter="\t"):
+        ref[r["sample"]] = r["reference"]
+    masks = {}
+    for s, g in ref.items():
+        iv = sorted((int(f[1]), int(f[2])) for f in
+                    (x.split("\t") for x in open(os.path.join(mask_dir, f"{g}.bed"))))
+        masks[s] = ([x[0] for x in iv], iv)
+    return masks
+
+
+def masked(m, s, e):
+    if m is None:
+        return False
+    starts, iv = m
+    lo, hi = s - 1 - TOL, e + TOL  # 1-based event span +-50 bp, as 0-based half-open
+    i = bisect.bisect_right(starts, hi)
+    return any(iv[j][1] > lo for j in range(max(0, i - 8), i))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--truth", required=True)
@@ -92,8 +120,11 @@ def main():
     ap.add_argument("--p2-dir", required=True)
     ap.add_argument("--asm-dir", help="assemble_candidates.py tables (step 1)")
     ap.add_argument("--depth-dir", help="depth_scan.py tables (step 2)")
+    ap.add_argument("--refmap", help="P1 refmap.tsv: sample -> matched reference")
+    ap.add_argument("--mask-dir", help="callable_mask.py BEDs, <reference>.bed")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
+    masks = load_masks(a.refmap, a.mask_dir) if a.mask_dir else {}
     truth = collections.defaultdict(list)
     for r in csv.DictReader(open(a.truth), delimiter="\t"):
         size = max(int(r["ref_len"]), int(r["alt_len"]))
@@ -121,12 +152,25 @@ def main():
                                                for s in truth}
 
     rows = []
+    n_unc_truth = collections.Counter()
+    for s, ts in truth.items():
+        m = masks.get(s)
+        for t in ts:
+            t["unc"] = masked(m, t["start"], t["end"])
+            if t["unc"]:
+                n_unc_truth["all"] += 1
     for name, by_s in calls.items():
         strata = collections.defaultdict(lambda: [0, 0, 0])  # n, typed hit, bp hit
-        n_calls = n_true_calls = 0
+        n_calls = n_true_calls = n_unc_calls = 0
         for s, ts in truth.items():
-            cs = by_s.get(s, [])
+            m = masks.get(s)
+            cs_all = by_s.get(s, [])
+            cs = [c for c in cs_all if not masked(m, c["start"], c["end"])]
+            n_unc_calls += sum(1 for c in cs_all if c["type"] != "BND") - \
+                sum(1 for c in cs if c["type"] != "BND")
             for t in ts:
+                if t["unc"]:
+                    continue
                 keys = ["all", f"type={t['type']}", f"size={size_class(t['size'])}"]
                 if t["is6110"]:
                     keys.append("IS6110-sized INS")
@@ -145,7 +189,9 @@ def main():
         for k, (n, h, b) in sorted(strata.items()):
             rows.append(dict(caller=name, stratum=k, n_true=n, typed_recall=round(h / n, 3),
                              breakpoint_recall=round(b / n, 3), typed_calls=n_calls,
-                             precision=round(prec, 3)))
+                             precision=round(prec, 3),
+                             n_true_uncallable=n_unc_truth[k] if k == "all" else "",
+                             calls_uncallable=n_unc_calls))
     with open(a.out, "w") as fo:
         w = csv.DictWriter(fo, fieldnames=list(rows[0]), delimiter="\t")
         w.writeheader()
