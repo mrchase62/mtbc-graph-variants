@@ -1433,3 +1433,11 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     split this study for no visible benefit. Data now support a cutoff
     somewhere in 1.2-4.8; cohorts in use above 2: 30%, above 3: 24%.
   - in_panel: as before (10 above 4.8).
+- **Fold-back cutoff set at 2 per 1,000 (user, 2026-10-09).** Phase B rerun
+  list `foldback_qc/phaseB_keep.txt`: 51 isolates (19 novel, 17 setE, 15
+  clean controls); excluded N0153 and the 10 chimeric controls.
+- **Firm rerun cost** from measured per-isolate costs (marinQC5b chain and
+  kraken2 51636061), QC scaled by raw size (rerun mean 123x vs test 113x):
+  QC 0.53 x 1.09 x 51 = 29.5; kraken2 2 min copy + 51 x 25 s at billing 22
+  = about 9; P1 0.26 x 51 = 13.3; P2 0.40 x 51 = 20.5; callers + assembly
+  0.13 x 51 = 6.8; scoring under 0.5. Total about 79 billing-hours.

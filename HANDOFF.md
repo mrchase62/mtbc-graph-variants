@@ -317,7 +317,7 @@ Full log: `analysis/CHAT_LOG.md`; review: `analysis/novel_events/REVIEW_2026-10-
   gwas1000 by lineage: L1 41%, L2 39%, L3 32%, L4 34%, L5 54%, L6 19%,
   L7 0%, L9 0%; RRDR 0 and 1 both 35%. Reads of 160 bp or more: 72%.
   Strongly study-specific (ENA metadata, `analysis/foldback_sim/ena_library.tsv`).
-- **Undecided:** a 1 per 1,000 cutoff for SV work, which would mean rebuilding
+- **Cutoff set at 2 per 1,000 (user, 2026-10-09)** for Phase B (Phase B setE sits at 0.25-1.21 and behaves cleanly). For production cohorts it would mean rebuilding
   the cohorts (gwas1000 would lose lineage balance, mostly L5 and L1).
 
 **Parked (the user, 2026-10-09: not now): fold-back chimeras and Mutect2.**
