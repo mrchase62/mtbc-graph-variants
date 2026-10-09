@@ -1177,3 +1177,17 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     about 7 controls (mostly the N series) have hundreds.
   - The depth scan is unusable.
   - Phase B total about 111 billing-hours against 62 approved in all.
+- **GRIDSS timing** (job 51564761, 201 s, about 0.45 billing-hours): about
+  100 s per isolate with 4 threads (mar_QC_6 108 s, mar_TB1612 91 s) on the
+  un-QC'd P2 BAMs. Full 102 isolates: about 23 billing-hours at this setting.
+  - PASS records: mar_QC_6 189 (177 of them single breakends), mar_TB1612 21
+    (13 single).
+  - Not scored yet: GRIDSS reports breakend pairs, which need converting to
+    DEL/INS/etc before score.py can use them.
+- **User raised read preprocessing:** reads should be QC'd and downsampled to
+  100x. Currently there is no QC at all (no adapter or quality trimming, in
+  Phase B or in the pipeline), and Phase B is subsampled to about 120x
+  (47-120x). Proposed: fastp (adapters, 3' sliding-window Q20 trim, min
+  length 50), then rasusa to 100x; a 5-isolate test (about 4 billing-hours)
+  before a full rerun (about 80). Awaiting the user. Open question: were the
+  production CRAMs trimmed upstream?
