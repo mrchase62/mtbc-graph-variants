@@ -1294,3 +1294,9 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   So a 1-per-1,000 fail cutoff would drop about 40% of production; this
   looks like a library-prep difference, not rare bad samples.
 - `split_reads.awk` holds the fold-back count, shared by 01 and 03.
+- **kraken2 on controls** (51636061, 14 min: database copy 2 min, then about
+  25 s per isolate; about 5 billing-hours, about 18 with the stalled job):
+  all 15 pass the user's rules. MTBC 98.5-99.7% of classified reads; largest
+  other taxon at most 1.8% (Homo, in clean control 01_R1134). Noisy controls:
+  Staphylococcus at most 1.0% (N1176), the rest under 0.6%. Contamination
+  does not explain the noisy controls. `controls/summary.tsv` updated.
