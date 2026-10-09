@@ -1386,3 +1386,18 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     assembly) call 21-43 indels and share 13-42 calls with the real reads
     against the panel genome R: Marin's assembly and the panel GCF assembly
     of the same isolate differ at those sites. Not investigated.
+- **DYSGU-1 and DYSGU-2 fixed in `bin/p2_call.sh`** (user request):
+  - DYSGU-1: dysgu's working folder is now node-local (mktemp under
+    $TMPDIR or /tmp) and removed by P2 with a guarded rm, not by dysgu's
+    --clean. Test (51684684): dysgu with the new command on mar_TB3251's P2
+    BAM gives records identical to its existing VCF (364 of 364).
+  - DYSGU-2: when dysgu writes no records, P2 appends the sample name to
+    the #CHROM line (dysgu writes FORMAT with no sample column). Checked on
+    syn_mar_TB3368's empty VCF: bcftools rejects the original and parses the
+    fixed one; stamp_build_id.sh stamps it.
+  - Affects only new P2 runs; existing outputs are unchanged.
+- **Fold-back on cohorts in use** (user request): `analysis/foldback_qc/`,
+  `cohorts_in_use.tsv` = union of pilot, scale100, l49, l7, scale200,
+  gwas1000 crams tables (1,200 isolates; 16 already in the 500 random
+  sample). `01_measure.sbatch` job 51684612 (8 cores; about 3.3
+  billing-hours expected, above the 2 I quoted).

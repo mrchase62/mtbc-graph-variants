@@ -230,15 +230,32 @@ if [[ -x "$DYSGU" ]]; then
     # A nonzero exit used to be logged and the partial stdout kept and stamped
     # as a complete callset. Keep the output only on success; otherwise fail
     # the sample so the gap is visible (once in the project's history so far).
+    # The working folder is node-local and removed here, not by dysgu's
+    # --clean: on netscratch, --clean's own removal crashed on NFS lock files
+    # (.nfs*) after calling had finished, which failed 8 of 25 samples
+    # (DYSGU-1, 2026-10-09). --clean only deletes temporary files; the calls
+    # are the same without it.
     _dy_rc=0
-    "$DYSGU" run --clean -x -p "$THREADS" "$REF" \
-        "${WORK}/${SAMPLE}.dysgu_tmp" "$BAM" > "${OUTDIR}/${SAMPLE}.dysgu.vcf.tmp" \
+    _dy_wd="$(mktemp -d "${TMPDIR:-/tmp}/dysgu.${SAMPLE}.XXXXXX")"
+    "$DYSGU" run -x -p "$THREADS" "$REF" \
+        "${_dy_wd}/wd" "$BAM" > "${OUTDIR}/${SAMPLE}.dysgu.vcf.tmp" \
         2> "${WORK}/${SAMPLE}.dysgu.log" || _dy_rc=$?
-    rm -rf "${WORK}/${SAMPLE}.dysgu_tmp"
+    [[ -n "$_dy_wd" && "$_dy_wd" == "${TMPDIR:-/tmp}/dysgu.${SAMPLE}."* ]] && rm -rf -- "$_dy_wd"
     if [[ "$_dy_rc" -ne 0 ]]; then
         rm -f "${OUTDIR}/${SAMPLE}.dysgu.vcf.tmp"
         echo "FATAL: ${SAMPLE}: dysgu exited ${_dy_rc}; see ${WORK}/${SAMPLE}.dysgu.log" >&2
         exit 1
+    fi
+    # With no events, dysgu writes a #CHROM line that ends at FORMAT with no
+    # sample column, which bcftools cannot parse (DYSGU-2, 2026-10-09: clean
+    # synthetic reads). Add the sample name, as dysgu writes it when it has
+    # calls (the read group's SM, which is the sample), so the empty callset
+    # is a valid VCF.
+    if ! grep -qv '^#' "${OUTDIR}/${SAMPLE}.dysgu.vcf.tmp"; then
+        awk -v s="$SAMPLE" 'BEGIN{OFS="\t"} /^#CHROM/ && $NF=="FORMAT"{$0=$0"\t"s} {print}' \
+            "${OUTDIR}/${SAMPLE}.dysgu.vcf.tmp" > "${OUTDIR}/${SAMPLE}.dysgu.vcf.tmp2"
+        mv -f "${OUTDIR}/${SAMPLE}.dysgu.vcf.tmp2" "${OUTDIR}/${SAMPLE}.dysgu.vcf.tmp"
+        echo "[P2] ${SAMPLE}: dysgu found no events" >&2
     fi
     mv -f "${OUTDIR}/${SAMPLE}.dysgu.vcf.tmp" "${OUTDIR}/${SAMPLE}.dysgu.vcf"
 else
