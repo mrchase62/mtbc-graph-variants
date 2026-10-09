@@ -1155,3 +1155,13 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - `score.py --refmap --mask-dir`: true events and calls within 50 bp of the
     mask are uncallable. Recall is measured over callable events, uncallable
     calls are flagged, and both counts are reported.
+- **Uncallable masks built** (job 51560887, 3 min, about 0.6 billing-hours
+  against 5 approved): 51 matched references (Phase A and B), each 9.3-10.6%
+  uncallable (median 10.0%). In each, about 150 kb is measured on the
+  reference itself and about 410 kb is the lifted H37Rv mask (594 kb in
+  H37Rv). Outputs in `analysis/novel_events/out/masks/`.
+- **GRIDSS** (user prefers established tools): the user approved the install
+  and a 2-isolate timing test. Installing v2.13.2 from bioconda into
+  `~/.conda/envs/gridss`, with the package cache in `~/.conda/pkgs`. The
+  timing job is `analysis/novel_events/gridss/01_time.sbatch` (mar_QC_6,
+  mar_TB1612; P2 BAMs; the R mask as the exclude list).
