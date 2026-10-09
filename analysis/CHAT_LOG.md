@@ -1260,3 +1260,17 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - Written, not run: `01_artifacts.sbatch` (genome-wide split-read counts,
     GATK CollectSequencingArtifactMetrics for 8-oxoG) and `kraken_list.txt`
     (10 noisy + 5 clean) for `phaseB/09_kraken.sbatch`.
+- **Control artifact results** (jobs 51622822 artifacts, 51623580 Picard;
+  `controls/summary.tsv` via `summary.py`):
+  - Fold-back chimeras per 1,000 reads, whole genome: noisy 4.8-56,
+    clean 0.006-0.31.
+  - Picard CollectAlignmentSummaryMetrics PCT_CHIMERAS (PAIR; mates on
+    different contigs, insert over 100 kb, or not FR): noisy 1.4-10.3%,
+    clean 0.23-1.05%. Same ranking, narrower gap (RW_TB008 1.37% vs
+    M0003941_3 1.05%).
+  - Oxidative damage (GATK pre-adapter G>T, Phred): noisy 48-59, clean
+    39-47. Not the cause; no library looks damaged.
+  - kraken2 (51622823) still running.
+- **User: Peter's fastp settings for the production CRAMs likely differ** from
+  the hybrid-assembly settings used in Phase B QC. CRAM @PG lines show
+  fastp_trimming then bwa mem 0.7.19 to H37Rv, without the fastp options.
