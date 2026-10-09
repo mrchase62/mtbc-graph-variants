@@ -1165,3 +1165,15 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   `~/.conda/envs/gridss`, with the package cache in `~/.conda/pkgs`. The
   timing job is `analysis/novel_events/gridss/01_time.sbatch` (mar_QC_6,
   mar_TB1612; P2 BAMs; the R mask as the exclude list).
+- **Phase B full run done** (job 51557679, 64 min, 9.6 billing-hours).
+  Rescored on callable sequence; review written in
+  `analysis/novel_events/REVIEW_2026-10-09.md`.
+  - 84-87% of true events (simulated and real) have breakpoints in
+    uncallable sequence.
+  - In callable sequence, ours + dysgu typed recall: 0.74 (novel), 0.77
+    (setE), 0.90 (simulated). Precision on real reads is low (0.11-0.34),
+    driven by dysgu.
+  - In-panel controls: median 1 false call per isolate for our caller, but
+    about 7 controls (mostly the N series) have hundreds.
+  - The depth scan is unusable.
+  - Phase B total about 111 billing-hours against 62 approved in all.
