@@ -1139,3 +1139,7 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - The depth scan stays unusable on real reads even with GC correction:
     precision 0.02-0.10 and about 20 strong runs in each control. Decision on
     it is left to the user.
+- **Phase B full run approved (57 isolates, about 9 billing-hours, depth scan
+  option 1: run it, report it separately)**: job 51557679,
+  `phaseB/06_full_v3b.sbatch`, outputs in `phaseB/out/v3b/` (the 5 test
+  isolates copied in).
