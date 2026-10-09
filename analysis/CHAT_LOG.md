@@ -1191,3 +1191,17 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   length 50), then rasusa to 100x; a 5-isolate test (about 4 billing-hours)
   before a full rerun (about 80). Awaiting the user. Open question: were the
   production CRAMs trimmed upstream?
+- **Read QC written to match the user's standard** (their hybrid-assembly
+  pipeline settings, plus the user's statement: 100x, minimum 60x):
+  - `phaseB/08_qc.sbatch`: fastp with the user's options plus `--cut_right`
+    (4-base window, Q20) and `--trim_poly_g` (user approved these); TB-Profiler
+    6.7.0 from the container; rasusa 2.2.2 to 100x, seed 7; unaligned BAM.
+  - `09_kraken.sbatch`: kraken2, lab standard database (59 GB, memory-mapped,
+    one job for all samples).
+  - `qc_summary.py`: the user's pipeline rules, ported (MTBC >= 85% of
+    classified, any other taxon <= 5%, mixed = two top-level lineages each
+    >= 10%, final depth >= 60x).
+  - `gridss/02_array.sbatch`: 2 cores, 6 GB, 4 GB heap, 15 min per isolate
+    (from seff: 50% CPU, 3.4 GB peak).
+  - Corrected cost for the 5-isolate test: about 17 billing-hours, not 4
+    (kraken2's 72 GB about 6; QC about 5; P1+P2 about 6). Awaiting approval.
