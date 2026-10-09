@@ -1300,3 +1300,17 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   other taxon at most 1.8% (Homo, in clean control 01_R1134). Noisy controls:
   Staphylococcus at most 1.0% (N1176), the rest under 0.6%. Contamination
   does not explain the noisy controls. `controls/summary.tsv` updated.
+- **fastp comparison** (marinQC5 with --cut_right/--trim_poly_g vs marinQC5b
+  base settings; same 5 isolates, same references picked; 17 callable true
+  events; 6.7 billing-hours):
+
+  | | with extras | base only |
+  |---|---|---|
+  | ours + dysgu PASS, typed recall / precision | 0.65 / 0.57 (35 calls) | 0.71 / 0.56 (39) |
+  | ours + assembly | 0.47 / 0.64 (14) | 0.53 / 0.67 (15) |
+  | dysgu PASS | 0.59 / 0.52 (21) | 0.65 / 0.50 (24) |
+  | dysgu, all calls | 48 | 402 |
+
+  Differences are 1 event and 3-4 calls: no measurable gain from the extras.
+  Without 3' trimming dysgu makes many more non-PASS calls, but its PASS
+  filter removes them. Decision: base settings (closer to production).
