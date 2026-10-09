@@ -1346,3 +1346,18 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     indels + 30 SNPs; Polypolish as the user's 05_polish, Pilon one round as
     Marin; scored with minimap2 + paftools call against truth) written and
     tested (draft vs truth = 330 differences), not submitted: cost check.
+- **User clarified the design; simulation cancelled.** The user meant: SV calls
+  from the real Illumina reads used for polishing vs from synthetic reads
+  simulated from the same isolate's complete genome. My chimera-injection
+  simulation was a different design; cancelled at the user's request
+  (51676410/12/62). It cost 12.2 billing-hours (reads + 18 of 21 P2 tasks),
+  not the 7 I had stated.
+- **Real vs synthetic, 25 in-panel controls** (`novel_events/realsyn/`):
+  `01_reads.sbatch` (51679094): wgsim from each control's Marin assembly,
+  matched to its real run from samtools stats on the marinB63 P2 BAM (pairs,
+  read length 100-151, insert mean/sd), 0.2% error. Cohort `marinSyn25`
+  (P2 only, reference pinned to marinB63's P1 choice; run folder stamped).
+  P2 51679401/02, then `02_call_compare.sbatch` 51679403 (our caller +
+  assembly on synthetic BAMs, `compare.py`: real-only and synthetic-only
+  typed calls in callable sequence per caller; small variants real vs
+  synthetic).
