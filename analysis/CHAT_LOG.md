@@ -1401,3 +1401,12 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   gwas1000 crams tables (1,200 isolates; 16 already in the 500 random
   sample). `01_measure.sbatch` job 51684612 (8 cores; about 3.3
   billing-hours expected, above the 2 I quoted).
+- **Fold-back on cohorts in use** (51684612, 24 min, 3.6 billing-hours; 1,200
+  of 1,200 measured; `foldback_qc/cohorts_in_use_rates.tsv`,
+  `cohorts_in_use.summary.txt`). The job's output overwrote its input list
+  (named the same); results moved to `_rates.tsv`, list restored from git,
+  script fixed to write `<name>_rates.tsv`. Share above 1 per 1,000: pilot
+  26%, scale100 39%, l49 15%, l7 0%, scale200 30%, gwas1000 35%. gwas1000 by
+  lineage above 1: L1 41%, L2 39%, L3 32%, L4 34%, L5 54%, L6 19%, L7 0%, L9 0%;
+  RRDR 0 35%, RRDR 1 34%. By read length: under 110 bp 41%, 110-160 bp 27%,
+  160-400 bp 72%.

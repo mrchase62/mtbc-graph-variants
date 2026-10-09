@@ -6,7 +6,7 @@
 # strand and within 1 kb, per 1,000 primary alignments. CRAMs are aligned to
 # H37Rv (bwa mem 0.7.19) and keep the SA tag. Submit from runroot:
 #   sbatch ../analysis/foldback_qc/01_measure.sbatch <list> <name>
-# Output: analysis/foldback_qc/<name>.tsv
+# Output: analysis/foldback_qc/<name>_rates.tsv
 #SBATCH -p shared
 #SBATCH -c 8
 #SBATCH --mem=6G
@@ -25,5 +25,5 @@ export O MTB_SAMTOOLS MTB_H37RV MTB_CRAM_ROOT
 cut -f1,2 "$LIST" | xargs -P 8 -L 1 bash -c '
     "$MTB_SAMTOOLS" view -T "$MTB_H37RV" -F 0x904 "$MTB_CRAM_ROOT/$1" \
         | awk -v s=$0 -f ../analysis/novel_events/controls/split_reads.awk > $O/$0.tsv'
-{ printf "sample\treads\tdup_like\tinv_chimera_per_1k\tother_split_per_1k\n"; cat $O/*.tsv; } > $Q/$NAME.tsv
-echo "$(($(wc -l < $Q/$NAME.tsv) - 1)) of $(wc -l < "$LIST") measured"
+{ printf "sample\treads\tdup_like\tinv_chimera_per_1k\tother_split_per_1k\n"; cat $O/*.tsv; } > $Q/${NAME}_rates.tsv
+echo "$(($(wc -l < $Q/${NAME}_rates.tsv) - 1)) of $(wc -l < "$LIST") measured"
