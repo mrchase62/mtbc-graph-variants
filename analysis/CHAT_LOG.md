@@ -1314,3 +1314,10 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   Differences are 1 event and 3-4 calls: no measurable gain from the extras.
   Without 3' trimming dysgu makes many more non-PASS calls, but its PASS
   filter removes them. Decision: base settings (closer to production).
+- **Correction: the 500-CRAM chimera sample ignored the standing inclusion
+  screen** (`bin/select_isolates.py`: paired-end, meandepth >= 60, not mixed
+  at any frequency, complete run, error_rate <= 0.01). 422 of 500 pass (52 low
+  depth, 28 high error rate, 6 mixed). Among the 422: median 0.23 per 1,000,
+  35% above 1, 83 above 4.8. By read length (avglen_1): 110-160 bp median
+  0.18 (27% above 1); 160-260 bp and 260-400 bp all 29 above 1 (medians
+  9.3, 11.0). The results table has no contamination (kraken2) column.
