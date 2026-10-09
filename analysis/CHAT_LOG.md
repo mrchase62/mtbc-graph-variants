@@ -1098,3 +1098,4 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   isolates. MT_0080 (an in-panel control) was dropped after ENA reset its
   1.8 GB read-2 transfer three times. Groups: novel, in_panel (false-call
   controls), setE_polished (Peker, less reliable truth).
+- **Accessory summary for scale200_fix** (`analysis/accessory_scale200_fix/SUMMARY.md`): 806 catalogue loci (481 IS6110-sized); 204 measurable, 86 variable; TbD1 (ACC_1761789) behaves as expected; 462 small variants inside accessory sequence, mostly singletons; no accessory association survivor.
