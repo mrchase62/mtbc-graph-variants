@@ -1099,3 +1099,15 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   1.8 GB read-2 transfer three times. Groups: novel, in_panel (false-call
   controls), setE_polished (Peker, less reliable truth).
 - **Accessory summary for scale200_fix** (`analysis/accessory_scale200_fix/SUMMARY.md`): 806 catalogue loci (481 IS6110-sized); 204 measurable, 86 variable; TbD1 (ACC_1761789) behaves as expected; 462 small variants inside accessory sequence, mostly singletons; no accessory association survivor.
+- **Phase B caller job 51469186 hit its 3 h limit** after finishing 1 of 62
+  isolates (prototype done on 5). On real reads (about 120x) the prototype
+  finds about 1,100 clip clusters per isolate, against about 10-20 on the
+  simulated reads. Most are unpaired single-side clusters (BND) where reads are
+  clipped at scattered positions in GC-rich sequence. These are probably
+  untrimmed low-quality ends or library chimeras, not breakpoints. Every one
+  becomes a local-assembly window, so assembly took about 3 h per isolate.
+- **Phase B cost overrun:** prep 1.2 + P1 28.7 + P2 45.1 + callers 24.1 =
+  **99 billing-hours against 45 approved** (plus 18.5 for the download).
+  P1/P2 alone cost 74, about twice the 38 estimate, because the real reads
+  are deeper than the novelA40 simulations. No further compute until the user
+  approves.
