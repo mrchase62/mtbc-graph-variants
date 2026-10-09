@@ -1321,3 +1321,28 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   35% above 1, 83 above 4.8. By read length (avglen_1): 110-160 bp median
   0.18 (27% above 1); 160-260 bp and 260-400 bp all 29 above 1 (medians
   9.3, 11.0). The results table has no contamination (kraken2) column.
+- **Fold-back study approved (synthetic study + ENA query).** `analysis/foldback_sim/`.
+  - ENA (`ena_library.py` -> `ena_library.tsv`, portal API, metadata only):
+    498/500 production samples, 63/63 Phase B runs. Rate by instrument
+    (median per 1,000; share above 1): NextSeq 500 0.15, 12%; HiSeq 2500
+    1.89, 64%; MiSeq 7.1, 85%; HiSeq 2000 0.06, 7%; NextSeq 2000 0.28, 32%.
+    Protocol text is mostly empty. Strong study effect: in the 21 studies
+    with 5 or more isolates, 89% of a study's isolates fall on the same side
+    of 1 per 1,000; studies run from 0% to 100% above 1. Nextera XT studies
+    differ (PRJEB9680 median 0.16; PRJEB6273 8.99), so the kit name alone
+    does not decide it. N-series = PRJEB27802 (Swiss TPH, HiSeq 2500).
+  - Synthetic design: Phase A genomes R27252 (L1), QC_6 (L4), R37765 (L2)
+    with their novelA40 references; wgsim 1.47M pairs (100x), 150 bp, frag
+    450+/-50, 0.2% error, seed per genome; `foldback_sim.py` replaces 0,
+    0.5, 2, 6, 15% of pairs (inverted-repeat model, k=10 IR 20-300 bp apart,
+    about 7,000 sites per genome) and 2, 15% (random model). Cohort
+    `foldsim` (P2 only, reference pinned; run folder stamped with the build
+    because the hand-made refmap predates the runner's record). Login test:
+    at 5% replaced, 15.8 junction-crossing reads per 1,000 and 10.9 detected
+    by the fold-back count (about 70%).
+  - Jobs: reads 51676142 (done), P2 51676410/51676412, callers+score
+    51676462 (`02_call_score.sbatch`, `analyze.py`).
+  - Polishing (`make_draft.py`, `03_polish.sbatch`: 300 one-base homopolymer
+    indels + 30 SNPs; Polypolish as the user's 05_polish, Pilon one round as
+    Marin; scored with minimap2 + paftools call against truth) written and
+    tested (draft vs truth = 330 differences), not submitted: cost check.
