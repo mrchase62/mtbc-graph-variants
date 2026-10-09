@@ -30,12 +30,8 @@ S=$(sed -n "${SLURM_ARRAY_TASK_ID}p" $N/controls/controls.txt)
 R=$(awk -F'\t' -v s="$S" '$1==s{print $5}' refbias/marinB63/run/p1/refmap.tsv)
 B=refbias/work/marinB63_p2/$S.bam
 mkdir -p $O/ref/$R $O/$S
-"$MTB_SAMTOOLS" view -@ 1 -F 0x904 $B | awk -v s=$S '
-  {n++; k=$3":"$4":"$6":"and($2,16)":"$8; if(k in seen) d++; seen[k]=1}
-  /SA:Z:/{split($0,a,"SA:Z:"); split(a[2],b,","); st=and($2,16)?"-":"+"
-          if(b[1]==$3 && b[3]!=st && b[2]-$4<1000 && $4-b[2]<1000) inv++; else if(b[1]==$3) oth++}
-  END{printf "sample\treads\tdup_like\tinv_chimera_per_1k\tother_split_per_1k\n%s\t%d\t%.4f\t%.3f\t%.3f\n",
-      s, n, d/n, 1000*inv/n, 1000*oth/n}' > $O/$S/split_reads.tsv
+{ printf "sample\treads\tdup_like\tinv_chimera_per_1k\tother_split_per_1k\n"
+  "$MTB_SAMTOOLS" view -@ 1 -F 0x904 $B | awk -v s=$S -f $N/controls/split_reads.awk; } > $O/$S/split_reads.tsv
 F=$O/ref/$R/$R.fasta
 [[ -e $F ]] || ln -s "$(readlink -f refbias/build/7713a8d71d8e-fix1/refs/$R.fasta)" $F
 [[ -e $F.fai ]] || "$MTB_SAMTOOLS" faidx $F

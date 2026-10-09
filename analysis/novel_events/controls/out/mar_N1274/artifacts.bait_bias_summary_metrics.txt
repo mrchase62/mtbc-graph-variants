@@ -1,0 +1,21 @@
+## htsjdk.samtools.metrics.StringHeader
+# CollectSequencingArtifactMetrics  --FILE_EXTENSION .txt --INPUT refbias/work/marinB63_p2/mar_N1274.bam --OUTPUT ../analysis/novel_events/controls/out/mar_N1274/artifacts --REFERENCE_SEQUENCE ../analysis/novel_events/controls/out/ref/GCF_022870365/GCF_022870365.fasta  --MINIMUM_QUALITY_SCORE 20 --MINIMUM_MAPPING_QUALITY 30 --MINIMUM_INSERT_SIZE 60 --MAXIMUM_INSERT_SIZE 600 --INCLUDE_UNPAIRED false --INCLUDE_DUPLICATES false --INCLUDE_NON_PF_READS false --TANDEM_READS false --USE_OQ true --CONTEXT_SIZE 1 --ASSUME_SORTED true --STOP_AFTER 0 --VERBOSITY INFO --QUIET false --VALIDATION_STRINGENCY STRICT --COMPRESSION_LEVEL 2 --MAX_RECORDS_IN_RAM 500000 --CREATE_INDEX false --CREATE_MD5_FILE false --GA4GH_CLIENT_SECRETS client_secrets.json --help false --version false --showHidden false --USE_JDK_DEFLATER false --USE_JDK_INFLATER false
+## htsjdk.samtools.metrics.StringHeader
+# Started on: Fri Oct 09 16:55:02 UTC 2026
+
+## METRICS CLASS	picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasSummaryMetrics
+SAMPLE_ALIAS	LIBRARY	REF_BASE	ALT_BASE	TOTAL_QSCORE	WORST_CXT	WORST_CXT_QSCORE	WORST_PRE_CXT	WORST_PRE_CXT_QSCORE	WORST_POST_CXT	WORST_POST_CXT_QSCORE	ARTIFACT_NAME
+mar_N1274	UnknownLibrary	A	C	69	TAA	46	TAN	51	NAG	53	NA
+mar_N1274	UnknownLibrary	A	G	56	TAT	46	CAN	52	NAG	50	NA
+mar_N1274	UnknownLibrary	A	T	61	TAG	48	CAN	57	NAC	54	NA
+mar_N1274	UnknownLibrary	C	A	56	TCA	45	ACN	55	NCA	49	Cref
+mar_N1274	UnknownLibrary	C	G	60	GCC	52	GCN	53	NCC	56	NA
+mar_N1274	UnknownLibrary	C	T	100	ACG	50	TCN	64	NCC	59	NA
+mar_N1274	UnknownLibrary	G	A	55	AGT	49	AGN	53	NGG	52	NA
+mar_N1274	UnknownLibrary	G	C	100	GGT	53	CGN	59	NGT	55	NA
+mar_N1274	UnknownLibrary	G	T	100	GGG	44	GGN	53	NGA	58	Gref
+mar_N1274	UnknownLibrary	T	A	100	GTA	48	TTN	52	NTA	55	NA
+mar_N1274	UnknownLibrary	T	C	100	GTC	49	GTN	54	NTC	58	NA
+mar_N1274	UnknownLibrary	T	G	100	TTC	48	TTN	52	NTT	56	NA
+
+

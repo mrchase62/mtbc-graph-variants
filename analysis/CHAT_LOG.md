@@ -1274,3 +1274,23 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - **User: Peter's fastp settings for the production CRAMs likely differ** from
   the hybrid-assembly settings used in Phase B QC. CRAM @PG lines show
   fastp_trimming then bwa mem 0.7.19 to H37Rv, without the fastp options.
+- **fastp:** user doubts production used --cut_right/--trim_poly_g; include them
+  only if they help. `08_qc.sbatch` now takes an optional third argument
+  `extra` (default: user's base settings). Comparison approved: cohort
+  `marinQC5b` (same 5 isolates, base settings), QC 51635721 (final depth
+  70.6-100x vs 64-100x with extras), P1/P2 51637341-51637354, callers
+  51637363 -> `phaseB/out/qc5b`. `make_qc_cohort.py` builds the runner tables
+  (reproduces marinQC5's).
+- **kraken2 51622823 stalled** memory-mapping the 59 GB database from boslfs02
+  (23 s CPU in 36 min); cancelled, about 13 billing-hours lost.
+  `09_kraken.sbatch` now copies the database to /dev/shm once; resubmitted as
+  51636061.
+- **Fold-back chimeras in production CRAMs** (`controls/03_production.sbatch`,
+  job 51631401, 500 random of 54,461, seed 7, about 1.5 billing-hours;
+  `controls/production_chimera.tsv`): per 1,000 reads median 0.31, p75 3.6,
+  p90 9.6, max 87; 40% above 1. Bimodal: one mode near 0.1 (like the clean
+  controls) and one near 3-5 (like the noisy controls), trough about 0.3-1.
+  SAMEA median 0.17 (95 of 282 above 1), SAMN median 0.92 (103 of 214).
+  So a 1-per-1,000 fail cutoff would drop about 40% of production; this
+  looks like a library-prep difference, not rare bad samples.
+- `split_reads.awk` holds the fold-back count, shared by 01 and 03.
