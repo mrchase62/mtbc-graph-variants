@@ -1120,3 +1120,22 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     support of at least 20% of median depth, with at most 40 windows per isolate.
   - The depth scan is GC-corrected by GC-percentage bin.
   - Regression check: v3 caller on the 40 Phase A simulations.
+- **5-isolate test results** (jobs 51555392 and 51556221, 1.8 billing-hours; Phase B total about 101 against 45):
+  - Real reads have binned quality scores (scattered Q14 bases), so first-low-base
+    trimming cut good clips. Changed to a sliding-window trim (v3b): stop where
+    the mean quality of 5 bases first falls below Q20.
+  - Clip clusters on mar_QC_6: 1,297 (v2) -> 92 (v3b). Typed calls fell from
+    108 to 24, precision rose from 0.17 to 0.58, and breakpoint recall went from
+    0.51 to 0.47.
+  - Phase A simulations are unchanged (typed recall 0.333 -> 0.330, breakpoint
+    recall 0.556).
+  - Novel isolates (TB1236, TB1612), prototype + assembly + dysgu PASS: typed
+    recall 0.39 / 0.50, precision 0.28 / 0.48.
+  - In-panel controls (should have no events), typed calls:
+    - prototype + assembly: 0 and 2;
+    - dysgu PASS: 4 and 11;
+    - delly PASS: 2 and 9;
+    - depth scan: 161 and 170.
+  - The depth scan stays unusable on real reads even with GC correction:
+    precision 0.02-0.10 and about 20 strong runs in each control. Decision on
+    it is left to the user.

@@ -14,7 +14,9 @@ needs max(4, 10% of median depth) reads, and must lie more than 200 bp from
 either contig end (the circular origin; v2).
 Clip filter (v3, for real reads; off with --no-clip-filter):
   - each clip is quality-trimmed: its length is counted outward from the
-    alignment end up to the first base below Q20, and must still be >= 10 bp;
+    alignment end up to the first 5-base window with mean quality below Q20
+    (a sliding-window trim; single low bases are common in binned-quality
+    reads), and must still be >= 10 bp;
   - at least half of the cluster's reads clip within 1 bp of its main
     position (a real breakpoint clips every read at the same base; untrimmed
     read ends and library chimeras clip at scattered positions);
@@ -60,14 +62,16 @@ JOIN_TOL = 20
 
 def clip_out(r, n, right, filt):
     """The clipped bases read outward from the alignment end, quality-trimmed
-    at the first base below Q20 (v3). None if fewer than MINCLIP remain."""
+    where the mean quality of a 5-base window first falls below Q20 (v3).
+    None if fewer than MINCLIP remain."""
     seq, q = r.query_sequence, r.query_qualities
     if right:
         bases, quals = seq[-n:], (q[-n:] if q is not None else None)
     else:
         bases, quals = seq[:n][::-1], (q[:n][::-1] if q is not None else None)
     if filt and quals is not None:
-        k = next((i for i, x in enumerate(quals) if x < MINQ), len(quals))
+        k = next((i for i in range(len(quals) - 4) if sum(quals[i:i + 5]) < 5 * MINQ),
+                 len(quals))
         bases = bases[:k]
     return bases if len(bases) >= MINCLIP else None
 
