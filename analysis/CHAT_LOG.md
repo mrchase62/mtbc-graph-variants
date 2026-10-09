@@ -1410,3 +1410,12 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   lineage above 1: L1 41%, L2 39%, L3 32%, L4 34%, L5 54%, L6 19%, L7 0%, L9 0%;
   RRDR 0 35%, RRDR 1 34%. By read length: under 110 bp 41%, 110-160 bp 27%,
   160-400 bp 72%.
+- **Fold-back vs Peter's Mutect2 columns** (no compute; 1,684 isolates with a
+  measured rate: cohorts in use + 500 random). Within lineage, median per
+  isolate, rate <=0.31 vs >4.8 per 1,000: m2_low_alt L4 48 vs 784, L2 74 vs
+  591, L3 78 vs 1,252 (3-16x); m2_fail about 3x; m2_pass +8% (L1) to +57%
+  (L4); m2_mix_call +2% to +32%; mean depth similar. The lineage-based mixed
+  flag (conflict_lineages / n_mixed / mix_freq) is 0-0.7% in every group.
+  Association only (studies differ in other ways too); column definitions
+  are Peter's and not checked. HaplotypeCaller in P2 is haploid, which is
+  why the real-vs-synthetic test showed no SNP effect.
