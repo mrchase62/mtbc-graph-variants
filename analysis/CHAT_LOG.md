@@ -1242,3 +1242,21 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - fastp settings reported: the user's (`--detect_adapter_for_pe --correction
     --qualified_quality_phred 20 --length_required 36`) plus `--cut_right`
     (4-base window, mean Q20) and `--trim_poly_g`.
+- **Depth scan dropped** (user, 2026-10-09): removed from `phaseB/10_test_qc.sbatch`,
+  the template for the QC rerun; README notes it.
+- **Noisy in-panel controls** (`novel_events/controls/`, user request; no compute yet):
+  - `false_calls.py` -> `false_calls.tsv`: typed false calls per control in
+    callable sequence. 10 noisy: all 9 N-series (ERR27046xx-7xx, one ENA
+    study, HiSeq 2500) and RW_TB008 (MiSeq), with dysgu PASS 135-505 and ours
+    9-424. The other 15 have 0-7.
+  - Our caller's false calls there are almost all inversions of about 60-220
+    bp, typed from clipped reads alone ("not assembled").
+  - Reads at one (N1274, 69,083): split reads whose other part maps on the
+    opposite strand about 100 bp away (fold-back chimeras), some repeated as
+    identical copies (duplicates; P2 does not mark them).
+  - Quick count on 300 kb (login node): inverted local chimeras per 1,000
+    reads are 4.8-59 in 4 noisy controls and 0.0-0.1 in 4 clean ones.
+    The duplicate share does not separate them.
+  - Written, not run: `01_artifacts.sbatch` (genome-wide split-read counts,
+    GATK CollectSequencingArtifactMetrics for 8-oxoG) and `kraken_list.txt`
+    (10 noisy + 5 clean) for `phaseB/09_kraken.sbatch`.

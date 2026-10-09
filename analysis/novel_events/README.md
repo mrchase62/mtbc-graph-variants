@@ -103,7 +103,10 @@ Phase A's total is now **30.0 billing-hours**, the approved budget.
 - Events are read off the contigs with the truth-set rules.
 - Windows that give no events keep the prototype's calls.
 
-**Step 2: read-depth scan** (`depth_scan.py` -> `out/depth`).
+**Step 2: read-depth scan** (`depth_scan.py` -> `out/depth`). **Dropped
+2026-10-09:** even GC-corrected it made a median of 48 false calls per
+in-panel control on real reads (REVIEW_2026-10-09.md section 4). The script
+is kept for the record; Phase B runs no longer use it.
 - samtools depth with all mapping qualities, in 100 bp windows, against the
   sample's median window depth.
 - 2 or more windows at 1.4x or above is a gain (INS); 2 or more at 0.6x or
