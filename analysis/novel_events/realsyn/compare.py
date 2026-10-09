@@ -35,6 +35,11 @@ def same(a, b):
         and (near(a, b) or near(b, a))
 
 
+def dysgu_syn(y):
+    p = f"refbias/marinSyn25/run/p2/{y}.dysgu.vcf"
+    return p if os.path.exists(p) and os.path.getsize(p) else f"{N}/realsyn/out/dysgu/{y}.dysgu.vcf"
+
+
 def small(path):
     out = set()
     if not os.path.exists(path):
@@ -63,7 +68,7 @@ def main():
             "ours_asm": (read_proto(f"{N}/phaseB/out/v3b/asm/{s}.events.tsv"),
                          read_proto(f"{N}/realsyn/out/asm/{y}.events.tsv")),
             "dysgu_pass": (read_vcf(f"refbias/marinB63/run/p2/{s}.dysgu.vcf", True),
-                           read_vcf(f"refbias/marinSyn25/run/p2/{y}.dysgu.vcf", True)),
+                           read_vcf(dysgu_syn(y), True)),
             "delly_pass": (read_vcf(f"refbias/marinB63/run/p2/{s}.delly.vcf", True),
                            read_vcf(f"refbias/marinSyn25/run/p2/{y}.delly.vcf", True)),
         }

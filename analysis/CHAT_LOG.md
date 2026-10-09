@@ -1361,3 +1361,15 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   assembly on synthetic BAMs, `compare.py`: real-only and synthetic-only
   typed calls in callable sequence per caller; small variants real vs
   synthetic).
+- **marinSyn25 P2: 11 of 25 tasks failed, both P2 robustness bugs (fix list):**
+  - DYSGU-1 (8 tasks): dysgu's own `--clean` work-folder removal crashed on
+    an NFS lock file (`.nfs...`) after calling finished; p2_call.sh then
+    deletes the output and fails the sample.
+  - DYSGU-2 (3 tasks: M0016737_0, 01_R1430, TB3368 synthetic): dysgu found
+    no events and wrote a VCF whose header puts ##contig after #CHROM with
+    no sample column; stamp_build_id.sh could not parse it.
+  For this analysis, without touching production code: the 3 count as 0
+  dysgu calls (their BAM, HaplotypeCaller and delly outputs are complete);
+  for the 8, `02_call_compare.sbatch` reruns dysgu alone with P2's options on
+  the P2 BAM into `realsyn/out/dysgu/`. P2 cost 10.3 billing-hours with the
+  failures; comparison job resubmitted (no dependency).
