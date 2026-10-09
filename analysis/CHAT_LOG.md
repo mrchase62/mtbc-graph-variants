@@ -1419,3 +1419,17 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   Association only (studies differ in other ways too); column definitions
   are Peter's and not checked. HaplotypeCaller in P2 is haploid, which is
   why the real-vs-synthetic test showed no SNP effect.
+- **Fold-back on Phase B** (`foldback_qc/02_phaseb.sbatch`, 51704033, 53 s,
+  about 0.13 billing-hours; `foldback_qc/phaseB_rates.tsv`, all 62):
+  - novel: 19 of 20 at 0.01-0.04; **N0153 14.4** (PRJEB31443, HiSeq 2500).
+    N0153 alone carries 457 of the novel group's 669 false dysgu PASS calls
+    and 19 of our 38 false calls in callable sequence. Without it: dysgu
+    precision about 0.20 (was 0.07), ours about 0.67 (was 0.50); its 0
+    callable true events are lost. Clean novel isolates still have 15-21
+    false dysgu calls each.
+  - setE_polished (one study, PRJNA720906, NextSeq 500): all 0.25-1.21,
+    between the clean (<=0.31) and chimeric (>=4.8) controls. 8651_04 (1.21)
+    and QC_6 (1.06) are not outliers in false calls, so a cutoff at 1 would
+    split this study for no visible benefit. Data now support a cutoff
+    somewhere in 1.2-4.8; cohorts in use above 2: 30%, above 3: 24%.
+  - in_panel: as before (10 above 4.8).
