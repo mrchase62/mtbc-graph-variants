@@ -1234,3 +1234,11 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     control.
   - With tuned resources GRIDSS ran in 55-141 s at billing 3, about 0.1
     billing-hours per isolate.
+- **Tool decisions (user, 2026-10-09):**
+  - GRIDSS dropped ("doesn't seem so promising"); scripts kept in
+    `novel_events/gridss/`.
+  - breseq not pursued: too slow, and it misses events without saying why.
+  - Lower bwa seed length (-k 15) not tested.
+  - fastp settings reported: the user's (`--detect_adapter_for_pe --correction
+    --qualified_quality_phred 20 --length_required 36`) plus `--cut_right`
+    (4-base window, mean Q20) and `--trim_poly_g`.
