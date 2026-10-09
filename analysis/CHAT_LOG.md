@@ -1441,3 +1441,11 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   QC 0.53 x 1.09 x 51 = 29.5; kraken2 2 min copy + 51 x 25 s at billing 22
   = about 9; P1 0.26 x 51 = 13.3; P2 0.40 x 51 = 20.5; callers + assembly
   0.13 x 51 = 6.8; scoring under 0.5. Total about 79 billing-hours.
+- **Phase B rerun submitted (user approved, about 79 billing-hours).** Cohort
+  `marinQC51` (registry row added; `runroot/refbias/marinQC51` -> netscratch).
+  QC array 51710211 (51 tasks, base fastp settings), kraken2 51710219. Next,
+  by hand when both finish: `make_qc_cohort.py` (PASS only, kraken2 rules
+  included), runner P1/P2, then `phaseB/11_call_score.sbatch` (callers +
+  assembly, score per group). Known limit of score.py: isolates with no truth
+  rows are not counted in precision, so control false calls are counted
+  separately (as `controls/false_calls.py`).
