@@ -278,6 +278,81 @@ cohort outputs are intact. The CRAMs survived.
   SNP positions change base. Which arm is right is not tested (next step
   would score both against direct alignments).
 
+## Novel-event (SV) calling: status 2026-10-09
+
+**Focus (the user, 2026-10-09):** keep working through the SV-calling
+pipeline. Do not open new branches of work (the Mutect2 item below is parked).
+Full log: `analysis/CHAT_LOG.md`; review: `analysis/novel_events/REVIEW_2026-10-09.md`.
+
+**Where it stands**
+- Components: our breakpoint caller v3b + local assembly (SPAdes), plus
+  dysgu PASS, scored on callable sequence only (`callable_mask.py`; 9-10% of
+  each reference is uncallable, and 84-87% of true events fall there).
+- Dropped by the user: the depth scan, GRIDSS, breseq, a lower bwa seed
+  length (see the memory notes and REVIEW section 7).
+- Read QC for external reads (`novel_events/phaseB/08_qc.sbatch`): fastp with
+  the user's base settings (`--cut_right`/`--trim_poly_g` tested on 5
+  isolates, no gain, now off by default), TB-Profiler mixed removal, rasusa
+  100x, minimum 60x, kraken2 (`09_kraken.sbatch`, database copied to
+  /dev/shm; memory-mapping it from boslfs02 stalls). Peter's production fastp
+  settings are not recorded.
+
+**Fold-back chimeric libraries: the main source of false SV calls**
+- What: reads whose second part maps to the same contig, opposite strand,
+  within 1 kb (a known library-prep artifact; Zhang et al. 2024 BMC
+  Genomics; Haile et al. 2019 NAR). Count: `novel_events/controls/split_reads.awk`
+  (per 1,000 primary alignments). Picard PCT_CHIMERAS ranks isolates the same
+  way but separates them poorly.
+- The 10 noisy in-panel controls (all 9 N-series, PRJEB27802, and RW_TB008)
+  are 4.8-56 per 1,000; the 15 clean ones 0.006-0.31. Not contamination
+  (kraken2 clean) and not oxidative damage (GATK pre-adapter metrics).
+- **Real vs synthetic reads** (`novel_events/realsyn/`, the user's design):
+  synthetic reads from each control's own complete assembly, matched in read
+  length, insert size and depth, give 0-2 SV calls per caller. Real reads
+  give hundreds to thousands in the chimeric controls (ours up to 424, dysgu
+  up to 505, delly up to 6,586) and 0-7 in the clean ones. Haploid
+  HaplotypeCaller SNP/indel calls are not visibly affected.
+- **Cohorts in use** (`analysis/foldback_qc/`): share above 1 per 1,000:
+  pilot 26%, scale100 39%, l49 15%, l7 0%, scale200 30%, gwas1000 35%.
+  gwas1000 by lineage: L1 41%, L2 39%, L3 32%, L4 34%, L5 54%, L6 19%,
+  L7 0%, L9 0%; RRDR 0 and 1 both 35%. Reads of 160 bp or more: 72%.
+  Strongly study-specific (ENA metadata, `analysis/foldback_sim/ena_library.tsv`).
+- **Undecided:** a 1 per 1,000 cutoff for SV work, which would mean rebuilding
+  the cohorts (gwas1000 would lose lineage balance, mostly L5 and L1).
+
+**Parked (the user, 2026-10-09: not now): fold-back chimeras and Mutect2.**
+- Why haploid calling is unaffected: both halves of a chimera are real genome
+  sequence, the joined part is soft-clipped or supplementary, and mismatches
+  near junctions reach only a few % of reads at a site.
+- Mutect2 calls low-frequency alleles, so recurrent junction artifacts can
+  look like minority variants. In Peter's table (1,684 isolates with a
+  measured rate), within lineage, chimeric libraries (>4.8) vs clean (<=0.31):
+  m2_low_alt 3-16x higher (L4 48 vs 784), m2_fail about 3x, m2_pass +8-57%,
+  m2_mix_call +2-32%; the lineage-based mixed flag stays 0-0.7%. Association
+  only; the m2_* definitions were read from their names, not Peter's code.
+- Proposed test when reopened: Mutect2 on the 25 controls' real and synthetic
+  BAMs (both exist), with the user's Mutect2 settings; about 5-10
+  billing-hours.
+
+**Fixed 2026-10-09 in `bin/p2_call.sh` (new P2 runs only)**
+- DYSGU-1: dysgu's work folder is node-local and removed by P2, not by
+  `--clean` (which crashed on NFS lock files); calls identical (364/364 on
+  mar_TB3251).
+- DYSGU-2: when dysgu finds no events, P2 adds the sample column so the empty
+  VCF parses and stamps.
+
+**Next steps (awaiting the user)**
+1. Decide the fold-back cutoff for SV work and whether to rebuild cohorts.
+2. Full Phase B rerun with read QC (and the cutoff), about 90 billing-hours
+   before kraken2 savings.
+3. Earlier review items still open: the 7-10 noisy controls are now
+   explained; IS6110 presence/absence from unique flanks is not started.
+
+**Cost today (billing-hours):** read QC test 6.5, fastp comparison 6.7,
+control artifact checks and Picard about 3, kraken2 about 18 (13 lost to the
+stall), 500-CRAM sample 1.5, cancelled fold-back simulation 12.2,
+real vs synthetic about 11, cohorts in use 3.6.
+
 ## Earlier start-here (2026-10-05)
 
 **Audit (section 0m): 97 findings, and the current association results are
