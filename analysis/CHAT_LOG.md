@@ -1216,3 +1216,21 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   First look, 2 isolates without QC, callable sequence: GRIDSS PASS
   breakpoint recall 0.54, typed recall 0.15 (13 events), mostly single
   breakends.
+- **Read QC test results** (5 isolates, callable sequence, 17 true events):
+  - P1 picked the same references after QC.
+  - QC cost about 6.5 billing-hours in all (QC 2.4, P1 1.1, P2 1.7, callers
+    0.5, GRIDSS before and after QC 0.8), against 11 approved.
+
+  | | before QC | after QC |
+  |---|---|---|
+  | ours + dysgu PASS, typed recall / precision | 0.71 / 0.38 | 0.65 / 0.57 |
+  | dysgu PASS calls | 45 | 21 |
+  | ours + assembly, typed recall / precision | 0.53 / 0.67 | 0.47 / 0.64 |
+  | GRIDSS single breakends (PASS) | mar_QC_6 177, TB1236 19, TB1612 13 | 10, 2, 5 |
+
+  - Controls: 0-2 calls per caller after QC, against 0-7 before.
+  - GRIDSS PASS typed recall is 0.18 either way: it finds breakpoints (0.53
+    before QC, 0.59 after) but types few, and makes 2-3 typed calls in each
+    control.
+  - With tuned resources GRIDSS ran in 55-141 s at billing 3, about 0.1
+    billing-hours per isolate.
