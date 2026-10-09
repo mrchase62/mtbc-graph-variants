@@ -18,13 +18,20 @@ For one sample:
 5. A window whose contigs give events contributes those, typed and sized.
    A window whose contigs give none keeps the prototype's original calls,
    noted "not assembled".
+Window selection (Phase B, real reads): a window is assembled only if it has
+a typed candidate (DEL, INS, INV, REARR) or a one-sided cluster (BND) with
+support of at least --bnd-min-frac of the sample's median depth; at most
+--max-windows are assembled, those with the most support first. The rest keep
+the prototype's calls, noted "not assembled (weak BND)" or "(cap)".
 Output: an events table in breakpoint_caller.py's format, for score.py.
 """
 import argparse
+import collections
 import csv
 import os
 import re
 import shutil
+import statistics
 import subprocess
 import sys
 
@@ -92,6 +99,8 @@ def main():
     ap.add_argument("--minimap2", required=True)
     ap.add_argument("--workdir", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--bnd-min-frac", type=float, default=0.0)
+    ap.add_argument("--max-windows", type=int, default=0, help="0 = no cap")
     a = ap.parse_args()
     ev = list(csv.DictReader(open(a.events), delimiter="\t"))
     bam = pysam.AlignmentFile(a.bam)
@@ -109,9 +118,24 @@ def main():
             wins[-1]["ev"].append(e)
         else:
             wins.append(dict(lo=s, hi=t, ev=[e]))
+    L = bam.lengths[0]
+    dep = [bam.count(ctg, x, x + 1) for x in range(1000, L - 1000, max(1, L // 2000))]
+    med = statistics.median(dep) if dep else 0
+    for w in wins:
+        w["sup"] = max(int(e["support"] or 0) for e in w["ev"])
+        w["skip"] = None
+        if all(e["type"] == "BND" for e in w["ev"]) and w["sup"] < a.bnd_min_frac * med:
+            w["skip"] = "weak BND"
+    if a.max_windows:
+        cand = sorted((w for w in wins if not w["skip"]), key=lambda w: -w["sup"])
+        for w in cand[a.max_windows:]:
+            w["skip"] = "cap"
     rows, n_asm = [], 0
     for i, w in enumerate(wins):
         lo, hi = w["lo"], w["hi"]
+        if w["skip"]:
+            rows += [dict(r, source=r["source"] + f";not assembled ({w['skip']})") for r in w["ev"]]
+            continue
         if hi - lo > 20000:
             rows += [dict(r, source=r["source"] + ";not assembled (window > 20 kb)") for r in w["ev"]]
             continue
@@ -157,7 +181,9 @@ def main():
         w = csv.DictWriter(fo, fieldnames=cols, delimiter="\t", extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)
-    print(f"{a.sample}: {len(wins)} windows, {n_asm} gave events by assembly", file=sys.stderr)
+    sk = collections.Counter(w["skip"] for w in wins)
+    print(f"{a.sample}: {len(wins)} windows, {sk[None]} assembled, {sk['weak BND']} weak BND, "
+          f"{sk['cap']} over the cap; {n_asm} gave events by assembly", file=sys.stderr)
 
 
 if __name__ == "__main__":

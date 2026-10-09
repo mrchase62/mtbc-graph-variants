@@ -12,6 +12,17 @@ Evidence (MAPQ >= 20, primary alignments):
 Clustering: clip positions within 5 bp on the same side form a cluster. It
 needs max(4, 10% of median depth) reads, and must lie more than 200 bp from
 either contig end (the circular origin; v2).
+Clip filter (v3, for real reads; off with --no-clip-filter):
+  - each clip is quality-trimmed: its length is counted outward from the
+    alignment end up to the first base below Q20, and must still be >= 10 bp;
+  - at least half of the cluster's reads clip within 1 bp of its main
+    position (a real breakpoint clips every read at the same base; untrimmed
+    read ends and library chimeras clip at scattered positions);
+  - the clipped sequences agree: at least 60% of the reads at the main
+    position differ from the consensus of their first 20 clipped bases at no
+    more than 10% of those bases.
+  Every cluster, kept or not, is listed in <out>.clusters.tsv with these
+  measures.
 Events:
   DEL   right-clip cluster at A, left-clip cluster at B > A + 50, joined by
         >= 2 split reads or >= 3 pairs spanning A..B; or >= 2 reads with a
@@ -47,13 +58,47 @@ TOL = 5
 JOIN_TOL = 20
 
 
+def clip_out(r, n, right, filt):
+    """The clipped bases read outward from the alignment end, quality-trimmed
+    at the first base below Q20 (v3). None if fewer than MINCLIP remain."""
+    seq, q = r.query_sequence, r.query_qualities
+    if right:
+        bases, quals = seq[-n:], (q[-n:] if q is not None else None)
+    else:
+        bases, quals = seq[:n][::-1], (q[:n][::-1] if q is not None else None)
+    if filt and quals is not None:
+        k = next((i for i, x in enumerate(quals) if x < MINQ), len(quals))
+        bases = bases[:k]
+    return bases if len(bases) >= MINCLIP else None
+
+
+def agreement(seqs):
+    """Fraction of clipped sequences within 10% mismatches of the consensus
+    of their first 20 bases."""
+    if not seqs:
+        return 0.0
+    cons = []
+    for i in range(20):
+        col = collections.Counter(x[i] for x in seqs if len(x) > i)
+        if not col:
+            break
+        cons.append(col.most_common(1)[0][0])
+    ok = 0
+    for x in seqs:
+        m = min(len(x), len(cons))
+        ok += sum(1 for i in range(m) if x[i] != cons[i]) <= 0.1 * m
+    return ok / len(seqs)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bam", required=True)
     ap.add_argument("--sample", required=True)
     ap.add_argument("--max-insert", type=int, default=1000)
+    ap.add_argument("--no-clip-filter", action="store_true", help="v2 behaviour")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
+    filt = not a.no_clip_filter
     bam = pysam.AlignmentFile(a.bam)
     ctg = bam.references[0]
     L = bam.lengths[0]
@@ -75,10 +120,15 @@ def main():
                 c, p, st, cg, mq, _ = x.split(",")
                 if int(mq) >= MINQ and c == ctg:
                     sa.append((int(p), st))
+        st = "+" if not r.is_reverse else "-"
         if ct[-1][0] == 4 and ct[-1][1] >= MINCLIP:
-            rclip[r.reference_end].append((sa, "+" if not r.is_reverse else "-"))
+            k = clip_out(r, ct[-1][1], right=True, filt=filt)
+            if k is not None:
+                rclip[r.reference_end].append((sa, st, k))
         if ct[0][0] == 4 and ct[0][1] >= MINCLIP:
-            lclip[r.reference_start + 1].append((sa, "+" if not r.is_reverse else "-"))
+            k = clip_out(r, ct[0][1], right=False, filt=filt)
+            if k is not None:
+                lclip[r.reference_start + 1].append((sa, st, k))
         p = r.reference_start
         for op, n in ct:
             if op == 2 and n >= 50:
@@ -100,7 +150,7 @@ def main():
     med = statistics.median(dep) if dep else 0
     minr = max(4, 0.1 * med)
 
-    def clusters(d):
+    def clusters(d, side):
         out, cur = [], None
         for p in sorted(d):
             if cur and p - cur["end"] <= TOL:
@@ -116,11 +166,22 @@ def main():
             c["n"] = len(c["reads"])
             c["pos"] = c["start"] if c["end"] - c["start"] < 1 else \
                 max(range(c["start"], c["end"] + 1), key=lambda q: len(d.get(q, [])))
+            near_main = [k for q in range(c["pos"] - 1, c["pos"] + 2) for _, _, k in d.get(q, [])]
+            c["main_frac"] = len(near_main) / c["n"]
+            c["agree"] = agreement(near_main)
+            c["keep"] = (c["n"] >= minr and 200 < c["pos"] < L - 200
+                         and (not filt or (c["main_frac"] >= 0.5 and c["agree"] >= 0.6)))
+        diag.extend((side, c) for c in out if c["n"] >= minr)
         # the circular origin: every read that crosses it is clipped at the
         # contig ends, so clusters within 200 bp of either end are dropped
-        return [c for c in out if c["n"] >= minr and 200 < c["pos"] < L - 200]
+        return [c for c in out if c["keep"]]
 
-    R, Lc = clusters(rclip), clusters(lclip)
+    diag = []
+    R, Lc = clusters(rclip, "right"), clusters(lclip, "left")
+    with open(a.out + ".clusters.tsv", "w") as fo:
+        fo.write("side\tpos\treads\tmain_frac\tagree\tkept\n")
+        for sd, c in sorted(diag, key=lambda x: x[1]["pos"]):
+            fo.write(f"{sd}\t{c['pos']}\t{c['n']}\t{c['main_frac']:.2f}\t{c['agree']:.2f}\t{int(c['keep'])}\n")
 
     def depth_ratio(s, e):
         if not med or e < s:
@@ -132,7 +193,7 @@ def main():
     events = []
 
     def partners(c):
-        return [(p, st, rst) for sa, rst in c["reads"] for p, st in sa]
+        return [(p, st, rst) for sa, rst, _ in c["reads"] for p, st in sa]
 
     # joins from right clips (A) via SA to a partner position
     for i, c in enumerate(R):

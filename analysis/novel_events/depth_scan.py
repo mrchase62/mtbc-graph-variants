@@ -11,8 +11,11 @@ repeat unit.
    as INS); runs at <= 0.6 are a loss (scored as DEL). Windows within 1 kb
    of either contig end are skipped (the circular origin).
 4. The size is estimated as |ratio - 1| x run length.
-No GC correction: the reads are simulated without GC bias. Real reads
-(Phase B) will need one.
+GC correction (Phase B, with --ref): each window's ratio is divided by the
+median ratio of all windows with the same GC percentage (bins with fewer than
+20 windows use the nearest bin that has 20), so depth that follows GC content
+is not called a gain or loss. Without --ref, no correction (Phase A: the
+simulated reads have no GC bias).
 """
 import argparse
 import statistics
@@ -30,6 +33,7 @@ def main():
     ap.add_argument("--gain", type=float, default=1.4)
     ap.add_argument("--loss", type=float, default=0.6)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--ref", help="matched reference FASTA, for GC correction")
     a = ap.parse_args()
     p = subprocess.Popen([a.samtools, "depth", "-a", "-Q", "0", a.bam],
                          stdout=subprocess.PIPE, text=True)
@@ -44,6 +48,17 @@ def main():
     win = [sums.get(i, 0) / W for i in range(nwin)]
     med = statistics.median(win)
     ratio = [x / med if med else 0 for x in win]
+    if a.ref:
+        import pysam
+        seq = next(iter(pysam.FastxFile(a.ref))).sequence.upper()
+        gc = [round(100 * sum(seq[i * W:(i + 1) * W].count(b) for b in "GC") / max(1, len(seq[i * W:(i + 1) * W])))
+              for i in range(nwin)]
+        bins = {}
+        for g, r in zip(gc, ratio):
+            bins.setdefault(g, []).append(r)
+        good = {g: statistics.median(v) for g, v in bins.items() if len(v) >= 20}
+        corr = {g: good[min(good, key=lambda h: abs(h - g))] for g in set(gc)}
+        ratio = [r / corr[g] if corr[g] else r for g, r in zip(gc, ratio)]
     edge = 1000 // W
     events = []
     i = edge

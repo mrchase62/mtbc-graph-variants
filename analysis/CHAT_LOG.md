@@ -1111,3 +1111,12 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   P1/P2 alone cost 74, about twice the 38 estimate, because the real reads
   are deeper than the novelA40 simulations. No further compute until the user
   approves.
+- **Real-read changes approved (steps 1-4) and tested** (job 51555392, 5 isolates):
+  - Caller v3 trims low-quality clip bases (stops at the first base below
+    Q20) and keeps a cluster only if half its reads clip within 1 bp of the
+    main position and their clipped sequences agree (60%). Every cluster is
+    logged to `<out>.clusters.tsv`.
+  - Assembly runs only for typed candidates and for one-sided clusters with
+    support of at least 20% of median depth, with at most 40 windows per isolate.
+  - The depth scan is GC-corrected by GC-percentage bin.
+  - Regression check: v3 caller on the 40 Phase A simulations.
