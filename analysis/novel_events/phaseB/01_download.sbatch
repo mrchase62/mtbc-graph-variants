@@ -27,7 +27,17 @@ for k in "${!URLS[@]}"; do
     if [[ -s "$f" ]] && [[ "$(md5sum "$f" | cut -d' ' -f1)" == "${SUMS[$k]}" ]]; then
         echo "$f present, md5 ok"; continue
     fi
-    curl -sS --retry 5 --retry-delay 20 -o "$f.part" "https://${URLS[$k]}"
+    # resume a partial file (-C -): ENA resets long transfers (SRR9588558_2,
+    # 1.7 GB, twice), and a restart from zero hits the same reset
+    ok=0
+    for attempt in 1 2 3 4 5 6 7 8 9 10; do
+        if curl -sS -C - --retry 5 --retry-delay 20 -o "$f.part" "https://${URLS[$k]}"; then
+            ok=1; break
+        fi
+        echo "attempt $attempt interrupted at $(stat -c %s "$f.part" 2>/dev/null || echo 0) bytes; resuming" >&2
+        sleep 30
+    done
+    [[ $ok -eq 1 ]] || { echo "FATAL: $f not complete after 10 attempts" >&2; exit 1; }
     got=$(md5sum "$f.part" | cut -d' ' -f1)
     [[ "$got" == "${SUMS[$k]}" ]] || { echo "FATAL: md5 mismatch for $f ($got vs ${SUMS[$k]})" >&2; exit 1; }
     mv -f "$f.part" "$f"

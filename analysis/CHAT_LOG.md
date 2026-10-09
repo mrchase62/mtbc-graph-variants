@@ -1094,3 +1094,7 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - **OUT-1 added to the fix list:** a canettii pseudo-isolate (simulated reads
   through P1-P5) for IS6110/SV/accessory polarity.
 - **AA-1 added to the fix list:** AA_CHANGES (Fitch count), AA_FLAG HOMOPLASTIC/OUTGROUP, AA_SOURCE for assumed polarity. Measured: 1,741 panel sites (2.4%) homoplastic, 196 of 1,084 alt-ancestral.
+- **Phase B P1/P2 submitted** (p1 51453199 -> p2sum 51453203), with 62
+  isolates. MT_0080 (an in-panel control) was dropped after ENA reset its
+  1.8 GB read-2 transfer three times. Groups: novel, in_panel (false-call
+  controls), setE_polished (Peker, less reliable truth).
