@@ -1373,3 +1373,16 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   for the 8, `02_call_compare.sbatch` reruns dysgu alone with P2's options on
   the P2 BAM into `realsyn/out/dysgu/`. P2 cost 10.3 billing-hours with the
   failures; comparison job resubmitted (no dependency).
+- **Real vs synthetic results** (51681813; `realsyn/out/compare.tsv`; total
+  about 11 billing-hours). Typed SV calls in callable sequence, real /
+  synthetic:
+  - Synthetic reads of every control: 0-2 calls per caller.
+  - 10 chimeric controls (fold-back 4.8-56 per 1,000): ours 2-424,
+    dysgu 135-505, delly 206-6,586 with real reads; essentially all real-only.
+  - 15 clean controls (0.006-0.31): ours 0-2, dysgu 0-7, delly 0-3.
+  - Small variants: real-only SNVs 0-13 and indels 0-21 in both groups;
+    chimeras do not visibly add SNP/indel calls. Side finding: in the
+    N-series, RW_TB008, N0004 and TB3251 the synthetic reads (from Marin's
+    assembly) call 21-43 indels and share 13-42 calls with the real reads
+    against the panel genome R: Marin's assembly and the panel GCF assembly
+    of the same isolate differ at those sites. Not investigated.
