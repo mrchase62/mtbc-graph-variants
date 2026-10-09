@@ -26,6 +26,19 @@ run +-200 bp, since read-depth boundaries are only window-precise.
 Truth events are split by size (50-150, 150-500, 500-2,000, >2,000 bp) and
 by whether an insertion is IS6110-sized (1,340-1,370 bp).
 
+GRIDSS (--gridss-dir, <dir>/<sample>/<sample>.gridss.vcf): breakend pairs
+are typed by the usual reading of VCF breakend notation, once per pair:
+  t[p[ with p > pos, or ]p]t with p < pos   deletion of the bases between,
+      or an insertion when the inserted sequence is at least 70% as long
+      as the deleted span (a replacement is scored as INS or DEL either way)
+  t[p[ with p < pos, or ]p]t with p > pos   tandem duplication of the segment,
+      scored as an insertion of its length (as the prototype does)
+  t]p] or [p[t                            inversion
+  other chromosome                       REARR
+Single breakends (t. or .t; the partner could not be placed) are untyped
+BND, counted for breakpoint recall only. gridss_pass uses FILTER=PASS;
+gridss_all uses every record.
+
 Callable sequence (--mask-dir with --refmap; Phase B): a true event or a call
 whose span +-50 bp touches the matched reference's uncallable mask
 (callable_mask.py) is uncallable. Recall is then measured over callable true
@@ -113,6 +126,50 @@ def masked(m, s, e):
     return any(iv[j][1] > lo for j in range(max(0, i - 8), i))
 
 
+def read_gridss(path, pass_only):
+    import re
+    if not os.path.exists(path):
+        return []
+    recs = {}
+    out = []
+    for line in open(path):
+        if line.startswith("#"):
+            continue
+        c = line.rstrip("\n").split("\t")
+        if pass_only and c[6] != "PASS":
+            continue
+        pos, alt = int(c[1]), c[4]
+        info = dict(x.split("=", 1) if "=" in x else (x, "") for x in c[7].split(";"))
+        if alt.startswith(".") or alt.endswith("."):
+            out.append(dict(type="BND", start=pos, end=pos))
+            continue
+        m = re.match(r"^([A-Za-z]*)([\[\]])([^:\[\]]+):(\d+)([\[\]])([A-Za-z]*)$", alt)
+        if not m:
+            continue
+        mate = info.get("MATEID", "")
+        if mate in recs:  # the pair is typed from its first record
+            continue
+        recs[c[2]] = 1
+        before, br, chrom, p, _, after = m.groups()
+        p = int(p)
+        ins = max(len(before), len(after)) - 1
+        if chrom != c[0]:
+            out.append(dict(type="REARR", start=pos, end=pos))
+        elif (before and br == "[") and p > pos or (after and br == "]") and p < pos:
+            a, b = min(pos, p), max(pos, p)
+            span = b - a - 1
+            if ins >= 0.7 * span:
+                out.append(dict(type="INS", start=a, end=a, size=ins))
+            else:
+                out.append(dict(type="DEL", start=a + 1, end=b - 1, size=span))
+        elif (before and br == "[") or (after and br == "]"):
+            out.append(dict(type="INS", start=max(pos, p), end=max(pos, p), size=abs(pos - p) + 1))
+        else:
+            out.append(dict(type="INV", start=min(pos, p), end=max(pos, p)))
+    # events under 50 bp are out of scope, as in the truth set
+    return [x for x in out if x.get("size", 50) >= 50]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--truth", required=True)
@@ -120,6 +177,7 @@ def main():
     ap.add_argument("--p2-dir", required=True)
     ap.add_argument("--asm-dir", help="assemble_candidates.py tables (step 1)")
     ap.add_argument("--depth-dir", help="depth_scan.py tables (step 2)")
+    ap.add_argument("--gridss-dir", help="GRIDSS output folder, <sample>/<sample>.gridss.vcf")
     ap.add_argument("--refmap", help="P1 refmap.tsv: sample -> matched reference")
     ap.add_argument("--mask-dir", help="callable_mask.py BEDs, <reference>.bed")
     ap.add_argument("--out", required=True)
@@ -139,6 +197,10 @@ def main():
         "delly_pass": lambda s: read_vcf(os.path.join(a.p2_dir, f"{s}.delly.vcf"), True),
     }
     calls = {k: {s: f(s) for s in truth} for k, f in callers.items()}
+    if a.gridss_dir:
+        for nm, ps in (("gridss_pass", True), ("gridss_all", False)):
+            calls[nm] = {s: read_gridss(os.path.join(a.gridss_dir, s, f"{s}.gridss.vcf"), ps)
+                         for s in truth}
     calls["dysgu+delly_pass"] = {s: calls["dysgu_pass"][s] + calls["delly_pass"][s] for s in truth}
     calls["prototype+dysgu_pass"] = {s: calls["prototype"][s] + calls["dysgu_pass"][s] for s in truth}
     if a.asm_dir:

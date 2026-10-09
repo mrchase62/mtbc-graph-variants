@@ -1205,3 +1205,14 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     (from seff: 50% CPU, 3.4 GB peak).
   - Corrected cost for the 5-isolate test: about 17 billing-hours, not 4
     (kraken2's 72 GB about 6; QC about 5; P1+P2 about 6). Awaiting approval.
+- **Read QC test (user: without kraken2):** QC array 51567729, about 2.4
+  billing-hours. All 5 PASS: TB-Profiler single-lineage; fastp removed
+  6-19% of bases (3' trim); final depth 64-100x (`refbias/marinQC5/qc_table.tsv`).
+  Cohort `marinQC5` registered; P1/P2 chain 51568650 -> 51568653. Then callers
+  51568688 and GRIDSS 51568689 on the QC'd reads, and GRIDSS 51568691 (tuned
+  resources) on the same 5 without QC.
+- **score.py reads GRIDSS** (`--gridss-dir`): breakend pairs typed as
+  DEL/INS/dup/INV/REARR by standard breakend notation; single breakends untyped.
+  First look, 2 isolates without QC, callable sequence: GRIDSS PASS
+  breakpoint recall 0.54, typed recall 0.15 (13 events), mostly single
+  breakends.

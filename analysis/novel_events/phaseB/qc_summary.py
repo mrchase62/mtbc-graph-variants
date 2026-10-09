@@ -58,29 +58,30 @@ def tbprofiler(path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sample", required=True)
-    ap.add_argument("--kraken", required=True)
+    ap.add_argument("--kraken", help="kraken2 report; omitted = not run")
     ap.add_argument("--fastp", required=True, help="fastp JSON")
     ap.add_argument("--tbprofiler", required=True, help="TB-Profiler results JSON")
     ap.add_argument("--final-bases", type=int, required=True, help="bases after downsampling")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
-    tf, oname, ofrac = kraken(a.kraken)
+    tf, oname, ofrac = kraken(a.kraken) if a.kraken else (None, "not run", None)
     fp = json.load(open(a.fastp))
     before, after = fp["summary"]["before_filtering"], fp["summary"]["after_filtering"]
     adapt = fp.get("adapter_cutting", {}).get("adapter_trimmed_reads", 0)
     lin, sub, tbs = tbprofiler(a.tbprofiler)
     depth = a.final_bases / GENOME
     why = []
-    if tf < 0.85:
+    if tf is not None and tf < 0.85:
         why.append(f"MTBC {tf:.1%} < 85%")
-    if ofrac > 0.05:
+    if ofrac is not None and ofrac > 0.05:
         why.append(f"{oname} {ofrac:.1%} > 5%")
     if tbs != "ok":
         why.append(f"TB-Profiler {tbs}")
     if depth < 60:
         why.append(f"depth {depth:.0f}x < 60x")
     cols = dict(sample=a.sample, status="FAIL" if why else "PASS", reason="; ".join(why),
-                mtbc_frac=f"{tf:.4f}", top_other=oname, top_other_frac=f"{ofrac:.4f}",
+                mtbc_frac="" if tf is None else f"{tf:.4f}", top_other=oname,
+                top_other_frac="" if ofrac is None else f"{ofrac:.4f}",
                 raw_depth=f"{before['total_bases'] / GENOME:.1f}",
                 fastp_depth=f"{after['total_bases'] / GENOME:.1f}",
                 reads_raw=before["total_reads"], reads_fastp=after["total_reads"],
