@@ -1628,3 +1628,11 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   M. tuberculosis"): Oxford Nanopore runs (MinION/GridION) on the same
   BioSample for all 17 setE isolates, 27-485x, 13.0 Gb / 13.8 GB fastq.
   Library protocol not in ENA metadata. Not downloaded (needs approval).
+- **Long-read test submitted** (user approved download + run, 2026-10-10):
+  `longread/runs.tsv` (17 setE Nanopore runs, ENA PRJNA720906),
+  `01_download.sbatch` -> 51826243 (array 0-16%6, md5-checked, to
+  netscratch data/external_reads/marin_ont), `02_align.sbatch` -> 51826244
+  (minimap2 -ax map-ont to the marinQC51 matched reference, aftercorr),
+  analysis `lr_element.py` (reads anchored >= 200 bp both sides: member
+  present / absent (member-sized deletion or < 20% aligned) / other).
+  Estimate ~5 billing-hours.
