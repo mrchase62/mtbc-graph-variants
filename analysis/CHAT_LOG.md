@@ -1753,3 +1753,16 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   preparations, so the assembly's consensus correctly lacks it, and the
   truth set (majority sequence) cannot contain it. A real event scored false
   by construction; no scoring change.
+- **Do the 24-29 bp indels belong to HaplotypeCaller?** Yes: P2's GATK
+  HaplotypeCaller (ploidy 1) calls all 6 at the assembly's exact size, PASS,
+  QUAL 2,300-4,800, every read supporting (AD 0,52 to 0,107). Our caller
+  reports them as INS of unknown size because bwa clips reads at a 24-29 bp
+  indel. Across the 44 isolates, SV calls (ours, dysgu AF>=0.2) within 60 bp
+  of a HC 10-49 bp indel: 11 false, 1 true. The true one (8129_04, 1,360 bp
+  IS6110 insertion at 2,633,361) has a weak HC 18 bp call: QUAL 205, DP 17
+  against ~100x, AD 6,11, since reads cannot align across 1.3 kb. Every
+  false one: DP at full depth (78-107) and alt fraction 1.0. Proposed rule
+  (not applied): drop an SV call when a HC indel of 10-49 bp lies within
+  60 bp with DP >= 50% of the isolate's median depth and alt fraction >= 0.9
+  (HC's small allele explains all reads at full depth; a large insertion
+  cannot). Removes 11 false calls, 0 true, here.
