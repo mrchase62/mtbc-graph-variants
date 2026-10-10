@@ -11,6 +11,7 @@
 #SBATCH -J ont_dl
 #SBATCH -o analysis/novel_events/logs/ont_dl_%A_%a.out
 set -euo pipefail
+PROTO=${PROTO:-https}  # 2026-10-10: ftp for the 5 large files that kept failing md5 over https
 D=/n/netscratch/sfortune_lab/Lab/mchase/MtbPangenome/data/external_reads/marin_ont
 T=analysis/novel_events/longread/runs.tsv
 mkdir -p "$D"
@@ -28,7 +29,7 @@ fi
 for full in 1 2 3; do
     ok=0
     for attempt in 1 2 3 4 5 6 7 8 9 10; do  # resume on ENA resets, as in phaseB/01_download.sbatch
-        if curl -sS --fail -C - --retry 5 --retry-delay 20 -o "$f.part" "https://$FTP"; then ok=1; break; fi
+        if curl -sS --fail -C - --retry 5 --retry-delay 20 -o "$f.part" "$PROTO://$FTP"; then ok=1; break; fi
         echo "attempt $attempt interrupted at $(stat -c %s "$f.part" 2>/dev/null || echo 0) bytes; resuming" >&2
         sleep 30
     done

@@ -1668,3 +1668,14 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   its artifact level, and samples well under the 2/1k cutoff still show it:
   the fold-back QC filter will not remove the tatC-helY artifact. Other
   family members' summed junction signal: no relation (rho -0.22).
+- **Long-read test, 12 of 17 isolates.** Rerun 51844221: 6 more complete
+  (several needed 2-3 full downloads; md5 failures over https recur), 5
+  largest (1.4-2.3 GB) timed out at 2 h; resubmitted over ftp with 8 h
+  (download 51869430, align 51869436). tatC-helY: 4 absent of 843 spanning
+  reads (0.5%; single reads in mar_702_06, mar_706_05, mar_8651_04, each
+  101-187 reads deep), 0 in the other 9. Short reads at the same isolates:
+  26-54 junction reads per 100x, dysgu AF 0.16-0.43. Other family members
+  with no short-read signal show the same background of single absent reads
+  (icl1 5/894, PE_PGRS52 3/831, Rv2522c 3/883): Nanopore noise. Conclusion
+  unchanged: the short-read excision signal is a short-read artifact.
+  Positive control and QC_7 mixture as before.
