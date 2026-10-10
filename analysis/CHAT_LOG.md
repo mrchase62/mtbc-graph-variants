@@ -1610,3 +1610,21 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   batch, strength batch-dependent. Library protocol not in ENA metadata.
   Artifact (polymerase skipping the hairpin between the direct repeats) vs
   real excision in culture not resolved; decisive test: PCR-free long reads.
+- **Repeat family members, short-read signal** (`phaseB/repeat_family.py`
+  -> `out/qc51/repeat_family.{members,isolates}.tsv`; 46 isolates; 41 H37Rv
+  copies from loci/hely_tatc/repeat_family_loci.tsv + tatC-helY + fadE22,
+  located in each matched reference by H37Rv flanks / own sequence).
+  - Coverage dropout is family-wide: depth inside / flanks median 0.25-0.42
+    for 33 of 43 members, ~1.0 for the weakest folders (MFE > -0.5/nt).
+  - Deletion-junction reads (clipped 15-mer continues exactly 30-150 bp
+    further on): tatC-helY 885 reads in 41/42 carriers, length 68, per 100x
+    depth setE 39, novel 18, controls 20 (medians). Others: Rv2522c 56 reads
+    in 26 isolates (73 bp), nrdB 26 in 17 (75), fadE22 16 in 12 (68),
+    3348486 12 in 8; medians 0-1.7 per 100x. 755253: 114 reads in 3
+    isolates (QC_1, QC_6, QC_7) = a real 79 bp deletion in the truth set.
+    22 members: no junction reads. dysgu calls a deletion only at tatC-helY
+    (39 carriers) and at the real 755253 event (3).
+- **setE long reads exist** (ENA PRJNA720906, "Short- and long-read WGS of
+  M. tuberculosis"): Oxford Nanopore runs (MinION/GridION) on the same
+  BioSample for all 17 setE isolates, 27-485x, 13.0 Gb / 13.8 GB fastq.
+  Library protocol not in ENA metadata. Not downloaded (needs approval).
