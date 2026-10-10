@@ -1658,3 +1658,13 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     0.36 in QC_7 vs 0.67-0.73 in QC_1/QC_6, so the Illumina reads look
     mixed too. Fits QC_7's identity-check failure (276 discordant SNPs).
   - Other family members: no absent reads except single reads at 6 members.
+- **Fold-back rate vs tatC-helY artifact** (`phaseB/foldback_vs_element.py`
+  -> `out/qc51/foldback_vs_element.tsv`; 42 carriers, Spearman). Pooled:
+  junction/100x rho +0.57 (p 9e-5), dysgu AF +0.43, depth loss +0.51. Within
+  each batch: none (rho -0.35 to +0.28, all p > 0.18). setE has both the
+  highest fold-back rates (median 0.54/1k) and the strongest artifact
+  (junction 40/100x); HiSeq batches are low on both. So both depend on the
+  library/sequencing batch, but a sample's fold-back rate does not predict
+  its artifact level, and samples well under the 2/1k cutoff still show it:
+  the fold-back QC filter will not remove the tatC-helY artifact. Other
+  family members' summed junction signal: no relation (rho -0.22).
