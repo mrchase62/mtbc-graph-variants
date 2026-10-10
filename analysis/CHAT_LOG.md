@@ -1636,3 +1636,25 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   analysis `lr_element.py` (reads anchored >= 200 bp both sides: member
   present / absent (member-sized deletion or < 20% aligned) / other).
   Estimate ~5 billing-hours.
+- **Long-read test, first pass (2026-10-10).** Download 51826243: 6 of 17
+  completed; 11 failed md5 although full size, with no interruption logged
+  and gzip CRC errors (silent corruption in transfer). `01_download.sbatch`
+  now deletes a file failing md5 and fetches it again from scratch (up to 3
+  times, curl `--fail`); corrupt partials deleted; the 11 resubmitted as
+  51844221, alignment 51844222 (aftercorr). First pass cost: ~13 CPU-h
+  download (1 CPU, 1 GB) + ~0.3 CPU-h alignment (4 CPU).
+- **Interim result, 6 isolates (QC_1, QC_3, QC_6, QC_7, QC_9, QC_10;
+  `lr_element.py` -> `longread/out/lr_element.tsv`):**
+  - tatC-helY: present in 226/226 spanning Nanopore reads (14-57 per
+    isolate), 0 absent, 0 partial. Short reads at the same isolates: 27-45
+    deletion-junction reads per 100x, dysgu DEL AF 0.20-0.32. If the
+    excised form were even 5% of molecules, ~11 absent reads would be
+    expected (P(0) ~ 1e-5). The short-read signal is therefore made during
+    library prep / sequencing, not present in the DNA.
+  - Positive control: 755253 (real 79 bp deletion in the truth set) is
+    absent in 60/60 reads (QC_1) and 29/29 (QC_6); present in the others.
+  - QC_7 is mixed in the long reads: 755253 absent in 47/77, Rv2273 absent
+    in 15/33 (0 in every other isolate). Short-read dysgu AF at 755253 is
+    0.36 in QC_7 vs 0.67-0.73 in QC_1/QC_6, so the Illumina reads look
+    mixed too. Fits QC_7's identity-check failure (276 discordant SNPs).
+  - Other family members: no absent reads except single reads at 6 members.
