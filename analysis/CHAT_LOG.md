@@ -1725,3 +1725,20 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   0.580, ours alone 0.526 / 0.511. Remaining setE false calls of ours
   (ours_false.py, before exclusion/rule): 14 tatC-helY (now dropped by the
   rule), 14 QC_7 (excluded), 6 real 24-29 bp indels, 3 other.
+- **Our caller's 3 "other" setE false calls (after the fixes).**
+  - mar_702_06 and mar_9050_05, INS at 801,398 (tandem_dup, 72 bp; dysgu
+    AF>=0.2 also calls it, 54 bp at 801,399): the truth's 108 bp insertion
+    of a repeated unit at 801,326. Nanopore reads of 702_06 (162 spanning)
+    put net insertion at 100-120 bp, so the assembly size is right and both
+    short-read callers underestimate it in the tandem repeat (local assembly
+    failed there). Scored false and missed: 72 bp from the true start and
+    72/108 = 0.67 < pctsize 0.7. Detection is right, size is wrong.
+  - mar_3003_06, INS at 1,171,103 (dysgu also calls it, AF < 0.2): clipped
+    sequences are the two IS6110 ends (IRL TGAACCGCCCCGGCATGTCCGGAGAC on one
+    side, IRR on the other), clip positions 5 bp apart (target-site
+    duplication). 36 junction reads vs 59 intact spanning reads: IS6110
+    inserted in ~38% of the Illumina culture, absent from the (Nanopore)
+    assembly. A real subclonal transposition the truth set lacks.
+  - So all 9 remaining setE false calls of ours are real sequence
+    differences: 6 indels of 24-29 bp, 1 event sized wrong, 1 subclonal
+    IS6110 insertion.
