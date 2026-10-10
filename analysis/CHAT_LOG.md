@@ -1580,3 +1580,21 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     now 0.526/0.511, 0.744/0.580; - short anchors 0.526/0.565, 0.744/0.610;
     - QC_7 0.485/0.650, 0.727/0.664; + palindrome mask 0.485/0.830,
     0.727/0.809.
+- **What the palindrome mask loses** (user asked; exploration, no code kept).
+  Element state at the site (flank search) in all 63 Phase B assemblies vs
+  their matched reference: 61 agree (QC_6 differs by 1 bp inside it). Two
+  real events, both in the truth set: TB3237 INS 68 (L4.4.1.1; its
+  reference lacks the element) and TB3386 DEL 68 (L4.3.3; failed read QC,
+  so only in the raw-read run). Both found by both callers (ours exact; dysgu
+  INS size 184/236, DEL 69). Element absent from 5 assemblies in L4.3.3,
+  L4.5, L4.8, L6.2.1, L6.3.1, and from 10 of 51 references: scattered across
+  lineages. In the 46 compared isolates (callable calls) the mask removes ours
+  19 false (setE 14, controls 5) + 1 true; dysgu_af20 15 false (setE 12,
+  controls 3) + 1 true. Real and artifact overlap on dysgu AF (real 0.20-0.45,
+  artifact 0.2-0.4). Depth inside the element / flanks (MAPQ >= 20): TB3386
+  0.00; every isolate carrying the element 0.08-0.66 (setE 0.08-0.21,
+  controls 0.35-0.66): the element is poorly covered everywhere, never
+  absent. The artifact only ever removes the element (all site calls in
+  isolates carrying it are DEL). Alternative to the mask: at the site, keep
+  INS; keep DEL only when depth inside the element is ~0. One real DEL to
+  test it on.
