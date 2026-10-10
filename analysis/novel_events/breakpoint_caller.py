@@ -23,6 +23,11 @@ Clip filter (v3, for real reads; off with --no-clip-filter):
   - the clipped sequences agree: at least 60% of the reads at the main
     position differ from the consensus of their first 20 clipped bases at no
     more than 10% of those bases.
+  - (v4, 2026-10-10) a read's clips count only when >= 30 of its bases are
+    aligned (MIN_ANCHOR). Reads of sequence absent from R otherwise sit on a
+    chance ~19-base match at MAPQ 40, clipped on both sides, and by
+    themselves form both clip clusters of a false INS (10 of our false calls
+    on clean Phase B reads, none of the true ones; phaseB/ours_false.py).
   Every cluster, kept or not, is listed in <out>.clusters.tsv with these
   measures.
 Events:
@@ -58,6 +63,7 @@ MINQ = 20
 MINCLIP = 10
 TOL = 5
 JOIN_TOL = 20
+MIN_ANCHOR = 30
 
 
 def clip_out(r, n, right, filt):
@@ -125,11 +131,12 @@ def main():
                 if int(mq) >= MINQ and c == ctg:
                     sa.append((int(p), st))
         st = "+" if not r.is_reverse else "-"
-        if ct[-1][0] == 4 and ct[-1][1] >= MINCLIP:
+        anchored = not filt or r.query_alignment_length >= MIN_ANCHOR
+        if anchored and ct[-1][0] == 4 and ct[-1][1] >= MINCLIP:
             k = clip_out(r, ct[-1][1], right=True, filt=filt)
             if k is not None:
                 rclip[r.reference_end].append((sa, st, k))
-        if ct[0][0] == 4 and ct[0][1] >= MINCLIP:
+        if anchored and ct[0][0] == 4 and ct[0][1] >= MINCLIP:
             k = clip_out(r, ct[0][1], right=False, filt=filt)
             if k is not None:
                 lclip[r.reference_start + 1].append((sa, st, k))

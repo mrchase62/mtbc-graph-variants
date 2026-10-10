@@ -1,0 +1,3 @@
+sample	reason
+mar_QC_7	mixed: reads and assembly disagree at 276 SNPs, 272 at intermediate allele fraction; Nanopore 755253 61% absent, Rv2273 45% (phaseB/identity_detail.py, longread/lr_element.py; user 2026-10-10)
+mar_TB1612	mixed: 78 of 79 discordant SNPs at intermediate allele fraction, genome-wide (phaseB/identity_detail.py; user 2026-10-10)

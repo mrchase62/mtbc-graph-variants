@@ -14,6 +14,11 @@ caller. For the in-panel controls (no callable true events): typed calls in
 callable sequence per isolate, all of them false by construction, counted
 directly because score.py skips isolates without truth rows.
 
+Isolates in phaseB/exclude.tsv (mixed samples: reads and the assembly that
+gives their truth are not one strain) are left out of both runs.
+DEL calls at the tatC-helY site in isolates carrying the element are
+dropped (score.py --element-gt; element_genotype.py per run).
+
 Writes out/qc51/compare.tsv and prints a summary.
 """
 import collections
@@ -24,15 +29,15 @@ import sys
 
 N = "../analysis/novel_events"
 sys.path.insert(0, N)
-from score import load_masks, masked, read_proto, read_vcf  # noqa: E402
+from score import element_artifact, load_element_gt, load_masks, masked, read_proto, read_vcf  # noqa: E402
 
 RM_AFTER = "refbias/marinQC51/run/p1/refmap.tsv"
 RM_BEFORE = "refbias/marinB63/run/p1/refmap.tsv"
 CALLERS = ("proto_asm", "dysgu_pass", "dysgu_af20", "proto_asm+dysgu_pass", "proto_asm+dysgu_af20")
 RUNS = {"before": dict(proto=f"{N}/phaseB/out/v3b/proto", asm=f"{N}/phaseB/out/v3b/asm",
-                       p2="refbias/marinB63/run/p2", rm=RM_BEFORE),
+                       p2="refbias/marinB63/run/p2", rm=RM_BEFORE, gt=f"{N}/phaseB/out/element_gt.marinB63.tsv"),
         "after": dict(proto=f"{N}/phaseB/out/qc51/proto", asm=f"{N}/phaseB/out/qc51/asm",
-                      p2="refbias/marinQC51/run/p2", rm=RM_AFTER)}
+                      p2="refbias/marinQC51/run/p2", rm=RM_AFTER, gt=f"{N}/phaseB/out/element_gt.marinQC51.tsv")}
 
 
 def main():
@@ -41,7 +46,8 @@ def main():
     ref_b = {r["sample"]: r["reference"] for r in csv.DictReader(open(RM_BEFORE), delimiter="\t")}
     ref_a = {r["sample"]: r["reference"] for r in csv.DictReader(open(RM_AFTER), delimiter="\t")}
     changed = [s for s in keep if ref_a[s] != ref_b.get(s)]
-    keep = [s for s in keep if s not in changed]
+    excluded = [r["sample"] for r in csv.DictReader(open(f"{N}/phaseB/exclude.tsv"), delimiter="\t")]
+    keep = [s for s in keep if s not in changed and s not in excluded]
     out_dir = f"{N}/phaseB/out/qc51"
     rows = []
     for grp in ("novel", "setE_polished"):
@@ -55,7 +61,7 @@ def main():
             o = f"{out_dir}/score_{run}.{grp}.tsv"
             subprocess.run([sys.executable, f"{N}/score.py", "--truth", t, "--proto-dir", p["proto"],
                             "--asm-dir", p["asm"], "--p2-dir", p["p2"], "--refmap", p["rm"],
-                            "--mask-dir", f"{N}/out/masks", "--out", o],
+                            "--mask-dir", f"{N}/out/masks", "--element-gt", p["gt"], "--out", o],
                            check=True, stdout=subprocess.DEVNULL)
             for r in csv.DictReader(open(o), delimiter="\t"):
                 if r["stratum"] == "all" and r["caller"] in CALLERS:
@@ -66,13 +72,15 @@ def main():
     ctl = [s for s in keep if groups[s] == "in_panel"]
     for run, p in RUNS.items():
         masks = load_masks(p["rm"], f"{N}/out/masks")
+        egt = load_element_gt(p["gt"])
         per = collections.defaultdict(list)
         for s in ctl:
             calls = dict(proto_asm=read_proto(f"{p['asm']}/{s}.events.tsv"),
                          dysgu_pass=read_vcf(f"{p['p2']}/{s}.dysgu.vcf", True),
                          dysgu_af20=read_vcf(f"{p['p2']}/{s}.dysgu.vcf", True, 0.2))
             for c, cs in calls.items():
-                per[c].append(sum(1 for x in cs if x["type"] != "BND" and not masked(masks[s], x["start"], x["end"])))
+                per[c].append(sum(1 for x in cs if x["type"] != "BND" and not masked(masks[s], x["start"], x["end"])
+                                   and not element_artifact(egt, s, x)))
         for c, v in per.items():
             rows.append(dict(group="in_panel", run=run, isolates=len(ctl), caller=c, n_true=0,
                              typed_calls=sum(v), precision="", typed_recall="", breakpoint_recall="",
@@ -83,7 +91,8 @@ def main():
         w = csv.DictWriter(fo, fieldnames=cols, delimiter="\t", restval="")
         w.writeheader()
         w.writerows(rows)
-    print(f"isolates compared {len(keep)}; left out, P1 reference changed: {', '.join(changed) or 'none'}")
+    print(f"isolates compared {len(keep)}; left out, P1 reference changed: {', '.join(changed) or 'none'}; "
+          f"excluded (phaseB/exclude.tsv): {', '.join(excluded)}")
     for r in rows:
         print("\t".join(str(r.get(k, "")) for k in ("group", "run", "caller", "n_true", "typed_recall",
                                                        "typed_calls", "precision", "per_isolate")))

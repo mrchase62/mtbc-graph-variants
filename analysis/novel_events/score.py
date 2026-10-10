@@ -61,6 +61,13 @@ whose span +-50 bp touches the matched reference's uncallable mask
 under evaluation, user 2026-10-10) is uncallable. Recall is then measured over callable true
 events only, and uncallable calls are flagged, not counted in precision.
 n_true_uncallable and calls_uncallable report how many were set aside.
+
+tatC-helY genotype rule (--element-gt, element_genotype.py's table; added
+2026-10-10, replacing the artifact mask by the user's decision): a DEL call
+overlapping the element site +-50 bp is dropped when the isolate's genotype
+is present (reads inside the element; the low-fraction DEL is a short-read
+artifact, longread/lr_element.py). INS calls, and DEL calls in isolates
+whose genotype is absent, are kept. calls_element_dropped counts them.
 """
 import argparse
 import collections
@@ -168,6 +175,22 @@ def load_masks(refmap, mask_dir, artifacts=False):
     return masks
 
 
+def load_element_gt(path):
+    """element_genotype.py table -> sample: (1-based start, end, genotype)."""
+    out = {}
+    for r in csv.DictReader(open(path), delimiter="\t"):
+        if r["site_start"] != "":
+            out[r["sample"]] = (int(r["site_start"]) + 1, int(r["site_end"]), r["genotype"])
+    return out
+
+
+def element_artifact(gt, s, c):
+    """A DEL call at the tatC-helY site in an isolate that carries the element."""
+    x = gt.get(s) if gt else None
+    return bool(x) and x[2] == "present" and c["type"] == "DEL" and \
+        c["start"] <= x[1] + TOL and c["end"] >= x[0] - TOL
+
+
 def masked(m, s, e):
     if m is None:
         return False
@@ -233,8 +256,10 @@ def main():
     ap.add_argument("--mask-dir", help="callable_mask.py BEDs, <reference>.bed")
     ap.add_argument("--artifact-mask", action="store_true",
                     help="also mask artifact_mask.py's sites (under evaluation)")
+    ap.add_argument("--element-gt", help="element_genotype.py table: drop DEL at the tatC-helY site in carriers")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
+    egt = load_element_gt(a.element_gt) if a.element_gt else {}
     masks = load_masks(a.refmap, a.mask_dir, a.artifact_mask) if a.mask_dir else {}
     truth = collections.defaultdict(list)
     for r in csv.DictReader(open(a.truth), delimiter="\t"):
@@ -265,6 +290,12 @@ def main():
         calls["proto_asm+depth+dysgu_pass"] = {s: calls["proto_asm+depth"][s] + calls["dysgu_pass"][s]
                                                for s in truth}
 
+    n_el = collections.Counter()
+    for name, by_s in calls.items():
+        for s in by_s:
+            kept = [c for c in by_s[s] if not element_artifact(egt, s, c)]
+            n_el[name] += len(by_s[s]) - len(kept)
+            by_s[s] = kept
     rows = []
     n_unc_truth = collections.Counter()
     for s, ts in truth.items():
@@ -305,7 +336,7 @@ def main():
                              breakpoint_recall=round(b / n, 3), typed_calls=n_calls,
                              precision=round(prec, 3),
                              n_true_uncallable=n_unc_truth[k] if k == "all" else "",
-                             calls_uncallable=n_unc_calls))
+                             calls_uncallable=n_unc_calls, calls_element_dropped=n_el[name]))
     with open(a.out, "w") as fo:
         w = csv.DictWriter(fo, fieldnames=list(rows[0]), delimiter="\t")
         w.writeheader()

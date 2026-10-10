@@ -1688,3 +1688,24 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   apparent loss in short reads: the short-read low-fraction excision is a
   short-read library/sequencing artifact. Not explained by per-sample
   fold-back rate (batch-level only).
+- **SV calling: three changes approved (user, 2026-10-10), "check TB1612
+  and TB3054 first".**
+  - Identity follow-up (`phaseB/identity_detail.py` ->
+    `out/qc51/identity_detail.tsv`; read alt fraction at each SNP where reads
+    and assembly disagree). QC_7: 272/276 discordant intermediate (0.2-0.8),
+    and 70/159 shared: mixed. TB1612: 78/79 intermediate, genome-wide, 9/32
+    shared intermediate: mixed. TB3054: 38/41 in one 1.3 kb block (2.973-
+    2.975 Mb) at ~0.5 with double depth, all 447 shared SNPs clean: a
+    duplicated, diverged region, not mixture; kept. TB3334 (clean) has the
+    same pattern on 50 bp. Excluded: QC_7, TB1612 (`phaseB/exclude.tsv`).
+  - tatC-helY genotype rule replaces the mask: `element_genotype.py`
+    (depth inside element / 200 bp flanks; absent < 0.05) ->
+    `phaseB/out/element_gt.{marinQC51,marinB63}.tsv`. TB3386 0.00 (absent);
+    carriers 0.094-0.94 (present); 5 references lack the element.
+    `score.py --element-gt` drops DEL calls at the site in carriers.
+  - Short-anchor fix: `breakpoint_caller.py` v4, a read's clips count only
+    with >= 30 aligned bases. Pre-fix outputs saved in `phaseB/out/qc51_v3b`.
+    Rerun 51902242 (11_call_score.sbatch).
+  - Exclusions + genotype rule on pre-fix outputs (44 isolates): combo
+    (ours+asm + dysgu AF>=0.2) novel 0.806 / 0.825, setE 0.727 / 0.774;
+    controls: ours 1 false call, dysgu_af20 0.
