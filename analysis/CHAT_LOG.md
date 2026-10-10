@@ -1462,3 +1462,11 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     classified; largest other taxon at most 3.5% (mostly Homo).
   - Paused before P1/P2 for cost approval: remaining about 37
     (0.79 x 47), projected total about 108.
+- **QC slowdown diagnosed from task logs** (51710211 vs test 51635721):
+  TB-Profiler's freebayes step took a median 310 s (16-634 s) against 13 s in
+  the test; its alignment median 84 s against 59; fastp 48 s against 18.
+  Freebayes time barely tracks depth (r = 0.25); the fastest tasks were the
+  first few at low depth. Most likely cause: 51 tasks reading the
+  TB-Profiler database (118 MB, boslfs02) by random access at once, as with
+  kraken2. Not confirmed. Options: copy the database to node-local /tmp per
+  task; throttle arrays (runner `--throttle N`).
