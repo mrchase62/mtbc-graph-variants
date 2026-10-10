@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Recurrent read-artifact sites, masked as uncallable in each matched
 reference (user's decision, 2026-10-10). Written beside callable_mask.py's
-BEDs as <reference>.artifact.bed; score.py's load_masks unions the two.
+BEDs as <reference>.artifact.bed; score.py unions the two only with
+--artifact-mask (off by default: under evaluation, user 2026-10-10).
 
 One site so far, found in phaseB/dysgu_false.py: a 67 bp palindromic element
 (GGGCTGGCGAGCAGACGCAAAATCCCCCGCACGCCCGGCGTGTCGGGGGATTTTGCGTCTGCTCGCC, a

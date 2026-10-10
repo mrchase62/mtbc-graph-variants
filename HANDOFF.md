@@ -373,6 +373,13 @@ truvari-style size-aware matching in `score.py`: on clean reads ours+asm +
 dysgu (AF >= 0.2) is novel 0.797 recall / 0.826 precision, setE 0.744 /
 0.677, 1 false call across 12 clean controls. setE false calls now come
 mostly from our caller (32 of 50).
+The palindrome mask was then made opt-in (`--artifact-mask`) pending
+further evaluation; default numbers are without it (setE 0.744 / 0.580).
+Our caller's 46 setE false calls (no mask): 14 palindrome, 14 QC_7 (reads
+and assembly are different strains: identity check, `phaseB/ours_false.py`;
+TB1612 and TB3054 also flagged), 9 short-anchor reads (< 30 aligned bases;
+caller fix proposed), 6 real 24-29 bp indels below the truth's 50 bp, 3
+other.
 
 ## Earlier start-here (2026-10-05)
 

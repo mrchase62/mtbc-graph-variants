@@ -22,5 +22,6 @@ cat refbias/{marinB63,novelA40}/run/p1/refmap.tsv | awk -F'\t' '$5!="reference"{
       --ref refbias/build/7713a8d71d8e-fix1/refs/{}.fasta --h37rv "$MTB_H37RV" --h37rv-mask $MASK \
       --minimap2 $M2 --k8 "$MTB_K8" --paftools "$MTB_PAFTOOLS" --out $O/{}.bed.tmp && mv $O/{}.bed.tmp $O/{}.bed'
 # recurrent read-artifact sites (artifact_mask.py; added 2026-10-10), <ref>.artifact.bed
+# (used only with score.py --artifact-mask; under evaluation)
 "$MTB_PY" $N/artifact_mask.py --mask-dir $O
 ls $O/*.bed | grep -vc artifact

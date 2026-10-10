@@ -56,8 +56,9 @@ gridss_all uses every record.
 
 Callable sequence (--mask-dir with --refmap; Phase B): a true event or a call
 whose span +-50 bp touches the matched reference's uncallable mask
-(callable_mask.py, <reference>.bed, plus artifact_mask.py's
-<reference>.artifact.bed when present) is uncallable. Recall is then measured over callable true
+(callable_mask.py, <reference>.bed; plus artifact_mask.py's
+<reference>.artifact.bed with --artifact-mask, off by default: the mask is
+under evaluation, user 2026-10-10) is uncallable. Recall is then measured over callable true
 events only, and uncallable calls are flagged, not counted in precision.
 n_true_uncallable and calls_uncallable report how many were set aside.
 """
@@ -152,15 +153,15 @@ def at_event(c, t):
     return matches(c, t) or abs(c["start"] - t["start"]) <= TOL or abs(c["start"] - t["end"]) <= TOL
 
 
-def load_masks(refmap, mask_dir):
+def load_masks(refmap, mask_dir, artifacts=False):
     ref = {}
     for r in csv.DictReader(open(refmap), delimiter="\t"):
         ref[r["sample"]] = r["reference"]
     masks = {}
     for s, g in ref.items():
         beds = [os.path.join(mask_dir, f"{g}.bed")]
-        art = os.path.join(mask_dir, f"{g}.artifact.bed")  # artifact_mask.py, when built
-        if os.path.exists(art):
+        art = os.path.join(mask_dir, f"{g}.artifact.bed")  # artifact_mask.py; opt-in
+        if artifacts and os.path.exists(art):
             beds.append(art)
         iv = sorted((int(f[1]), int(f[2])) for p in beds for f in (x.split("\t") for x in open(p)))
         masks[s] = ([x[0] for x in iv], iv)
@@ -230,9 +231,11 @@ def main():
     ap.add_argument("--gridss-dir", help="GRIDSS output folder, <sample>/<sample>.gridss.vcf")
     ap.add_argument("--refmap", help="P1 refmap.tsv: sample -> matched reference")
     ap.add_argument("--mask-dir", help="callable_mask.py BEDs, <reference>.bed")
+    ap.add_argument("--artifact-mask", action="store_true",
+                    help="also mask artifact_mask.py's sites (under evaluation)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
-    masks = load_masks(a.refmap, a.mask_dir) if a.mask_dir else {}
+    masks = load_masks(a.refmap, a.mask_dir, a.artifact_mask) if a.mask_dir else {}
     truth = collections.defaultdict(list)
     for r in csv.DictReader(open(a.truth), delimiter="\t"):
         size = max(int(r["ref_len"]), int(r["alt_len"]))

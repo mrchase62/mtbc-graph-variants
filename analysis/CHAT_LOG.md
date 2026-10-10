@@ -1551,3 +1551,32 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     (54 calls), dysgu_af20 0.667/0.869 (61); setE ours 0.526/0.600 (80),
     dysgu_af20 0.603/0.760 (75). Controls: ours 1, dysgu_af20 0.
     Raw-read (before) side, same rules: novel 0.797/0.758, setE 0.795/0.667.
+- **Artifact mask made opt-in** (user: "don't commit to this mask yet"):
+  `score.py --artifact-mask`, `load_masks(..., artifacts=False)`; default
+  scoring no longer applies it. Outputs regenerated without it. Clean-read
+  rerun, no mask: ours+dysgu_af20 novel 0.800/0.829 (70 events), setE
+  0.744/0.580; controls ours 6, dysgu_af20 3.
+- **Our caller's setE false calls** (`phaseB/ours_false.py` ->
+  `out/qc51/ours_false_setE.tsv`, `identity.tsv`; no compute). 46 false of
+  94 typed calls, by cause:
+  - palindrome site 14 (the 67 bp deletion; mask decision open);
+  - truth mismatch 14, all QC_7: identity check (assembly SNPs vs read SNPs
+    vs R, callable sequence) gives 276 discordant for QC_7 (218 reads-only,
+    58 assembly-only) against 0-8 for 40 of 46 isolates. QC_7's reads are
+    not the strain its assembly is from; several of these calls are found by
+    dysgu at AF 0.3-0.4 too. Also flagged: TB1612 79 (68 assembly-only),
+    TB3054 42 (41 reads-only), both novel;
+  - short anchor 9 (+1 in novel, TB3162; 0 of 91 true calls): reads of
+    sequence absent from R (QC_1's sits in its own assembly at ~1.98 Mb)
+    aligned by a 19-base match at MAPQ 40, clipped on both sides; one read
+    set makes both clip clusters, so our caller calls an INS. Recur at the
+    same R positions in QC_1/QC_6/QC_7. Candidate fix: ignore clips from
+    reads with < 30 aligned bases (bwa's default minimum score, -T 30);
+  - small indel 6: real 24-29 bp indels in the assembly, below the truth's
+    50 bp; our caller reports them as INS of unknown size (not assembled);
+  - other 3: two tandem-repeat INS 72 bp where truth has 108 bp at the same
+    site, one unexplained (3003_06, 1171103).
+  - Projected setE ours / ours+dysgu_af20 (calls removed, not rerun):
+    now 0.526/0.511, 0.744/0.580; - short anchors 0.526/0.565, 0.744/0.610;
+    - QC_7 0.485/0.650, 0.727/0.664; + palindrome mask 0.485/0.830,
+    0.727/0.809.
