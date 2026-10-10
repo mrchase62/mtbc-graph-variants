@@ -1449,3 +1449,16 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   assembly, score per group). Known limit of score.py: isolates with no truth
   rows are not counted in precision, so control false calls are counted
   separately (as `controls/false_calls.py`).
+- **Rerun QC done** (51710211 QC 61.5 billing-hours, estimate 29.5;
+  kraken2 51710219 9.1, as estimated). QC tasks averaged 12.1 min (test
+  5.3) at about 1.3 of 4 cores busy and up to 6 GB memory; probably
+  filesystem contention with 51 tasks at once (not confirmed). Spent so far
+  70.7 of the approved 79.
+  - Result (`refbias/marinQC51/qc_report.tsv`, `qc_report.py`; page
+    https://claude.ai/artifact/3fhVaqUwwf8222jQKHWPpg): 47 PASS, 4 FAIL on
+    depth after QC (M0011368_9 45x, M0016395_7 49x, TB3368 58x: clean
+    controls; TB3386 55x: novel, 4 callable events), 11 excluded for
+    fold-back. TB-Profiler: none mixed. kraken2: MTBC 96.2-99.7% of
+    classified; largest other taxon at most 3.5% (mostly Homo).
+  - Paused before P1/P2 for cost approval: remaining about 37
+    (0.79 x 47), projected total about 108.
