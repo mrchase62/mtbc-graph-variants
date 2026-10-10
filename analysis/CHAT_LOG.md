@@ -1493,3 +1493,30 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     dysgu 37 -> 31 (1-7), delly 26 -> 21 (1-3).
   - Against the original full Phase B (raw, all isolates incl. N0153):
     novel ours+dysgu precision 0.11 -> 0.48 at recall 0.74 -> 0.77.
+- **delly dropped from novel-event scoring** (user, 2026-10-10): removed from
+  `score.py` (delly_all, delly_pass, dysgu+delly_pass) and
+  `phaseB/rerun_compare.py`; compare.tsv regenerated (other rows unchanged).
+  Production P2/P4b/P5 still run and use delly: not touched, decision open.
+- **dysgu's remaining false calls on clean reads** (`phaseB/dysgu_false.py`
+  -> `out/qc51/dysgu_calls.tsv`, `dysgu_filters.tsv`; existing outputs, no
+  compute). Same 46 isolates; labels by score.py's rules. dysgu PASS false
+  calls: novel 82, setE 95, controls 31.
+  - dysgu's AF (share of reads at the site with direct evidence; true events
+    in these clonal isolates have median 0.36, not ~1) separates them: true
+    calls median 0.38 (novel) / 0.34 (setE), false 0.05 / 0.18 / 0.07
+    (controls). SU separates less; PROB and MAPQP poorly.
+  - Filter sweep, ours+asm + dysgu (AF >= x), recall / precision:
+    none: novel 0.771/0.481, setE 0.744/0.393, controls 31 false;
+    AF>=0.1: 0.771/0.689, 0.718/0.447, 9; AF>=0.2: 0.771/0.735,
+    0.718/0.481, 3; AF>=0.3: 0.743/0.745, 0.615/0.464, 2.
+    setE loses 2 events at 0.1 or 0.2: INS 87 bp at 28469 in QC_1 and QC_6
+    (AF 0.04/0.06, our caller misses it).
+  - What survives AF>=0.2 (59 false): 31 within 200 bp of a true event and
+    5 within 1 kb (same-size insertions placed elsewhere in the same repeat,
+    or dysgu INS at the end of a true deletion: scoring tolerance, not
+    caller error); 15 are one 67 bp deletion of a palindromic sequence
+    (GGGCTGGCGAGCAGACGCAAAATCCCCCGCACG...) at the homologous locus near
+    2.35 Mb on several references, in 12 setE and 3 clean controls whose own
+    genome is the reference (so artifact; AF 0.2-0.4, split reads, our caller
+    calls it too); 8 other.
+  - Caveat: cutoff chosen on the same isolates it is scored on.

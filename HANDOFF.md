@@ -359,6 +359,16 @@ control artifact checks and Picard about 3, kraken2 about 18 (13 lost to the
 stall), 500-CRAM sample 1.5, cancelled fold-back simulation 12.2,
 real vs synthetic about 11, cohorts in use 3.6.
 
+**2026-10-10: delly dropped; dysgu false calls.** delly removed from
+novel-event scoring (production P2/P4b/P5 still use it; open). On clean
+reads, dysgu's false calls are mostly low-AF (dysgu FORMAT AF < 0.2).
+Requiring AF >= 0.2 for dysgu in the combination: novel recall 0.771 at
+precision 0.48 -> 0.74; setE recall 0.744 -> 0.718, precision 0.39 -> 0.48;
+control false calls 31 -> 3. Remaining false calls: mostly real events
+offset > 50 bp in repeats (scoring tolerance) and a recurrent 67 bp
+palindrome deletion near 2.35 Mb (artifact; also called by ours). Details:
+CHAT_LOG, `phaseB/dysgu_false.py`. Not yet applied.
+
 ## Earlier start-here (2026-10-05)
 
 **Audit (section 0m): 97 findings, and the current association results are

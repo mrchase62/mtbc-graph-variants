@@ -2,8 +2,9 @@
 """Score structural-event calls against the Phase A truth set.
 
 Callers: the prototype breakpoint caller (breakpoint_caller.py tables), and
-dysgu and delly from P2 (VCFs in the matched reference's coordinates), each
-scored with all calls and with PASS calls only.
+dysgu from P2 (VCF in the matched reference's coordinates), scored with all
+calls and with PASS calls only. delly was dropped 2026-10-10: typed recall
+0.10 on the Phase B novel events, adding nothing to our caller + dysgu.
 
 A call matches a true event when:
   - the start is within 50 bp of the true start, or, for deletions, the end
@@ -193,15 +194,12 @@ def main():
         "prototype": lambda s: read_proto(os.path.join(a.proto_dir, f"{s}.events.tsv")),
         "dysgu_all": lambda s: read_vcf(os.path.join(a.p2_dir, f"{s}.dysgu.vcf"), False),
         "dysgu_pass": lambda s: read_vcf(os.path.join(a.p2_dir, f"{s}.dysgu.vcf"), True),
-        "delly_all": lambda s: read_vcf(os.path.join(a.p2_dir, f"{s}.delly.vcf"), False),
-        "delly_pass": lambda s: read_vcf(os.path.join(a.p2_dir, f"{s}.delly.vcf"), True),
     }
     calls = {k: {s: f(s) for s in truth} for k, f in callers.items()}
     if a.gridss_dir:
         for nm, ps in (("gridss_pass", True), ("gridss_all", False)):
             calls[nm] = {s: read_gridss(os.path.join(a.gridss_dir, s, f"{s}.gridss.vcf"), ps)
                          for s in truth}
-    calls["dysgu+delly_pass"] = {s: calls["dysgu_pass"][s] + calls["delly_pass"][s] for s in truth}
     calls["prototype+dysgu_pass"] = {s: calls["prototype"][s] + calls["dysgu_pass"][s] for s in truth}
     if a.asm_dir:
         calls["proto_asm"] = {s: read_proto(os.path.join(a.asm_dir, f"{s}.events.tsv")) for s in truth}
