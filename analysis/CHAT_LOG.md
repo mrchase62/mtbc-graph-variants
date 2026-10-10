@@ -1598,3 +1598,15 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   isolates carrying it are DEL). Alternative to the mask: at the site, keep
   INS; keep DEL only when depth inside the element is ~0. One real DEL to
   test it on.
+- **The "palindrome site" is the user's tatC-helY hairpin element**
+  (MtbPangenome/loci/hely_tatc; H37Rv 2,352,065; 68 bp, CTCGCC direct
+  repeats, precise excision, ~30 independent deletions on the CX333 tree,
+  230/332 carriers). The low-AF deletion calls are the same precise 68 bp
+  excision product. Signal by batch, element carriers in marinQC51 (depth in
+  element / flanks; dysgu DEL AF, max per isolate): setE NextSeq 500
+  (SRR1419*, n=17) 0.14 (0.08-0.21), AF 0.23 (0.01-0.43); novel HiSeq 2500
+  (SRR6356/6807/7516, n=15) 0.22-0.30, AF 0.07-0.11; controls HiSeq 2500
+  (SRR1723*, n=10) 0.50 (0.35-0.66), AF 0.14 (0-0.37). Present in every
+  batch, strength batch-dependent. Library protocol not in ENA metadata.
+  Artifact (polymerase skipping the hairpin between the direct repeats) vs
+  real excision in culture not resolved; decisive test: PCR-free long reads.
