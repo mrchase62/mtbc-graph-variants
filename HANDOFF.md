@@ -343,8 +343,14 @@ Full log: `analysis/CHAT_LOG.md`; review: `analysis/novel_events/REVIEW_2026-10-
 
 **Next steps (awaiting the user)**
 1. Decide the fold-back cutoff for SV work and whether to rebuild cohorts.
-2. Full Phase B rerun with read QC (and the cutoff), about 90 billing-hours
-   before kraken2 savings.
+2. **Done 2026-10-09:** Phase B rerun on clean data (cohort `marinQC51`,
+   113.9 billing-hours; `analysis/novel_events/phaseB/out/qc51/compare.tsv`).
+   47 of 51 passed QC; 46 compared (QC_10 changed reference). Novel,
+   ours + dysgu PASS: typed recall 0.77, precision 0.48 (was 0.28 on raw
+   reads of the same isolates, 0.11 on the original full set). setE 0.74 /
+   0.39. 12 clean controls: 0-1 false calls each from ours, 1-7 from dysgu.
+   QC tasks ran 2x slower than tested (TB-Profiler database on boslfs02
+   under 51 concurrent tasks); now copied to node-local /tmp, untested.
 3. Earlier review items still open: the 7-10 noisy controls are now
    explained; IS6110 presence/absence from unique flanks is not started.
 
