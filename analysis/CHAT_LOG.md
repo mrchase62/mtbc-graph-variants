@@ -1470,3 +1470,9 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   TB-Profiler database (118 MB, boslfs02) by random access at once, as with
   kraken2. Not confirmed. Options: copy the database to node-local /tmp per
   task; throttle arrays (runner `--throttle N`).
+- **TB-Profiler database copied to node-local /tmp per QC task** (user approved;
+  `08_qc.sbatch`, `cp -rL` into the task folder, `--db_dir` points there).
+  Untested until the next QC run.
+- **Rerun continued (user approved, throttle 15):** cohort tables 47 PASS;
+  P1 51741763/76, P2 51741784/86 (`--throttle 15`, arrays 1-47%15), callers
+  and scoring 51741788.
