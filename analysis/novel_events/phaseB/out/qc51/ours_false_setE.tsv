@@ -1,0 +1,38 @@
+sample	type	start	end	size	support	source	cause	short_anchor_reads	asm_small_indel	dysgu	dysgu_af20
+mar_3003_06	INS	1171103	1171108	0	31	clip;one_end=2;not assembled	other	0/64		True	False
+mar_3003_06	DEL	2347929	2347990	62	11	clip;not assembled (window > 20 kb)	palindrome	0/32		True	True
+mar_3003_06	INS	4232199	4232200	0	40	clip;one_end=0;not assembled	small_indel	0/82	del29	False	False
+mar_4549_04	INS	4232199	4232200	0	27	clip;one_end=1;not assembled	small_indel	0/54	del29	False	False
+mar_696_05	DEL	2347929	2347990	62	6	clip;not assembled (window > 20 kb)	palindrome	0/43		True	False
+mar_702_06	INS	801398	801398	72	109	clip;tandem_dup;not assembled	other	0/87		True	True
+mar_702_06	DEL	2347929	2347990	62	17	clip;not assembled (window > 20 kb)	palindrome	0/39		True	True
+mar_706_05	DEL	2128222	2128289	68		assembled	palindrome	0/33		True	True
+mar_8129_04	DEL	2349229	2349296	68		assembled	palindrome	0/39		True	True
+mar_8651_04	DEL	2347929	2347990	62	6	clip;not assembled (window > 20 kb)	palindrome	0/17		True	False
+mar_9050_05	INS	801398	801398	72	91	clip;tandem_dup;not assembled	other	0/74		True	True
+mar_9050_05	DEL	2347929	2347990	62	13	clip;not assembled (window > 20 kb)	palindrome	0/41		True	True
+mar_QC_3	DEL	2377044	2377105	62	13	clip;not assembled (window > 20 kb)	palindrome	0/34		True	False
+mar_QC_4	INS	693411	693412	0	88	clip;one_end=2;not assembled	small_indel	0/182	ins28	False	False
+mar_QC_4	DEL	2359579	2359646	68		assembled	palindrome	0/51		True	True
+mar_QC_5	DEL	2377044	2377105	62	25	clip;not assembled (window > 20 kb)	palindrome	0/54		True	True
+mar_QC_6	DEL	2348903	2348964	62	18	clip;not assembled (window > 20 kb)	palindrome	0/49		True	True
+mar_QC_6	INS	3662566	3662567	0	24	clip;one_end=0;not assembled (window > 20 kb)	small_indel	0/50	del24	False	False
+mar_QC_7	REARR	28469	28556	87	12	clip;not assembled	truth_mismatch	0/29		False	False
+mar_QC_7	INS	62755	62757	0	44	clip;one_end=1;not assembled	truth_mismatch	0/88		True	False
+mar_QC_7	INV	455233	455540	307	2	clip;not assembled	truth_mismatch	0/57		False	False
+mar_QC_7	INS	482863	482868	0	40	clip;one_end=0;not assembled	truth_mismatch	0/86		True	False
+mar_QC_7	DEL	1529154	1531800	2647	23	clip;not assembled	truth_mismatch	0/36		True	True
+mar_QC_7	INS	1718697	1718699	0	34	clip;one_end=1;not assembled	truth_mismatch	0/68		True	False
+mar_QC_7	INS	1837116	1837116	68	15	clip;tandem_dup;not assembled (window > 20 kb)	truth_mismatch	0/26		True	True
+mar_QC_7	DEL	2348903	2348964	62	17	clip;not assembled (window > 20 kb)	palindrome	0/47		True	True
+mar_QC_7	INS	2357546	2357555	0	28	clip;one_end=0;not assembled (window > 20 kb)	truth_mismatch	0/34		True	False
+mar_QC_7	DEL	2711139	2711215	77	20	clip;not assembled (window > 20 kb)	truth_mismatch	0/43		True	True
+mar_QC_7	INS	2727800	2727802	0	45	clip;one_end=0;not assembled (window > 20 kb)	truth_mismatch	0/96		True	False
+mar_QC_7	DEL	3118577	3119101	525	18	clip;not assembled (window > 20 kb)	truth_mismatch	0/46		False	False
+mar_QC_7	INS	3418784	3418786	0	73	clip;one_end=1;not assembled	truth_mismatch	0/148		True	True
+mar_QC_7	INS	3539113	3539115	0	52	clip;one_end=0;not assembled	truth_mismatch	0/106		True	True
+mar_QC_7	INS	3543935	3543937	0	29	clip;one_end=0;not assembled	truth_mismatch	0/60		False	False
+mar_QC_7	INS	3662566	3662567	0	25	clip;one_end=0;not assembled	small_indel	0/54	del24	True	False
+mar_QC_8	INS	693411	693412	0	74	clip;one_end=1;not assembled	small_indel	0/160	ins28	False	False
+mar_QC_8	DEL	2359579	2359646	68		assembled	palindrome	0/35		True	True
+mar_QC_9	DEL	2377044	2377105	62	14	clip;not assembled (window > 20 kb)	palindrome	0/43		True	True

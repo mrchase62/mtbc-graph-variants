@@ -1709,3 +1709,19 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - Exclusions + genotype rule on pre-fix outputs (44 isolates): combo
     (ours+asm + dysgu AF>=0.2) novel 0.806 / 0.825, setE 0.727 / 0.774;
     controls: ours 1 false call, dysgu_af20 0.
+- **Short-anchor fix result** (51902242, 29 min, ~3 CPU-h). Calls changed vs
+  `qc51_v3b`: 28 false calls removed (all 9 known short-anchor setE calls,
+  plus 19 others in setE/novel/controls, e.g. TB3054 x5, TB3162 x5 incl. its
+  known one), 0 true events lost. Two true calls changed form only:
+  mar_4549_04's two overlapping DEL calls merged into one; TB3091's
+  redundant INS at the far end of a true 140 bp REPL became a BND (the DEL
+  call still matches the event). 1 false call gained (TB3162 DEL extended).
+  Final, 44 isolates (QC_7, TB1612 excluded; QC_10 reference changed),
+  tatC-helY genotype rule, recall / precision:
+    novel: ours 0.537 / 0.788; ours+dysgu AF>=0.2 0.806 / 0.832
+    setE:  ours 0.485 / 0.830; ours+dysgu AF>=0.2 0.727 / 0.809
+    12 clean controls: ours 1 false call, dysgu AF>=0.2 0.
+  Before these three changes (46 isolates, no rule): setE combo 0.744 /
+  0.580, ours alone 0.526 / 0.511. Remaining setE false calls of ours
+  (ours_false.py, before exclusion/rule): 14 tatC-helY (now dropped by the
+  rule), 14 QC_7 (excluded), 6 real 24-29 bp indels, 3 other.

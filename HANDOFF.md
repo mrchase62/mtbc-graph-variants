@@ -389,9 +389,16 @@ library/sequencing artifact; real losses (all reads, zero inside depth) are
 unaffected. Fold-back rate tracks it only by batch (`foldback_vs_element.py`),
 so the fold-back filter will not remove it. QC_7's Nanopore reads look mixed
 (755253 61% absent, Rv2273 45%), a likely cause of its read-vs-assembly
-mismatch. Open SV-calling decisions: short-anchor caller fix (~6 billing-h),
-excluding QC_7 (TB1612, TB3054 borderline), genotyping rule at tatC-helY
-(DEL only when inside depth ~0) instead of the mask.
+mismatch. Applied (user, 2026-10-10): short-anchor caller fix (breakpoint_caller.py
+v4: clips count only from reads with >= 30 aligned bases; removed 28 false
+calls, no true event lost); QC_7 and TB1612 excluded as mixed
+(phaseB/exclude.tsv; TB3054 kept: a duplicated region, not mixture);
+tatC-helY genotype rule (element_genotype.py + score.py --element-gt: drop
+DEL at the site when reads cover the element). Result, 44 isolates, ours +
+dysgu AF>=0.2: novel 0.806 recall / 0.832 precision, setE 0.727 / 0.809,
+controls 0 false calls from dysgu, 1 from ours. Remaining false calls of
+ours in setE: 6 real 24-29 bp indels below the 50 bp truth cutoff, 3 other.
+Production P2/P4b/P5 are not yet updated with these changes.
 
 ## Earlier start-here (2026-10-05)
 
