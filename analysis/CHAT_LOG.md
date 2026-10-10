@@ -1476,3 +1476,20 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - **Rerun continued (user approved, throttle 15):** cohort tables 47 PASS;
   P1 51741763/76, P2 51741784/86 (`--throttle 15`, arrays 1-47%15), callers
   and scoring 51741788.
+- **Phase B rerun on clean data: results** (`phaseB/rerun_compare.py` ->
+  `out/qc51/compare.tsv`). Cost: P1 14.6, P2 22.5, callers 6.1 = 43.2
+  (estimate 37); rerun total 113.9 (QC 61.5, kraken2 9.1). 47 passed QC:
+  18 novel, 17 setE, 12 clean controls (I earlier said 17/17/13: wrong).
+  QC_10's P1 reference changed on clean reads, so it is left out of both
+  sides (truth is in the old reference's coordinates): 46 compared.
+  Same isolates, raw reads (before) vs clean (after), callable sequence,
+  typed recall / precision (typed calls):
+  - novel (70 events): ours+dysgu 0.77/0.28 (318) -> 0.77/0.48 (189);
+    dysgu 0.69/0.20 (262) -> 0.71/0.39 (134); ours 0.50/0.66 (56) ->
+    0.50/0.71 (55); delly 0.10 recall either way.
+  - setE (78 events): ours+dysgu 0.81/0.33 (302) -> 0.74/0.39 (244);
+    dysgu 0.65/0.27 -> 0.65/0.37; ours 0.51/0.46 -> 0.50/0.44.
+  - 12 clean controls, typed calls (all false): ours 7 -> 6 (0-1 each),
+    dysgu 37 -> 31 (1-7), delly 26 -> 21 (1-3).
+  - Against the original full Phase B (raw, all isolates incl. N0153):
+    novel ours+dysgu precision 0.11 -> 0.48 at recall 0.74 -> 0.77.
