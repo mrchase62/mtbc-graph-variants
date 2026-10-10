@@ -1766,3 +1766,19 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   60 bp with DP >= 50% of the isolate's median depth and alt fraction >= 0.9
   (HC's small allele explains all reads at full depth; a large insertion
   cannot). Removes 11 false calls, 0 true, here.
+- **HaplotypeCaller hand-off applied (user, 2026-10-10)**: `score.py
+  --hc-dir` (rerun_compare passes P2). Drop an SV call when a PASS HC indel
+  of 10-49 bp lies within 60 bp with DP >= 50% of the isolate's median SNP
+  DP and alt >= 90% of AD. 44 isolates: recall unchanged everywhere; true
+  calls unchanged (setE 89, novel 94). ours+dysgu AF>=0.2: novel 0.806 /
+  0.879 (was 0.832), setE 0.727 / 0.848 (was 0.809); ours alone setE
+  0.485 / 0.929.
+- **Harmonization (user asked: should IS6110, SV and HC calls be
+  harmonized?).** Production keeps three separate outputs with no
+  cross-check: HC small variants -> P5 small-variant matrix; delly + dysgu
+  -> P4b (merged across SV callers only, --min-sv 50) -> p5_sv_matrix.py, a
+  separate table; IS6110 arm -> is6110_p5_merge.py, symbolic <INS> keys in
+  P5's key space. Nothing in P4b / p5_sv_matrix refers to IS6110 or to HC
+  indels, so one event can be represented more than once (an IS6110
+  insertion as an IS6110 key and a dysgu INS; a 30-49 bp indel as a HC
+  allele and a dysgu call, dysgu's minimum is 30 bp). Not measured yet.

@@ -1,24 +1,24 @@
 group	run	isolates	caller	n_true	typed_recall	breakpoint_recall	typed_calls	precision	per_isolate
-novel	before	17	dysgu_pass	67	0.731	0.761	236	0.246	
-novel	before	17	dysgu_af20	67	0.687	0.716	68	0.794	
-novel	before	17	proto_asm	67	0.537	0.746	54	0.722	
-novel	before	17	proto_asm+dysgu_pass	67	0.806	0.836	290	0.334	
-novel	before	17	proto_asm+dysgu_af20	67	0.806	0.836	122	0.762	
-novel	after	17	dysgu_pass	67	0.746	0.761	116	0.491	
-novel	after	17	dysgu_af20	67	0.687	0.701	61	0.869	
-novel	after	17	proto_asm	67	0.537	0.746	52	0.788	
-novel	after	17	proto_asm+dysgu_pass	67	0.806	0.821	168	0.583	
-novel	after	17	proto_asm+dysgu_af20	67	0.806	0.821	113	0.832	
-setE_polished	before	15	dysgu_pass	66	0.697	0.697	164	0.378	
+novel	before	17	dysgu_pass	67	0.731	0.761	232	0.25	
+novel	before	17	dysgu_af20	67	0.687	0.716	66	0.818	
+novel	before	17	proto_asm	67	0.537	0.746	50	0.78	
+novel	before	17	proto_asm+dysgu_pass	67	0.806	0.836	282	0.344	
+novel	before	17	proto_asm+dysgu_af20	67	0.806	0.836	116	0.802	
+novel	after	17	dysgu_pass	67	0.746	0.761	112	0.509	
+novel	after	17	dysgu_af20	67	0.687	0.701	59	0.898	
+novel	after	17	proto_asm	67	0.537	0.746	48	0.854	
+novel	after	17	proto_asm+dysgu_pass	67	0.806	0.821	160	0.613	
+novel	after	17	proto_asm+dysgu_af20	67	0.806	0.821	107	0.879	
+setE_polished	before	15	dysgu_pass	66	0.697	0.697	163	0.38	
 setE_polished	before	15	dysgu_af20	66	0.636	0.636	66	0.788	
-setE_polished	before	15	proto_asm	66	0.515	0.727	53	0.774	
-setE_polished	before	15	proto_asm+dysgu_pass	66	0.818	0.833	217	0.475	
-setE_polished	before	15	proto_asm+dysgu_af20	66	0.803	0.818	119	0.782	
+setE_polished	before	15	proto_asm	66	0.515	0.727	48	0.854	
+setE_polished	before	15	proto_asm+dysgu_pass	66	0.818	0.833	211	0.488	
+setE_polished	before	15	proto_asm+dysgu_af20	66	0.803	0.818	114	0.816	
 setE_polished	after	15	dysgu_pass	66	0.667	0.667	105	0.571	
 setE_polished	after	15	dysgu_af20	66	0.606	0.606	63	0.794	
-setE_polished	after	15	proto_asm	66	0.485	0.697	47	0.83	
-setE_polished	after	15	proto_asm+dysgu_pass	66	0.742	0.758	152	0.651	
-setE_polished	after	15	proto_asm+dysgu_af20	66	0.727	0.758	110	0.809	
+setE_polished	after	15	proto_asm	66	0.485	0.697	42	0.929	
+setE_polished	after	15	proto_asm+dysgu_pass	66	0.742	0.758	147	0.673	
+setE_polished	after	15	proto_asm+dysgu_af20	66	0.727	0.758	105	0.848	
 in_panel	before	12	proto_asm	0			2		0,0,0,0,2,0,0,0,0,0,0,0
 in_panel	before	12	dysgu_pass	0			28		3,3,0,3,6,1,2,1,1,2,3,3
 in_panel	before	12	dysgu_af20	0			0		0,0,0,0,0,0,0,0,0,0,0,0

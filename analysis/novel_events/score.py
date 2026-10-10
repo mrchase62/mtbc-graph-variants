@@ -68,6 +68,16 @@ overlapping the element site +-50 bp is dropped when the isolate's genotype
 is present (reads inside the element; the low-fraction DEL is a short-read
 artifact, longread/lr_element.py). INS calls, and DEL calls in isolates
 whose genotype is absent, are kept. calls_element_dropped counts them.
+
+Small-indel hand-off (--hc-dir, P2 HaplotypeCaller VCFs <sample>.vcf.gz;
+added 2026-10-10, user): an SV call is dropped when HaplotypeCaller has a
+PASS indel of 10-49 bp within 60 bp of its start that every read explains:
+depth >= 50% of the isolate's median depth (median DP of its PASS SNPs) and
+alt reads >= 90% of AD. bwa clips reads at a 20-30 bp indel, so the SV
+callers report it again as an INS of unknown size; HaplotypeCaller calls it
+at its true size. A large insertion near a small HC call is kept: reads
+cannot cross it, so HC's depth there collapses (8129_04's 1,360 bp IS6110:
+DP 17 of ~100, AD 6,11). calls_hc_dropped counts them.
 """
 import argparse
 import collections
@@ -191,6 +201,45 @@ def element_artifact(gt, s, c):
         c["start"] <= x[1] + TOL and c["end"] >= x[0] - TOL
 
 
+def load_hc_small(path):
+    """HaplotypeCaller VCF -> [(pos, indel length, DP, alt fraction)] for PASS
+    10-49 bp indels, and the median DP of PASS SNPs."""
+    import gzip
+    if not os.path.exists(path):
+        return [], 0
+    ind, snp_dp = [], []
+    for line in gzip.open(path, "rt"):
+        if line.startswith("#"):
+            continue
+        c = line.rstrip("\n").split("\t")
+        if c[6] not in ("PASS", "."):
+            continue
+        fmt = dict(zip(c[8].split(":"), c[9].split(":")))
+        try:
+            dp = int(fmt.get("DP", "0"))
+            ad = [int(x) for x in fmt.get("AD", "").split(",")]
+        except ValueError:
+            continue
+        alts = c[4].split(",")
+        if len(c[3]) == 1 and all(len(a) == 1 for a in alts):
+            snp_dp.append(dp)
+            continue
+        for i, alt in enumerate(alts, 1):
+            d = len(alt) - len(c[3])
+            if 10 <= abs(d) < 50 and len(ad) > i and sum(ad):
+                ind.append((int(c[1]), d, dp, ad[i] / sum(ad)))
+    snp_dp.sort()
+    return ind, (snp_dp[len(snp_dp) // 2] if snp_dp else 0)
+
+
+def hc_small_indel(hc, c):
+    """An SV call that is a HaplotypeCaller 10-49 bp indel explained by every read."""
+    if not hc or c["type"] == "BND":
+        return False
+    ind, med = hc
+    return any(abs(p - c["start"]) <= 60 and dp >= 0.5 * med and af >= 0.9 for p, _, dp, af in ind)
+
+
 def masked(m, s, e):
     if m is None:
         return False
@@ -257,6 +306,7 @@ def main():
     ap.add_argument("--artifact-mask", action="store_true",
                     help="also mask artifact_mask.py's sites (under evaluation)")
     ap.add_argument("--element-gt", help="element_genotype.py table: drop DEL at the tatC-helY site in carriers")
+    ap.add_argument("--hc-dir", help="P2 HaplotypeCaller VCFs: drop SV calls that are its 10-49 bp indels")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     egt = load_element_gt(a.element_gt) if a.element_gt else {}
@@ -290,12 +340,15 @@ def main():
         calls["proto_asm+depth+dysgu_pass"] = {s: calls["proto_asm+depth"][s] + calls["dysgu_pass"][s]
                                                for s in truth}
 
-    n_el = collections.Counter()
+    hcs = {s: load_hc_small(os.path.join(a.hc_dir, f"{s}.vcf.gz")) for s in truth} if a.hc_dir else {}
+    n_el, n_hc = collections.Counter(), collections.Counter()
     for name, by_s in calls.items():
         for s in by_s:
             kept = [c for c in by_s[s] if not element_artifact(egt, s, c)]
             n_el[name] += len(by_s[s]) - len(kept)
-            by_s[s] = kept
+            kept2 = [c for c in kept if not hc_small_indel(hcs.get(s), c)]
+            n_hc[name] += len(kept) - len(kept2)
+            by_s[s] = kept2
     rows = []
     n_unc_truth = collections.Counter()
     for s, ts in truth.items():
@@ -336,7 +389,8 @@ def main():
                              breakpoint_recall=round(b / n, 3), typed_calls=n_calls,
                              precision=round(prec, 3),
                              n_true_uncallable=n_unc_truth[k] if k == "all" else "",
-                             calls_uncallable=n_unc_calls, calls_element_dropped=n_el[name]))
+                             calls_uncallable=n_unc_calls, calls_element_dropped=n_el[name],
+                             calls_hc_dropped=n_hc[name]))
     with open(a.out, "w") as fo:
         w = csv.DictWriter(fo, fieldnames=list(rows[0]), delimiter="\t")
         w.writeheader()

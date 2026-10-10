@@ -17,7 +17,8 @@ directly because score.py skips isolates without truth rows.
 Isolates in phaseB/exclude.tsv (mixed samples: reads and the assembly that
 gives their truth are not one strain) are left out of both runs.
 DEL calls at the tatC-helY site in isolates carrying the element are
-dropped (score.py --element-gt; element_genotype.py per run).
+dropped (score.py --element-gt; element_genotype.py per run), and so are
+SV calls that are HaplotypeCaller 10-49 bp indels (score.py --hc-dir).
 
 Writes out/qc51/compare.tsv and prints a summary.
 """
@@ -29,7 +30,7 @@ import sys
 
 N = "../analysis/novel_events"
 sys.path.insert(0, N)
-from score import element_artifact, load_element_gt, load_masks, masked, read_proto, read_vcf  # noqa: E402
+from score import element_artifact, hc_small_indel, load_element_gt, load_hc_small, load_masks, masked, read_proto, read_vcf  # noqa: E402
 
 RM_AFTER = "refbias/marinQC51/run/p1/refmap.tsv"
 RM_BEFORE = "refbias/marinB63/run/p1/refmap.tsv"
@@ -61,7 +62,7 @@ def main():
             o = f"{out_dir}/score_{run}.{grp}.tsv"
             subprocess.run([sys.executable, f"{N}/score.py", "--truth", t, "--proto-dir", p["proto"],
                             "--asm-dir", p["asm"], "--p2-dir", p["p2"], "--refmap", p["rm"],
-                            "--mask-dir", f"{N}/out/masks", "--element-gt", p["gt"], "--out", o],
+                            "--mask-dir", f"{N}/out/masks", "--element-gt", p["gt"], "--hc-dir", p["p2"], "--out", o],
                            check=True, stdout=subprocess.DEVNULL)
             for r in csv.DictReader(open(o), delimiter="\t"):
                 if r["stratum"] == "all" and r["caller"] in CALLERS:
@@ -75,12 +76,13 @@ def main():
         egt = load_element_gt(p["gt"])
         per = collections.defaultdict(list)
         for s in ctl:
+            hc = load_hc_small(f"{p['p2']}/{s}.vcf.gz")
             calls = dict(proto_asm=read_proto(f"{p['asm']}/{s}.events.tsv"),
                          dysgu_pass=read_vcf(f"{p['p2']}/{s}.dysgu.vcf", True),
                          dysgu_af20=read_vcf(f"{p['p2']}/{s}.dysgu.vcf", True, 0.2))
             for c, cs in calls.items():
                 per[c].append(sum(1 for x in cs if x["type"] != "BND" and not masked(masks[s], x["start"], x["end"])
-                                   and not element_artifact(egt, s, x)))
+                                   and not element_artifact(egt, s, x) and not hc_small_indel(hc, x)))
         for c, v in per.items():
             rows.append(dict(group="in_panel", run=run, isolates=len(ctl), caller=c, n_true=0,
                              typed_calls=sum(v), precision="", typed_recall="", breakpoint_recall="",
