@@ -1742,3 +1742,14 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - So all 9 remaining setE false calls of ours are real sequence
     differences: 6 indels of 24-29 bp, 1 event sized wrong, 1 subclonal
     IS6110 insertion.
+- **3003_06 IS6110 at 1,171,103 in Nanopore reads** (user approved;
+  02_align.sbatch 51934978, 3.6 min, ~0.25 CPU-h; `longread/lr_site.py`).
+  Reads covering the site: 17 with a 1,329-1,433 bp insertion there, 23
+  clipped there by >= 1 kb (rest of the read aligned elsewhere), 136 running
+  straight through. All 40 inserted/clipped sequences align to the
+  reference's own IS6110 copy end to end (minimap2, identity 0.79-0.94,
+  Nanopore error level). Insertion in 11% of fully spanning reads, 23%
+  counting the clipped ones; short reads 38%. Subclonal in both DNA
+  preparations, so the assembly's consensus correctly lacks it, and the
+  truth set (majority sequence) cannot contain it. A real event scored false
+  by construction; no scoring change.
