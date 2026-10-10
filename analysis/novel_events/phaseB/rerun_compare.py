@@ -28,7 +28,7 @@ from score import load_masks, masked, read_proto, read_vcf  # noqa: E402
 
 RM_AFTER = "refbias/marinQC51/run/p1/refmap.tsv"
 RM_BEFORE = "refbias/marinB63/run/p1/refmap.tsv"
-CALLERS = ("proto_asm", "dysgu_pass", "proto_asm+dysgu_pass")
+CALLERS = ("proto_asm", "dysgu_pass", "dysgu_af20", "proto_asm+dysgu_pass", "proto_asm+dysgu_af20")
 RUNS = {"before": dict(proto=f"{N}/phaseB/out/v3b/proto", asm=f"{N}/phaseB/out/v3b/asm",
                        p2="refbias/marinB63/run/p2", rm=RM_BEFORE),
         "after": dict(proto=f"{N}/phaseB/out/qc51/proto", asm=f"{N}/phaseB/out/qc51/asm",
@@ -69,7 +69,8 @@ def main():
         per = collections.defaultdict(list)
         for s in ctl:
             calls = dict(proto_asm=read_proto(f"{p['asm']}/{s}.events.tsv"),
-                         dysgu_pass=read_vcf(f"{p['p2']}/{s}.dysgu.vcf", True))
+                         dysgu_pass=read_vcf(f"{p['p2']}/{s}.dysgu.vcf", True),
+                         dysgu_af20=read_vcf(f"{p['p2']}/{s}.dysgu.vcf", True, 0.2))
             for c, cs in calls.items():
                 per[c].append(sum(1 for x in cs if x["type"] != "BND" and not masked(masks[s], x["start"], x["end"])))
         for c, v in per.items():

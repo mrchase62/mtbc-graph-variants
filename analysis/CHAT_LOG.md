@@ -1520,3 +1520,34 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     genome is the reference (so artifact; AF 0.2-0.4, split reads, our caller
     calls it too); 8 other.
   - Caveat: cutoff chosen on the same isolates it is scored on.
+- **Applied (user, 2026-10-10): dysgu AF >= 0.2, palindrome-locus mask,
+  scoring fix.**
+  - `score.py`: `dysgu_af20` (PASS and FORMAT AF >= 0.2) and
+    `proto_asm+dysgu_af20` (the combination from now on; the unfiltered
+    rows kept for reference). Matching: `matches()` adds truvari bench's
+    default rule (starts within 500 bp, sizes within 70%; truvari's sequence
+    similarity test not applied, no allele sequences); `at_event()` (for
+    precision and breakpoint recall) also accepts a call within 50 bp of the
+    true end. Call sizes from SVLEN / the tables' size column.
+    `controls/false_calls.py` and `phaseB/dysgu_false.py` use the same rules;
+    `realsyn/compare.py` (call vs call) keeps `near()`.
+  - `artifact_mask.py`: masks the 67 bp palindrome site in every matched
+    reference by its two flanking 30-mers (between flanks: 50 references;
+    GCF_001870145 has one flank only, +-100 bp masked). Written as
+    `out/masks/<ref>.artifact.bed`; `load_masks` unions it; `07_masks.sbatch`
+    runs it. Element present in 41 of 51 references: the site varies between
+    strains. Cost: TB3237's true 68 bp insertion (its reference lacks the
+    element) is now uncallable; it had been found.
+  - Regenerated: `out/qc51/compare.tsv`, `score_*`, `dysgu_*`. Earlier
+    stages' score files keep the old rules.
+  - Same 46 isolates, clean reads, ours+asm + dysgu, recall / precision
+    (false calls); one change at a time:
+    old rules:        novel 0.771/0.481 (98), setE 0.744/0.393 (148), controls 37
+    + AF >= 0.2:      0.771/0.735 (31), 0.718/0.481 (94), 9
+    + mask:           0.768/0.730 (31), 0.718/0.561 (68), 1
+    + scoring fix:    0.797/0.826 (20), 0.744/0.677 (50), 1
+    (scoring fix alone: 0.800/0.540, 0.756/0.484). Novel truth now 69
+    callable events. By caller after all three: novel ours 0.536/0.778
+    (54 calls), dysgu_af20 0.667/0.869 (61); setE ours 0.526/0.600 (80),
+    dysgu_af20 0.603/0.760 (75). Controls: ours 1, dysgu_af20 0.
+    Raw-read (before) side, same rules: novel 0.797/0.758, setE 0.795/0.667.

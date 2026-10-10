@@ -367,7 +367,12 @@ precision 0.48 -> 0.74; setE recall 0.744 -> 0.718, precision 0.39 -> 0.48;
 control false calls 31 -> 3. Remaining false calls: mostly real events
 offset > 50 bp in repeats (scoring tolerance) and a recurrent 67 bp
 palindrome deletion near 2.35 Mb (artifact; also called by ours). Details:
-CHAT_LOG, `phaseB/dysgu_false.py`. Not yet applied.
+CHAT_LOG, `phaseB/dysgu_false.py`.
+Applied the same day, with a palindrome-site mask (`artifact_mask.py`) and
+truvari-style size-aware matching in `score.py`: on clean reads ours+asm +
+dysgu (AF >= 0.2) is novel 0.797 recall / 0.826 precision, setE 0.744 /
+0.677, 1 false call across 12 clean controls. setE false calls now come
+mostly from our caller (32 of 50).
 
 ## Earlier start-here (2026-10-05)
 

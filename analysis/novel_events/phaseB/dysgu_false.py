@@ -8,7 +8,7 @@ unchanged). Calls: dysgu PASS, typed (BND excluded), in callable sequence,
 as in score.py.
 
 Each call is labelled
-  true    within 50 bp of a true event of its isolate (score.py's precision rule)
+  true    at a true event of its isolate (score.py's precision rule, at_event)
   false   otherwise
 and carries dysgu's evidence fields: AF (share of reads at the site that
 support the event), SU (supporting reads), PE / SR / SC (pairs, split reads,
@@ -29,7 +29,7 @@ import sys
 
 N = "../analysis/novel_events"
 sys.path.insert(0, N)
-from score import COMPAT, TOL, load_masks, masked, near, read_proto  # noqa: E402
+from score import COMPAT, at_event, load_masks, masked, matches, read_proto  # noqa: E402
 
 OUT = f"{N}/phaseB/out/qc51"
 P2 = "refbias/marinQC51/run/p2"
@@ -53,7 +53,9 @@ def read_dysgu(path):
         t = {"DUP": "INS", "BND": "REARR", "TRA": "REARR"}.get(info.get("SVTYPE", ""), info.get("SVTYPE", ""))
         pos = int(c[1])
         end = int(info["END"]) if info.get("END", "").lstrip("-").isdigit() else pos
-        d = dict(type=t, start=pos, end=max(pos, end), svlen=abs(int(info.get("SVLEN", 0) or 0)),
+        svlen = abs(int(info.get("SVLEN", 0) or 0))
+        d = dict(type=t, start=pos, end=max(pos, end), svlen=svlen,
+                 size=svlen or (max(pos, end) - pos + 1 if t in ("DEL", "INV") and end > pos else None),
                  kind=info.get("KIND", ""), ct=info.get("CT", ""))
         for f in FIELDS:
             try:
@@ -74,7 +76,8 @@ def main():
     for g in ("novel", "setE_polished", "in_panel"):
         for r in csv.DictReader(open(f"{OUT}/truth.{g}.tsv"), delimiter="\t"):
             if r["sample"] in keep:
-                truth[r["sample"]].append(dict(type=r["type"], start=int(r["r_start"]), end=int(r["r_end"])))
+                truth[r["sample"]].append(dict(type=r["type"], start=int(r["r_start"]), end=int(r["r_end"]),
+                                               size=max(int(r["ref_len"]), int(r["alt_len"]))))
     # as in score.py: a call is true if near any true event; recall counts callable true events only
     truth_all = {s: list(truth[s]) for s in keep}
     for s in keep:
@@ -88,10 +91,10 @@ def main():
     rows = []
     for s in keep:
         for c in dys[s]:
-            c["true"] = any(near(c, t) or abs(c["start"] - t["start"]) <= TOL for t in truth_all[s])
+            c["true"] = any(at_event(c, t) for t in truth_all[s])
             c["recurrent"] = sum(1 for o in keep if o != s and ref[o] == ref[s]
-                                 and any(abs(x["start"] - c["start"]) <= TOL for x in dys[o]))
-            c["ours_also"] = any(abs(x["start"] - c["start"]) <= TOL for x in ours[s])
+                                 and any(abs(x["start"] - c["start"]) <= 50 for x in dys[o]))
+            c["ours_also"] = any(abs(x["start"] - c["start"]) <= 50 for x in ours[s])
             rows.append(dict(sample=s, group=groups[s], reference=ref[s], label="true" if c["true"] else "false",
                              **{k: c[k] for k in ("type", "start", "end", "svlen", "kind", "ct") + FIELDS
                                 + ("recurrent", "ours_also")}))
@@ -106,12 +109,12 @@ def main():
             iso = [s for s in keep if groups[s] == g]
             fd = {s: [c for c in dys[s] if keep_call(c)] for s in iso}
             n_true = sum(len(truth[s]) for s in iso)
-            hit_d = sum(any(c["type"] in COMPAT[t["type"]] and near(c, t) for c in fd[s]) for s in iso for t in truth[s])
-            hit_c = sum(any(c["type"] in COMPAT[t["type"]] and near(c, t) for c in fd[s] + ours[s])
+            hit_d = sum(any(c["type"] in COMPAT[t["type"]] and matches(c, t) for c in fd[s]) for s in iso for t in truth[s])
+            hit_c = sum(any(c["type"] in COMPAT[t["type"]] and matches(c, t) for c in fd[s] + ours[s])
                         for s in iso for t in truth[s])
             tp = sum(c["true"] for s in iso for c in fd[s])
             fp = sum(not c["true"] for s in iso for c in fd[s])
-            ctp = sum(any(near(c, t) or abs(c["start"] - t["start"]) <= TOL for t in truth_all[s])
+            ctp = sum(any(at_event(c, t) for t in truth_all[s])
                       for s in iso for c in ours[s] + fd[s])
             cn = sum(len(ours[s]) + len(fd[s]) for s in iso)
             res.append(dict(group=g, isolates=len(iso), n_true=n_true, dysgu_true_calls=tp, dysgu_false_calls=fp,
