@@ -1679,3 +1679,12 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   (icl1 5/894, PE_PGRS52 3/831, Rv2522c 3/883): Nanopore noise. Conclusion
   unchanged: the short-read excision signal is a short-read artifact.
   Positive control and QC_7 mixture as before.
+- **Long-read test closed at 12 isolates (user, 2026-10-10).** 51869430 /
+  51869436 cancelled; mar_3003_06 and mar_696_05 fastq downloaded (md5 ok)
+  but not aligned; 3 incomplete partials deleted. Total cost ~45 CPU-h, nearly
+  all 1-CPU/1 GB download time (estimate was ~5 billing-hours; the overrun is
+  repeated md5 failures over https). Final: tatC-helY present in 839/843
+  spanning Nanopore reads (4 absent = Nanopore background), vs 15-40%
+  apparent loss in short reads: the short-read low-fraction excision is a
+  short-read library/sequencing artifact. Not explained by per-sample
+  fold-back rate (batch-level only).
