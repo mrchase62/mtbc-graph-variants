@@ -2159,3 +2159,14 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     runner p2 -> 02_post.
   - Part D after selfcal54: reads to the nearest other panel genome, truth
     from assembly differences.
+- **Part C result (read removal), `foldback_qc/removal/RESULTS.md`.** 9
+  chimeric isolates, 4 read sets each (jobs: P2 52222277 + 52227868, sets
+  52222307, post 52227921). Removing fold-back pairs (1.3-10.7% of pairs)
+  removes 95% of our false calls and 90% of dysgu's (98-100% at AF >= 0.2);
+  random removal of the same number removes none (+13-21%, unexplained,
+  likely fraction thresholds). Halving fold-backs cuts ours by 72%
+  (non-linear). Chimeric false calls are mostly AF < 0.2 for ours, but
+  dysgu has 1,703 at AF >= 0.2. delly keeps 6,373 after removal (its own
+  noise). Junction attribution at 20 bp is uninformative in these libraries
+  (chance 54-75%). RW_TB008 (10.9, few false calls) vs N0145 (13.0, 95)
+  shows the rate alone is not the whole story.
