@@ -1980,3 +1980,34 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   as a tandem duplication). Assembled INS > 20 kb: 6 (QC_10 429 kb, QC_1 77
   kb, TB2780 269 kb, TB3169 963 kb and 473 kb, TB3334 1.7 Mb). Not fixed.
   Previous outputs: phaseB/out/qc51_v5g.
+- **Contig-length guard result** (52099486, 42 min, 1.1 CPU-h). Assembled
+  INS > 20 kb: 6 -> 0; QC_1's IS6110 INS back at 3,189,869 (caller's INS,
+  size unknown, "long contig event dropped"). Scores unchanged from v6
+  (setE callable 1.000 / 0.892; novel 0.761 / 0.836; controls 1). Calls >
+  100 kb left: 18, all the caller's INV (13) / REARR (5). Snapshot of v6
+  outputs: phaseB/out/qc51_v6.
+- User (2026-10-11): rules getting complicated, not robust; goal is reliable
+  cross-sample calls for convergence testing and GWAS, staying within
+  short-read limits. Proposal accepted: robust tier (DEL/INS in callable
+  sequence, both breakpoints), everything else flagged and kept out; IS6110
+  from its own caller; per-sample present/absent/no-call in a common frame.
+  User: check heritability on the tree (outbreak / close relatives should
+  share an event). Method to be written up before running.
+- **Noise from reads mapped to the isolate's own genome**
+  (`phaseB/self_noise.py`, out/qc51/self_noise.tsv; 11 in_panel isolates
+  whose matched R is their own panel genome; raw output, no filters):
+  callable / masked, totals over 11 isolates
+    HC PASS SNPs           30 / 25   (20 + 16 in TB3251, 6 + 6 in
+                                      M0010874_7; 0-2 in the other 9)
+    HC indels 1-9 bp        7 / 46
+    HC indels 10-49 bp      0 / 0
+    our SV, typed           5 / 6    (callable: 4 tatC-helY 62-68 bp DEL,
+                                      removed by the genotype rule; 1 CIGAR
+                                      DEL 52 bp, 02_R1708; masked: all 6 in
+                                      M0010874_7)
+    our SV, BND            10 / 33   (27 + 6 in M0010874_7)
+    dysgu PASS             29 / 23
+    dysgu AF >= 0.2         3 / 8
+  So in callable sequence, after the existing filters: ~0.1 false SV per
+  isolate (ours), 0-2 SNPs in 9 of 11 isolates. M0010874_7 (P1 distance 103)
+  and TB3251 look like reads and panel genome not being the same DNA.
