@@ -143,7 +143,7 @@ class SvReverseStrand(unittest.TestCase):
         mask = write(os.path.join(d, "m.bed"), "c\t1\t2\ttandem|x|y\n")
         out = os.path.join(d, "out.tsv")
         subprocess.run([sys.executable, "bin/p4b_place_sv.py", "--sample", "s",
-                        "--reference", "R", "--build-id", "b", "--delly", vcf,
+                        "--reference", "R", "--build-id", "b", "--dysgu", vcf,
                         "--positions", posf, "--mask", mask, "--no-inherited",
                         "--out", out], check=True, capture_output=True)
         with open(out) as fh:
@@ -183,11 +183,21 @@ class SvReverseStrand(unittest.TestCase):
             posf = write(os.path.join(d, "bp.pos"), "")
             out = os.path.join(d, "out.tsv")
             subprocess.run([sys.executable, "bin/p4b_place_sv.py", "--sample", "s",
-                            "--reference", "R", "--build-id", "b", "--delly", empty,
+                            "--reference", "R", "--build-id", "b", "--dysgu", empty,
                             "--positions", posf, "--mask", mask, "--no-inherited",
                             "--out", out], check=True, capture_output=True)
             with open(out) as fh:
                 self.assertTrue(fh.readline().startswith("sample\treference"))
+
+    def test_delly_no_longer_read(self):
+        # delly dropped 2026-10-11 (the user's decision): P4b reads dysgu only
+        with tempfile.TemporaryDirectory() as d:
+            v = write(os.path.join(d, "s.delly.vcf"), "##fileformat=VCFv4.2\n")
+            r = subprocess.run([sys.executable, "bin/p4b_place_sv.py", "--sample", "s",
+                                "--reference", "R", "--build-id", "b", "--delly", v,
+                                "--positions", v, "--mask", v, "--no-inherited",
+                                "--out", os.path.join(d, "o.tsv")], capture_output=True)
+            self.assertEqual(r.returncode, 2)
 
     def test_missing_graph_vcf_is_fatal(self):
         with tempfile.TemporaryDirectory() as d:

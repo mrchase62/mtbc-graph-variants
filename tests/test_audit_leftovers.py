@@ -112,7 +112,7 @@ class OdgiInvertedStepP4(unittest.TestCase):
             r = subprocess.run(
                 [sys.executable, "bin/p4b_place_sv.py", "--sample", "S",
                  "--reference", "RREF", "--build-id", "b",
-                 "--delly", f"{d}/delly.vcf", "--positions", f"{d}/bp.pos",
+                 "--dysgu", f"{d}/delly.vcf", "--positions", f"{d}/bp.pos",
                  "--mask", f"{d}/mask.bed", "--no-inherited",
                  "--out", f"{d}/sv.tsv"], capture_output=True, text=True)
             self.assertEqual(r.returncode, 0, r.stderr + r.stdout)

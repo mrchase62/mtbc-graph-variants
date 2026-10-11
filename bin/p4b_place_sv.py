@@ -127,7 +127,6 @@ def main():
     ap.add_argument("--sample", required=True)
     ap.add_argument("--reference", required=True)
     ap.add_argument("--build-id", required=True)
-    ap.add_argument("--delly")
     ap.add_argument("--dysgu")
     ap.add_argument("--positions", required=True,
                     help="odgi output for every breakpoint, R -> H37Rv")
@@ -146,7 +145,11 @@ def main():
         sys.exit(f"FATAL: --graph-vcf {a.graph_vcf!r} does not exist; pass it, "
                  f"or --no-inherited to skip the inherited half deliberately")
 
-    recs = parse_sv_vcf(a.delly, "delly") + parse_sv_vcf(a.dysgu, "dysgu")
+    # dysgu only: delly was dropped on 2026-10-11 (the user's decision; it kept
+    # 6,373 false calls on own-genome reads with every fold-back read removed,
+    # analysis/foldback_qc/removal/RESULTS.md). P2 outputs made before then
+    # still hold a delly VCF; it is not read.
+    recs = parse_sv_vcf(a.dysgu, "dysgu")
     # No early return on zero calls. It used to write a header-only table here,
     # BEFORE the inherited half ran, so R's own large differences from H37Rv --
     # which need no calls at all -- were dropped for exactly the samples

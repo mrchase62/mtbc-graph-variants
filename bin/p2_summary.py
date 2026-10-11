@@ -68,19 +68,18 @@ def main():
         s = r["sample"]
         small = os.path.join(a.dir, f"{s}.vcf.gz")
         gvcf = os.path.join(a.dir, f"{s}.g.vcf.gz")
-        delly = os.path.join(a.dir, f"{s}.delly.vcf")
         dysgu = os.path.join(a.dir, f"{s}.dysgu.vcf")
         h37 = os.path.join(a.p1_work, f"{s}.h37rv.vcf.gz")
-        ns, nd, ny = count_records(small), count_records(delly), count_records(dysgu)
+        ns, ny = count_records(small), count_records(dysgu)
         nh = count_records(h37)
-        if ns is None or nd is None:
+        if ns is None or ny is None:  # dysgu is the only SV caller (delly dropped 2026-10-11)
             incomplete.append(s); continue
         rows.append(dict(
             sample=s, reference=r["reference"], snp_distance=r["snp_distance"],
             h37rv_small=nh if nh is not None else "",
             matched_small=ns,
             reduction=(round(1 - ns / nh, 4) if nh else ""),
-            delly=nd, dysgu=ny if ny is not None else "",
+            dysgu=ny,
             gvcf=("yes" if os.path.exists(gvcf) else "no"),
             bam=("yes" if os.path.exists(os.path.join(a.work, f"{s}.bam")) else "no"),
             stamped=stamped(small)))
@@ -102,7 +101,7 @@ def main():
     print(f"  {len(rows)} isolates with P2 output"
           f"{'; INCOMPLETE: ' + ', '.join(incomplete) if incomplete else ''}\n")
     print(f"  {'isolate':<17s}{'reference':<16s}{'d':>6s}{'H37Rv':>8s}"
-          f"{'matched':>9s}{'cut':>8s}{'delly':>7s}{'dysgu':>7s}  stamp")
+          f"{'matched':>9s}{'cut':>8s}{'dysgu':>7s}  stamp")
     # snp_distance can legitimately be blank. An arm that PINS every isolate to
     # one reference -- the two-reference comparison does exactly this -- has no
     # selection distance to report, and requiring one killed that arm's summary
@@ -118,15 +117,14 @@ def main():
         red = f"{100*r['reduction']:.1f}%" if r["reduction"] != "" else "-"
         print(f"  {r['sample']:<17s}{r['reference']:<16s}{r['snp_distance']:>6s}"
               f"{str(r['h37rv_small']):>8s}{r['matched_small']:>9d}{red:>8s}"
-              f"{r['delly']:>7d}{str(r['dysgu']):>7s}  {r['stamped']}")
+              f"{r['dysgu']:>7d}  {r['stamped']}")
 
     tot_h = sum(int(r["h37rv_small"]) for r in rows if r["h37rv_small"] != "")
     tot_m = sum(r["matched_small"] for r in rows if r["h37rv_small"] != "")
     print(f"\n  small-variant burden, pooled: H37Rv {tot_h}, matched {tot_m}"
           + (f", {100*(1-tot_m/tot_h):.1f}% fewer" if tot_h else ""))
     print(f"    T8 on the screened 23: 88.1% fewer")
-    print(f"  structural: delly {sum(r['delly'] for r in rows)} records, "
-          f"dysgu {sum(r['dysgu'] for r in rows if r['dysgu'] != '')}")
+    print(f"  structural: dysgu {sum(r['dysgu'] for r in rows)} records")
     nb = sum(1 for r in rows if r["bam"] == "yes")
     ng = sum(1 for r in rows if r["gvcf"] == "yes")
     unst = [r["sample"] for r in rows if r["stamped"] != "yes"]

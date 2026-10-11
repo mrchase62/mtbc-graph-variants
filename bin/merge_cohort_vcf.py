@@ -410,7 +410,7 @@ def main():
     ap.add_argument("--sv-states", default="",
                     help="per-sample SV states from bin/p5_sv_genotype.py. The "
                          "SV matrix never writes REF, on the measured grounds "
-                         "that a missing delly call is usually a missed call; "
+                         "that a missing caller call is usually a missed call; "
                          "this table carries the deletions whose absence was "
                          "measured directly as read depth across the interval.")
     ap.add_argument("--is6110-states", default="",

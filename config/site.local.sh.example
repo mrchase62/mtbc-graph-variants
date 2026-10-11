@@ -24,7 +24,6 @@ export MTB_CRAM_REF=/path/to/reference/the/reads/were/encoded/against.fasta
 # export MTB_BCFTOOLS=/path/to/bcftools
 # export MTB_ODGI=/path/to/odgi
 # export MTB_GATK_SIF=/path/to/gatk.sif
-# export MTB_DELLY_ENV=/path/to/conda/env/with/delly
 # export MTB_CONTAINERS=/path/to/durable/containers   # not scratch: purges took two
 # export MTB_SNPEFF_JAR=/path/to/snpEff.jar
 # export MTB_JAVA=/path/to/java

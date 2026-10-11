@@ -119,7 +119,6 @@ mtb_require_cram_root() {
 # script that needed it, so show_config could not report them and a site file
 # was the only way to learn they existed.
 : "${MTB_GATK_SIF:=${MTB_LAB_CONTAINERS}/mtb_gatk.sif}"
-: "${MTB_DELLY_ENV:=/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/tb-profiler}"
 
 # Python with pandas/numpy/scikit-learn, for the sv_*.py tools.
 : "${MTB_PY:=/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/mtb_pangenome_qc/bin/python}"
@@ -365,7 +364,7 @@ mtb_show_config() {
              MTB_SNPEFF_JAR MTB_JAVA MTB_SNPEFF_DB MTB_PY MTB_PY_VT MTB_ODGI MTB_MINIMAP2 \
              MTB_SAMTOOLS MTB_BGZIP MTB_TABIX MTB_BEDTOOLS MTB_BCFTOOLS MTB_K8 MTB_PAFTOOLS \
              MTB_BLASTN MTB_MAKEBLASTDB MTB_UNIVEC \
-             MTB_BWA MTB_WGSIM MTB_GATK_SIF MTB_DELLY_ENV \
+             MTB_BWA MTB_WGSIM MTB_GATK_SIF \
              MTB_CRAM_ROOT MTB_CRAM_REF MTB_BUILD_DIR MTB_GRAPH_FRAMES \
              MTB_THREADS MTB_PARTITION; do
         printf '%-18s %s\n' "$v" "${!v}"

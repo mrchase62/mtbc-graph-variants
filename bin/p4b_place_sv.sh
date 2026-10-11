@@ -15,7 +15,7 @@
 #   bash bin/p4b_place_sv.sh <sample>
 #   bash bin/p4b_place_sv.sh --summary
 #
-# P2 emits delly and dysgu VCFs per sample in the matched reference's
+# P2 emits a dysgu VCF per sample (delly until 2026-10-11) in the matched reference's
 # coordinates. P4 places only the small-variant VCF, so the matrix has contained
 # zero SV records. This projects both breakpoints of every merged event through
 # the graph and emits them in the same frame as everything else.
@@ -71,7 +71,6 @@ fi
 REFID="$(awk -F'\t' -v s="$SAMPLE" '$1==s{print $5; exit}' "$REFMAP")"
 RPATH="$(grep -m1 "^${REFID}#" "$PATHS" || true)"
 [[ -n "$RPATH" ]] || { echo "FATAL: ${SAMPLE}: ${REFID} not a graph path" >&2; exit 1; }
-DELLY="${P2DIR}/${SAMPLE}.delly.vcf"
 DYSGU="${P2DIR}/${SAMPLE}.dysgu.vcf"
 OUT="${OUTDIR}/${SAMPLE}.sv_placed.tsv"
 [[ -s "$OUT" ]] && { echo "[P4b] ${SAMPLE}: already done"; exit 0; }
@@ -85,7 +84,7 @@ OUT="${OUTDIR}/${SAMPLE}.sv_placed.tsv"
 # A header-only caller VCF passes [[ -s ]] and has nothing to test; frame_detect
 # then exits 2 and a bare $(...) under `set -e` killed the task. n=0 is "nothing
 # to test", not a mismatch, so it is let through.
-for _v in "$DELLY" "$DYSGU"; do
+for _v in "$DYSGU"; do
     [[ -s "$_v" ]] || continue
     _fd_rc=0
     _fd="$("$MTB_PY" graphframe/bin/frame_detect.py --vcf "$_v" \
@@ -102,7 +101,7 @@ for _v in "$DELLY" "$DYSGU"; do
 done
 
 # every breakpoint of every caller record, projected in one odgi call
-{ for f in "$DELLY" "$DYSGU"; do
+{ for f in "$DYSGU"; do
     [[ -s "$f" ]] || continue
     awk -v p="$RPATH" '!/^#/ {
         pos=$2; end=pos;
@@ -132,7 +131,7 @@ echo "[P4b] ${SAMPLE}: ${NBP} distinct breakpoints projected"
 GRAPH_VCF="${GRAPH_VCF:-${BUILD}/assets/graph_collapsed.vcf.gz}"
 [[ -s "$GRAPH_VCF" ]] || { echo "FATAL: no graph VCF at ${GRAPH_VCF}" >&2; exit 1; }
 "$MTB_PY" bin/p4b_place_sv.py --sample "$SAMPLE" --reference "$REFID" \
-    --build-id "$BUILD_ID" --delly "$DELLY" --dysgu "$DYSGU" \
+    --build-id "$BUILD_ID" --dysgu "$DYSGU" \
     --graph-vcf "$GRAPH_VCF" \
     --positions "${WORK}/${SAMPLE}.bp.pos" --mask "$MASK" --out "$OUT"
 rm -f "${WORK}/${SAMPLE}.bp.txt"

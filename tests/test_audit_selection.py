@@ -462,7 +462,7 @@ class P2SummaryInputs(unittest.TestCase):
             for p in (os.path.join(p2, "S1.vcf.gz"), os.path.join(p1w, "S1.h37rv.vcf.gz")):
                 with gzip.open(p, "wt") as fh:
                     fh.write(rec + ("c\t2\n" if "p1w" in p else ""))
-            write(os.path.join(p2, "S1.delly.vcf"), "#h\n")
+            write(os.path.join(p2, "S1.dysgu.vcf"), "#h\n")
             out = os.path.join(d, "sum.tsv")
             subprocess.run([py(), "bin/p2_summary.py", "--refmap",
                             os.path.join(d, "refmap.tsv"), "--dir", p2,

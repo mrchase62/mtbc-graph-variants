@@ -19,7 +19,10 @@
 # produces the callsets the later stages place into the common frame:
 #
 #   small variants   GATK HaplotypeCaller, haploid, via simulate_and_call.sh
-#   structural       delly and dysgu on the same BAM
+#   structural       dysgu on the same BAM (delly dropped 2026-10-11, the user's
+#                    decision: with every fold-back read removed from 9 chimeric
+#                    libraries it still made 6,373 false calls on the isolates'
+#                    own genomes, analysis/foldback_qc/removal/RESULTS.md)
 #
 # Both callsets stay in R coordinates. Nothing is lifted or composed here --
 # T16 showed composition is the defect and that no region rule separates its
@@ -74,7 +77,6 @@ WORK="${WORK:-refbias/work/p2}"
 # exports P1WORK per cohort; without it the summary read the pilot's P1 folder
 # and left h37rv_small blank for every isolate not in the pilot (audit P0P2-8).
 P1WORK="${P1WORK:-refbias/work/p1}"
-DELLY_ENV="${DELLY_ENV:-${MTB_DELLY_ENV:?MTB_DELLY_ENV is unset; see config/project_env.sh}}"
 DYSGU="${DYSGU:-refbias/work/svvenv/bin/dysgu}"
 THREADS="${SLURM_CPUS_PER_TASK:-8}"
 
@@ -216,17 +218,10 @@ BAM="${WORK}/${SAMPLE}.bam"
 [[ -s "$BAM" ]] || { echo "FATAL: ${SAMPLE}: no BAM after alignment" >&2; exit 1; }
 
 # --- structural variants, same BAM, same coordinates -------------------------
-export LD_LIBRARY_PATH="${DELLY_ENV}/lib:${LD_LIBRARY_PATH:-}"
-"${DELLY_ENV}/bin/delly" call -g "$REF" -o "${WORK}/${SAMPLE}.delly.bcf" "$BAM" \
-    > "${WORK}/${SAMPLE}.delly.log" 2>&1 || echo "[P2] ${SAMPLE}: delly nonzero exit" >&2
-if [[ -s "${WORK}/${SAMPLE}.delly.bcf" ]]; then
-    "$MTB_BCFTOOLS" view "${WORK}/${SAMPLE}.delly.bcf" > "${OUTDIR}/${SAMPLE}.delly.vcf.tmp"
-    mv -f "${OUTDIR}/${SAMPLE}.delly.vcf.tmp" "${OUTDIR}/${SAMPLE}.delly.vcf"
-else
-    echo "FATAL: ${SAMPLE}: delly produced no BCF" >&2; exit 1
-fi
-
-if [[ -x "$DYSGU" ]]; then
+# dysgu is now the only SV caller, so a missing dysgu fails the sample instead
+# of being logged and skipped.
+[[ -x "$DYSGU" ]] || { echo "FATAL: ${SAMPLE}: dysgu not installed at ${DYSGU}" >&2; exit 1; }
+{
     # A nonzero exit used to be logged and the partial stdout kept and stamped
     # as a complete callset. Keep the output only on success; otherwise fail
     # the sample so the gap is visible (once in the project's history so far).
@@ -258,19 +253,14 @@ if [[ -x "$DYSGU" ]]; then
         echo "[P2] ${SAMPLE}: dysgu found no events" >&2
     fi
     mv -f "${OUTDIR}/${SAMPLE}.dysgu.vcf.tmp" "${OUTDIR}/${SAMPLE}.dysgu.vcf"
-else
-    echo "[P2] ${SAMPLE}: dysgu not installed at ${DYSGU}" >&2
-fi
+}
 
 # Stamp the SV VCFs too. simulate_and_call.sh already stamped the small-variant
-# VCF and GVCF, but delly and dysgu write their own headers.
-_sv_vcfs=("${OUTDIR}/${SAMPLE}.delly.vcf")
-[[ -s "${OUTDIR}/${SAMPLE}.dysgu.vcf" ]] && _sv_vcfs+=("${OUTDIR}/${SAMPLE}.dysgu.vcf")
-bash bin/stamp_build_id.sh "${_sv_vcfs[@]}"
+# VCF and GVCF, but dysgu writes its own header.
+bash bin/stamp_build_id.sh "${OUTDIR}/${SAMPLE}.dysgu.vcf"
 
 rm -f "$FQ1" "$FQ2"
 echo "[P2] ${SAMPLE}: small $(zcat "${OUTDIR}/${SAMPLE}.vcf.gz" | grep -vc '^#'), "\
-"delly $(grep -vc '^#' "${OUTDIR}/${SAMPLE}.delly.vcf"), "\
-"dysgu $([[ -s "${OUTDIR}/${SAMPLE}.dysgu.vcf" ]] && grep -vc '^#' "${OUTDIR}/${SAMPLE}.dysgu.vcf" || echo 0)"
+"dysgu $(grep -vc '^#' "${OUTDIR}/${SAMPLE}.dysgu.vcf" || true)"
 _write_done
 echo "[P2] ${SAMPLE}: done"

@@ -2170,3 +2170,21 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   noise). Junction attribution at 20 bp is uninformative in these libraries
   (chance 54-75%). RW_TB008 (10.9, few false calls) vs N0145 (13.0, 95)
   shows the rate alone is not the whole story.
+- **delly dropped from production (user, 2026-10-11).** Basis: read-removal
+  experiment (6,373 delly false calls left with every fold-back read
+  removed). Changes:
+  - `p2_call.sh`: no delly; dysgu now required (missing dysgu fails the
+    sample); only the dysgu VCF stamped.
+  - `p4b_place_sv.sh` / `.py`: dysgu only; `--delly` removed, so an old
+    P2 folder's delly VCF is not read.
+  - `p2_summary.py`: dysgu column, a sample without dysgu is incomplete.
+  - `merge_cohort_vcf.py` help text.
+  - `config`: MTB_DELLY_ENV removed.
+  - P5 QUAL banding unchanged (per caller, from the calibration table;
+    dysgu already calibrated).
+  Tests updated (generic VCFs passed as --dysgu; p2_summary fixture writes
+  a dysgu VCF; new test: --delly refused). All suites pass (run_tests 370,
+  harmonize 16, 13 audit suites). First real use: selfcal54 P2.
+  Existing cohorts' SV records still include delly calls until rerun
+  (wrap-up item 5). dysgu AF >= 0.2 is not yet a production rule (item 3).
+  User will ask the CRAM owner before any copy (purge about 2026-10-26).
