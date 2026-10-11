@@ -2011,3 +2011,4 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   So in callable sequence, after the existing filters: ~0.1 false SV per
   isolate (ours), 0-2 SNPs in 9 of 11 isolates. M0010874_7 (P1 distance 103)
   and TB3251 look like reads and panel genome not being the same DNA.
+- **Tree check method drafted** (user asked): analysis/tree_check/METHOD.md. scale200_fix (200 isolates, tree + p5 sv_matrix 5,845 SV keys in H37Rv frame); close pairs <= 12 SNPs (+13-50, 51-200); per-pair SV disagreement vs SNP distance, noise = intercept; split by same/different matched reference, inherited vs called, callable/masked, type/size/source/tier, IS6110; parsimony gains + lone-isolate calls; lineage RDs as positive control. Awaiting user decisions (threshold, cohort, inherited).
