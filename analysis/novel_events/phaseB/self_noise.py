@@ -18,7 +18,12 @@ whose span +-50 bp touches it is masked):
 The tatC-helY and HaplotypeCaller hand-off filters are not applied: this is
 the raw output of each step.
 Writes out/qc51/self_noise.tsv and prints totals.
+
+Another cohort whose every isolate is pinned to its own genome (fold-back
+calibration, foldback_qc/selfcal, 2026-10-11):
+  self_noise.py --all-own --refmap <refmap> --p2 <p2 dir> --asm-dir <dir> --out <tsv>
 """
+import argparse
 import csv
 import gzip
 import os
@@ -52,6 +57,15 @@ def hc_counts(path, m):
 
 
 def main():
+    global RM, P2
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--all-own", action="store_true", help="every refmap row is its own genome")
+    ap.add_argument("--refmap", default=RM)
+    ap.add_argument("--p2", default=P2)
+    ap.add_argument("--asm-dir", default=f"{O}/asm")
+    ap.add_argument("--out", default=f"{O}/self_noise.tsv")
+    a = ap.parse_args()
+    RM, P2 = a.refmap, a.p2
     rm = {r["sample"]: r["reference"] for r in csv.DictReader(open(RM), delimiter="\t")}
     own = {r["cohort_sample"]: r["same_isolate_in_cx333"]
            for r in csv.DictReader(open(f"{N}/phaseB/genomes.tsv"), delimiter="\t")}
@@ -60,14 +74,14 @@ def main():
     masks = load_masks(RM, f"{N}/out/masks")
     rows = []
     for s in sorted(rm):
-        if grp.get(s) != "in_panel" or s in excl or own.get(s) != rm[s]:
+        if not a.all_own and (grp.get(s) != "in_panel" or s in excl or own.get(s) != rm[s]):
             continue
         m = masks[s]
         hc, hcm = hc_counts(f"{P2}/{s}.vcf.gz", m)
         r = dict(sample=s, reference=rm[s])
         for k in hc:
             r[f"hc_{k}"], r[f"hc_{k}_masked"] = hc[k], hcm[k]
-        ours = read_proto(f"{O}/asm/{s}.events.tsv")
+        ours = read_proto(f"{a.asm_dir}/{s}.events.tsv")
         for lab, keep in (("sv_typed", lambda c: c["type"] != "BND"), ("sv_bnd", lambda c: c["type"] == "BND")):
             cs = [c for c in ours if keep(c)]
             r[lab] = sum(1 for c in cs if not masked(m, c["start"], c["end"]))
@@ -77,7 +91,7 @@ def main():
             r[lab] = sum(1 for c in cs if not masked(m, c["start"], c["end"]))
             r[f"{lab}_masked"] = len(cs) - r[lab]
         rows.append(r)
-    with open(f"{O}/self_noise.tsv", "w") as fo:
+    with open(a.out, "w") as fo:
         w = csv.DictWriter(fo, fieldnames=list(rows[0]), delimiter="\t")
         w.writeheader()
         w.writerows(rows)

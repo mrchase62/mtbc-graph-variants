@@ -2104,3 +2104,30 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   production samples already give the distribution (<=0.3 50%, 0.3-1 10%,
   1-2 8%, 2-5 11%, >5 22%, old count); what is missing is the false-call
   rate between 0.4 and 6.4 per 1,000, where no control exists.
+- **Fold-back calibration step 2 (user: straight to full reads, all 54;
+  2026-10-11).** User's guidance (memory `sample-quality-from-wild-data`):
+  learn sample filters from the distribution in real public data, not take
+  all data because it exists; SVs need good reads (read length, depth,
+  maybe insert size); a reusable junk-sample filter helps other projects.
+  Parked for later: Mutect2 / non-haploid calling for within-host variants,
+  and the effect of library fragmentation (sonication vs enzymatic) on low-
+  frequency variants. Plan and limits: `foldback_qc/CALIBRATION_PLAN.md`
+  (polishing bias, genome-vs-reads DNA mismatch, fold-back confounded with
+  library era, unknown count in the 1-6 gap).
+  - `selfcal/make_runs.py` -> `selfcal/genomes.tsv`: 54 genomes, one run each
+    (largest paired Illumina WGS run of the BioSample, runs not pooled),
+    35.6 GB FASTQ, with ENA library fields. Count corrected from 56 (one
+    single-end set; Phase B controls counted by genome).
+  - Cohort `selfcal54` (registry row; `runroot/refbias/selfcal54` ->
+    netscratch), P2 only, reference pinned to the own genome
+    (`selfcal/make_refmap.py`, run after QC).
+  - `phaseB/08_qc.sbatch`, `09_kraken.sbatch`: QC_TABLE / QC_READS env
+    overrides (defaults unchanged). `phaseB/self_noise.py`: `--all-own
+    --refmap --p2 --asm-dir --out` (default output unchanged, checked).
+  - Jobs: download 52206224 (54, 8 at a time), masks 52206464, QC 52206708
+    (afterany download, 20 at a time), kraken2 52206709. Then by hand:
+    make_qc_cohort.py, make_refmap.py, runner `--only p2`, then
+    `selfcal/03_post.sbatch` (fold-back v2 at 25%, samtools stats, caller v6
+    + assembly, self_noise, `collect.py` -> `selfcal/out/selfcal_table.tsv`;
+    fold-back and stats also for the 11 Phase B own-genome controls on QC'd
+    BAMs). Estimate about 100-110 billing-hours.

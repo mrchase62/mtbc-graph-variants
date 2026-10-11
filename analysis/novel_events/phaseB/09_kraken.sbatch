@@ -4,6 +4,7 @@
 # copied once (a sequential read) into node memory (/dev/shm, counted in the
 # job's memory) and memory-mapped from there for every sample. Memory-mapping
 # it straight from boslfs02 stalled (job 51622823: 23 s of CPU in 36 min).
+# QC_TABLE and QC_READS select another read set, as in 08_qc.sbatch.
 # Submit from runroot:
 #   sbatch ../analysis/novel_events/phaseB/09_kraken.sbatch <list> <cohort>
 #SBATCH -p shared
@@ -15,8 +16,8 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 LIST="${1:?sample list}"; C="${2:?cohort name}"
-G=../analysis/novel_events/phaseB/genomes.tsv
-IN=/n/netscratch/sfortune_lab/Lab/mchase/MtbPangenome/data/external_reads/marin_illumina
+G=${QC_TABLE:-../analysis/novel_events/phaseB/genomes.tsv}
+IN=${QC_READS:-/n/netscratch/sfortune_lab/Lab/mchase/MtbPangenome/data/external_reads/marin_illumina}
 SRC=/n/boslfs02/LABS/sfortune_lab/Lab/kraken2standardDB
 DB=/dev/shm/kraken2db.$SLURM_JOB_ID
 trap '[[ "$DB" == /dev/shm/kraken2db.* ]] && rm -rf -- "$DB"' EXIT

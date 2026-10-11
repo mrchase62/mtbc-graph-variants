@@ -17,6 +17,8 @@
 #   4. unaligned BAM for the runner (as 02_prepare.sbatch)
 # kraken2 runs separately (09_kraken.sbatch: one job loads the 59 GB database
 # once); qc_summary.py combines both into the PASS/FAIL table.
+# Other read sets: QC_TABLE (table with cohort_sample, r1, r2) and QC_READS
+# (FASTQ folder) in the environment (foldback_qc/selfcal, 2026-10-11).
 # One array task per line of the sample list ($1). Submit from runroot:
 #   sbatch --array=1-N ../analysis/novel_events/phaseB/08_qc.sbatch <list> <cohort> [extra]
 #SBATCH -p shared
@@ -32,10 +34,10 @@ LIST="${1:?sample list}"; C="${2:?cohort name}"
 EXTRA=()
 [[ "${3:-}" == extra ]] && EXTRA=(--cut_right --cut_right_window_size 4 --cut_right_mean_quality 20 --trim_poly_g)
 S=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$LIST")
-G=../analysis/novel_events/phaseB/genomes.tsv
+G=${QC_TABLE:-../analysis/novel_events/phaseB/genomes.tsv}
 col() { awk -F'\t' -v s="$S" -v c="$1" 'NR==1{for(i=1;i<=NF;i++) h[$i]=i} $1==s{print $h[c]}' "$G"; }
 R1=$(col r1); R2=$(col r2)
-IN=/n/netscratch/sfortune_lab/Lab/mchase/MtbPangenome/data/external_reads/marin_illumina
+IN=${QC_READS:-/n/netscratch/sfortune_lab/Lab/mchase/MtbPangenome/data/external_reads/marin_illumina}
 CT=/n/boslfs02/LABS/sfortune_lab/Lab/containers
 E=/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/mtb_isolates/bin
 Q=refbias/$C/qc/$S
