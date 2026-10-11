@@ -62,6 +62,12 @@ under evaluation, user 2026-10-10) is uncallable. Recall is then measured over c
 events only, and uncallable calls are flagged, not counted in precision.
 n_true_uncallable and calls_uncallable report how many were set aside.
 
+Truth flags (--truth-flags, phaseB/truth_flags.tsv; sample, type, r_start,
+flag): events flagged refuted (the isolate's reads, long reads included,
+show the reference sequence: the assembly is wrong) are removed from the
+truth. Events flagged unconfirmed stay in; the stratum excl_unconfirmed
+gives recall without them.
+
 tatC-helY genotype rule (--element-gt, element_genotype.py's table; added
 2026-10-10, replacing the artifact mask by the user's decision): a DEL call
 overlapping the element site +-50 bp is dropped when the isolate's genotype
@@ -307,16 +313,25 @@ def main():
                     help="also mask artifact_mask.py's sites (under evaluation)")
     ap.add_argument("--element-gt", help="element_genotype.py table: drop DEL at the tatC-helY site in carriers")
     ap.add_argument("--hc-dir", help="P2 HaplotypeCaller VCFs: drop SV calls that are its 10-49 bp indels")
+    ap.add_argument("--truth-flags", help="refuted truth events removed; unconfirmed reported apart")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
+    flags = {}
+    if a.truth_flags:
+        for r in csv.DictReader(open(a.truth_flags), delimiter="\t"):
+            flags[(r["sample"], r["type"], int(r["r_start"]))] = r["flag"]
     egt = load_element_gt(a.element_gt) if a.element_gt else {}
     masks = load_masks(a.refmap, a.mask_dir, a.artifact_mask) if a.mask_dir else {}
     truth = collections.defaultdict(list)
     for r in csv.DictReader(open(a.truth), delimiter="\t"):
+        flag = flags.get((r["sample"], r["type"], int(r["r_start"])), "")
+        if flag == "refuted":
+            continue
         size = max(int(r["ref_len"]), int(r["alt_len"]))
         truth[r["sample"]].append(dict(type=r["type"], start=int(r["r_start"]),
                                        end=int(r["r_end"]), size=size,
-                                       is6110=r["type"] in ("INS", "REPL") and 1340 <= int(r["alt_len"]) <= 1370))
+                                       is6110=r["type"] in ("INS", "REPL") and 1340 <= int(r["alt_len"]) <= 1370,
+                                       unconfirmed=flag == "unconfirmed"))
     callers = {
         "prototype": lambda s: read_proto(os.path.join(a.proto_dir, f"{s}.events.tsv")),
         "dysgu_all": lambda s: read_vcf(os.path.join(a.p2_dir, f"{s}.dysgu.vcf"), False),
@@ -372,6 +387,8 @@ def main():
                 keys = ["all", f"type={t['type']}", f"size={size_class(t['size'])}"]
                 if t["is6110"]:
                     keys.append("IS6110-sized INS")
+                if not t["unconfirmed"]:
+                    keys.append("excl_unconfirmed")
                 typed = any(c["type"] in COMPAT[t["type"]] and matches(c, t) for c in cs)
                 bp = any(at_event(c, t) for c in cs)
                 for k in keys:

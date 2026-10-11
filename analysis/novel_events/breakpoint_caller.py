@@ -40,15 +40,28 @@ Events:
   INV   split reads joining two places on opposite strands
   INS   (tandem duplication) reads clipped at A continue at a left-clip
         cluster B < A on the same strand: the segment B..A is repeated;
-        scored as an insertion of A - B bp
+        scored as an insertion of A - B bp at B (left-aligned, v5)
   DEL   (depth-joined, v2) a right-clip cluster at A and a left-clip cluster
         at B within 5 kb, with no split reads but depth between them below
         30% of the median: a deletion in sequence too repetitive for SA tags
   REARR split reads joining two places on the same strand out of order
         (B < A), or more than 100 kb apart, not explained above
+  INS   (tandem expansion, v5, needs --ref) a left-clip cluster at A and a
+        right-clip cluster at B, A + 20 < B <= A + 500, not otherwise
+        paired, where most clipped bases on both sides (first 15 outward)
+        occur in R between A and B: extra copies of a tandem repeat unit.
+        Reads clip at the array's ends and continue inside it, one or more
+        units back, so they neither meet (INS needs <= 20 bp) nor give split
+        reads (tandem_dup). Placed at A, size unknown: neither the clips nor
+        depth across the array measure the copy number (Phase B, 12 missed
+        events at 4 sites; phaseB/missed.py)
   BND   one clip cluster with no partner: unresolved breakpoint
 Depth: for DEL the mean depth between A and B, against the sample median,
-is reported, not used as a filter.
+is reported, and (v5) used for one guard: a split-read DEL longer than
+LONG_DEL (5 kb) needs depth between A and B below 30% of the median. Split
+reads from an insertion of a repeat element go to another copy of it
+anywhere in R, which otherwise made a 1.3 Mb DEL out of N1177's IS6110
+insertion; real large deletions in these clonal isolates have depth ~0.
 
 Output: one row per event, in R coordinates (1-based).
 """
@@ -64,6 +77,8 @@ MINCLIP = 10
 TOL = 5
 JOIN_TOL = 20
 MIN_ANCHOR = 30
+LONG_DEL = 5000
+TANDEM_MAX = 500
 
 
 def clip_out(r, n, right, filt):
@@ -106,6 +121,7 @@ def main():
     ap.add_argument("--sample", required=True)
     ap.add_argument("--max-insert", type=int, default=1000)
     ap.add_argument("--no-clip-filter", action="store_true", help="v2 behaviour")
+    ap.add_argument("--ref", help="R FASTA: enables the tandem-expansion rule (v5)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     filt = not a.no_clip_filter
@@ -226,6 +242,10 @@ def main():
         if best is not None:
             j = best[0]
             B = Lc[j]["pos"]
+            if B - A > LONG_DEL and (depth_ratio(A + 1, B - 1) or 1) >= 0.3:
+                # long DEL with no depth drop: split reads into another copy of
+                # a repeat; leave the cluster for the INS pairing below (v5)
+                continue
             if B - A <= 100000:
                 events.append(dict(type="DEL", start=A + 1, end=B - 1, size=B - A - 1,
                                    support=best[1], left=c["n"], right=Lc[j]["n"],
@@ -241,7 +261,8 @@ def main():
             continue
         # tandem duplication: reads clipped at the copy's end (A) continue at
         # its start (a left-clip cluster at B < A); scored as an insertion of
-        # A - B bp at A
+        # A - B bp, placed at B (v5: left-aligned, the VCF convention and the
+        # truth set's; it was at A, scored 50+ bp off)
         dup = None
         for j, d in enumerate(Lc):
             B = d["pos"]
@@ -253,7 +274,7 @@ def main():
         if dup is not None:
             j = dup[0]
             B = Lc[j]["pos"]
-            events.append(dict(type="INS", start=A, end=A, size=A - B, support=dup[1],
+            events.append(dict(type="INS", start=B, end=A, size=A - B, support=dup[1],
                                left=c["n"], right=Lc[j]["n"], source="clip;tandem_dup"))
             used_r.add(i)
             used_l.add(j)
@@ -300,6 +321,32 @@ def main():
                 used_r.add(i)
                 used_l.add(j)
                 break
+    # tandem expansion: left-clip cluster at A, right-clip cluster at B
+    # (A + 20 < B <= A + 500), clipped bases found in R between them
+    if a.ref:
+        rseq = pysam.FastaFile(a.ref).fetch(ctg).upper()
+
+        def inside(c, A, B, right):
+            seg = rseq[max(0, A - 6):B + 5]
+            ks = [k for _, _, k in c["reads"] if len(k) >= 15]
+            if not ks:
+                return False
+            hit = sum(1 for k in ks if (k[:15] if right else k[:15][::-1]) in seg)
+            return hit >= 0.5 * len(ks)
+        for j, d in enumerate(Lc):
+            if j in used_l:
+                continue
+            A = d["pos"]
+            for i, c in enumerate(R):
+                B = c["pos"]
+                if i in used_r or not (A + JOIN_TOL < B <= A + TANDEM_MAX):
+                    continue
+                if inside(c, A, B, True) and inside(d, A, B, False):
+                    events.append(dict(type="INS", start=A, end=B, size=0, support=c["n"] + d["n"],
+                                       left=c["n"], right=d["n"], source="clip;tandem_expansion"))
+                    used_r.add(i)
+                    used_l.add(j)
+                    break
     # CIGAR events
     for (s, e), n in cig_del.items():
         if n >= 2:

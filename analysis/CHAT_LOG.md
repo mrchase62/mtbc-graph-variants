@@ -1841,3 +1841,19 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   the isolate's matched reference R (truth.py: indels in alignments, or
   DEL/INS/REPL/INV/REARR between alignments), scored when callable (not
   within 50 bp of R's uncallable mask): 66 in the 15 scored isolates.
+- **Caller v5 + truth flags (user approved all three, 2026-10-10).**
+  - `breakpoint_caller.py` v5: (1) tandem expansion: left-clip cluster at A,
+    right-clip cluster at B (A+20 < B <= A+500), not otherwise paired, most
+    clipped 15-mers on both sides found in R between A and B -> INS at A,
+    size unknown (needs --ref; 11_call_score.sbatch passes R); (2) split-read
+    DEL > 5 kb kept only with depth inside < 30% of median, otherwise the
+    cluster is left free (N1177's IS6110 had become a 1.3 Mb DEL); (3) found
+    in testing: the split-read tandem_dup INS is now placed at the
+    duplicated segment's start (left-aligned, as VCF and the truth set do),
+    not its end, which had put 801,326 and 1,840,217 72 / 68 bp off.
+    Test on 702_06 and N1177: IS6110 at 1,312 now INS; 2,397,739 called;
+    three other tandem calls in 702_06 to be scored.
+  - `phaseB/truth_flags.tsv`: 8 setE events refuted (removed from truth), 8
+    novel REPL unconfirmed (kept; recall_confirmed leaves them out).
+    `score.py --truth-flags`, rerun_compare passes it.
+  - v4 outputs saved in `phaseB/out/qc51_v4`; rerun 51952533.

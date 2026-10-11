@@ -19,6 +19,8 @@ gives their truth are not one strain) are left out of both runs.
 DEL calls at the tatC-helY site in isolates carrying the element are
 dropped (score.py --element-gt; element_genotype.py per run), and so are
 SV calls that are HaplotypeCaller 10-49 bp indels (score.py --hc-dir).
+Truth events in phaseB/truth_flags.tsv flagged refuted are removed;
+recall_confirmed also leaves out those flagged unconfirmed.
 
 Writes out/qc51/compare.tsv and prints a summary.
 """
@@ -62,14 +64,19 @@ def main():
             o = f"{out_dir}/score_{run}.{grp}.tsv"
             subprocess.run([sys.executable, f"{N}/score.py", "--truth", t, "--proto-dir", p["proto"],
                             "--asm-dir", p["asm"], "--p2-dir", p["p2"], "--refmap", p["rm"],
-                            "--mask-dir", f"{N}/out/masks", "--element-gt", p["gt"], "--hc-dir", p["p2"], "--out", o],
+                            "--mask-dir", f"{N}/out/masks", "--element-gt", p["gt"], "--hc-dir", p["p2"],
+                            "--truth-flags", f"{N}/phaseB/truth_flags.tsv", "--out", o],
                            check=True, stdout=subprocess.DEVNULL)
-            for r in csv.DictReader(open(o), delimiter="\t"):
+            sc = list(csv.DictReader(open(o), delimiter="\t"))
+            exu = {r["caller"]: r for r in sc if r["stratum"] == "excl_unconfirmed"}
+            for r in sc:
                 if r["stratum"] == "all" and r["caller"] in CALLERS:
                     rows.append(dict(group=grp, run=run, isolates=len(iso), caller=r["caller"],
                                      n_true=r["n_true"], typed_recall=r["typed_recall"],
                                      breakpoint_recall=r["breakpoint_recall"],
-                                     typed_calls=r["typed_calls"], precision=r["precision"]))
+                                     typed_calls=r["typed_calls"], precision=r["precision"],
+                                     n_true_confirmed=exu.get(r["caller"], {}).get("n_true", ""),
+                                     recall_confirmed=exu.get(r["caller"], {}).get("typed_recall", "")))
     ctl = [s for s in keep if groups[s] == "in_panel"]
     for run, p in RUNS.items():
         masks = load_masks(p["rm"], f"{N}/out/masks")
@@ -89,7 +96,7 @@ def main():
                              per_isolate=",".join(map(str, v))))
     with open(f"{out_dir}/compare.tsv", "w") as fo:
         cols = ["group", "run", "isolates", "caller", "n_true", "typed_recall", "breakpoint_recall",
-                "typed_calls", "precision", "per_isolate"]
+                "typed_calls", "precision", "n_true_confirmed", "recall_confirmed", "per_isolate"]
         w = csv.DictWriter(fo, fieldnames=cols, delimiter="\t", restval="")
         w.writeheader()
         w.writerows(rows)
@@ -97,7 +104,8 @@ def main():
           f"excluded (phaseB/exclude.tsv): {', '.join(excluded)}")
     for r in rows:
         print("\t".join(str(r.get(k, "")) for k in ("group", "run", "caller", "n_true", "typed_recall",
-                                                       "typed_calls", "precision", "per_isolate")))
+                                                       "typed_calls", "precision", "recall_confirmed",
+                                                       "per_isolate")))
 
 
 if __name__ == "__main__":
