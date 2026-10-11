@@ -322,6 +322,7 @@ ANCESTRAL="${ANCESTRAL:-${BUILD}/assets/ancestral.tsv}"
 MERGE=("$MTB_PY" bin/merge_cohort_vcf.py "${SMALL[@]}" \
     --sv-matrix "${OUTDIR}/sv_matrix.tsv" --ancestral "$ANCESTRAL" \
     --h37rv-fasta "$H37RV_FASTA" --build-id "$BUILD_ID" \
+    --is6110-gff "${BUILD}/assets/is6110_elements.gff" \
     ${IS6110_KEYS:+--is6110-keys "$IS6110_KEYS"} \
     ${IS6110_STATES:+--is6110-states "$IS6110_STATES"} \
     ${SV_STATES:+--sv-states "$SV_STATES"} \

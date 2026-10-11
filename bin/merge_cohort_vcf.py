@@ -37,6 +37,8 @@ THE THREE THINGS IT HAS TO GET RIGHT.
    at all, because an absent record is silent about which of the three it was.
 """
 import argparse, bisect, collections, csv, glob, gzip, json, os, subprocess, sys, datetime
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import harmonize_records as _harm
 
 STATE_GT = {"ALT": "1", "REF": "0", "ABSENT": "2", "NOCALL": "."}
 META = {"key", "frame", "region", "kind", "h37rv_pos", "node", "node_offset",
@@ -232,8 +234,12 @@ def _header_body(w):
       '0 reference with data, 1 alternate, 2 the * allele meaning this region '
       'is deleted in this sample, . no data">\n')
     w('##FORMAT=<ID=ST,Number=1,Type=String,Description="Pipeline state '
-      'verbatim: ALT, REF, ABSENT or NOCALL. Kept so the GT mapping loses '
+      'verbatim: ALT, REF, ABSENT or NOCALL; DUP where this arm\'s call was '
+      'absorbed into the record of the arm that owns the event '
+      '(bin/harmonize_records.py). Kept so the GT mapping loses '
       'nothing">\n')
+    for line in _harm.HEADER:
+        w(line)
 
 
 # ---- the VCF header, shared by the single-file and the assembled output ----
@@ -419,6 +425,11 @@ def main():
     ap.add_argument("--ancestral", default="",
                     help="per-site ancestral allele from bin/ancestral_alleles.py; "
                          "absent means no AA is emitted")
+    ap.add_argument("--is6110-gff", default="",
+                    help="H37Rv IS6110 copies (<build>/assets/is6110_elements.gff), "
+                         "for the copy-loss rule of the harmonization pass")
+    ap.add_argument("--no-harmonize", action="store_true",
+                    help="skip bin/harmonize_records.py (one event, one record)")
     ap.add_argument("--h37rv-contig", default="NC_000962.3")
     ap.add_argument("--h37rv-length", type=int, default=4411532)
     ap.add_argument("--h37rv-fasta", default="",
@@ -1060,6 +1071,17 @@ def main():
              "\t".join(cell)))
         n_is += 1
 
+    # ONE EVENT, ONE RECORD across the arms (bin/harmonize_records.py,
+    # approved 2026-10-11): HaplotypeCaller owns indels under 50 bp, the SV
+    # block owns 50 bp and over, the IS6110 arm owns its insertions, and
+    # deletions of an H37Rv IS6110 copy are labelled as copy losses.
+    if not a.no_harmonize:
+        copies = _harm.read_is6110_copies(a.is6110_gff) if a.is6110_gff else []
+        if not a.is6110_gff:
+            print("  no --is6110-gff: IS6110 copy losses not labelled")
+        recs, n_harm = _harm.harmonize(recs, a.h37rv_contig, copies)
+        for why, k in sorted(n_harm.items()):
+            print(f"  harmonize: {why}: {k:,}")
     recs.sort(key=lambda x: (x[0] != a.h37rv_contig, x[0], x[1]))
 
     # ---- write -------------------------------------------------------------
