@@ -2131,3 +2131,13 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     + assembly, self_noise, `collect.py` -> `selfcal/out/selfcal_table.tsv`;
     fold-back and stats also for the 11 Phase B own-genome controls on QC'd
     BAMs). Estimate about 100-110 billing-hours.
+- **Library type from adapter read-through (user: all three sets).**
+  `foldback_qc/adapters/adapter_count.py` + `01_count.sbatch` (jobs
+  52211341 phaseB 32 s, 52211344 production 97 s, 52211345 selfcal after the
+  download). Results in `adapters/RESULTS.md`:
+  - Phase B: all 11 chimeric controls are Tn5 libraries (10 with very short
+    inserts); clean are TruSeq set B, unclear set A, and Tn5 set E (0.33-1.55).
+  - Production (500): fold-back > 5 in 26% of Tn5 and 23% of TruSeq. Within
+    TruSeq, fold-back tracks short inserts (rho 0.61 adapter, 0.75 trimmed-
+    length fraction); within Tn5, weakly (0.07, 0.29).
+  - Adapter columns added to `selfcal/collect.py`.

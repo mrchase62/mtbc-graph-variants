@@ -12,6 +12,8 @@ Columns:
   reads      samtools stats on the P2 BAM: read length mean/max, insert mean
              and sd, error rate (mismatches per aligned base), properly
              paired fraction; duplicate fraction (foldback_v2)
+  library    adapter read-through on the raw FASTQ (adapters/adapter_count.py:
+             Nextera/Tn5 vs TruSeq-style, reads per million)
   fold-back  v2 per 1,000 (split, clip) and the old count
   noise      self_noise.py counts in callable sequence (and masked)
 Writes selfcal/out/selfcal_table.tsv.
@@ -53,6 +55,8 @@ def main():
            csv.DictReader(open(f"{PB}/runs.tsv"), delimiter="\t")}
     qc = {**tsv("refbias/marinQC51/qc_table.tsv", "sample"), **tsv("refbias/selfcal54/qc_table.tsv", "sample")}
     noise = {**tsv(f"{PB}/out/qc51/self_noise.tsv", "sample"), **tsv(f"{O}/self_noise.tsv", "sample")}
+    ad = {**tsv("../analysis/foldback_qc/adapters/phaseB.tsv", "sample"),
+          **tsv("../analysis/foldback_qc/adapters/selfcal.tsv", "sample")}
     controls = list(tsv(f"{PB}/out/qc51/self_noise.tsv", "sample"))
     rows = []
     for s in list(meta) + controls:
@@ -70,6 +74,9 @@ def main():
         q = qc.get(s, {})
         for k in ("status", "reason", "raw_depth", "final_depth", "mtbc_frac", "top_other", "top_other_frac", "lineage"):
             r[f"qc_{k}" if k in ("status", "reason") else k] = q.get(k, "")
+        x = ad.get(s, {})
+        for k in ("adapter_call", "nextera_per_M", "truseq_per_M"):
+            r[k] = x.get(k, "")
         r.update(stats(s))
         fb = tsv(f"{O}/foldback/{s}.tsv", "sample").get(s, {})
         for k in ("foldback_per_1k", "split_per_1k", "clip_per_1k", "old_per_1k", "dup_frac", "reads"):
