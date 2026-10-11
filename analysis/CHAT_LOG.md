@@ -1961,3 +1961,22 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   (ends in tandem repeats, short paralogs, or unique sequence; often only
   2-9 of 10-60 clipped reads with the partner) are not addressed.
   Snapshot of the previous outputs: phaseB/out/qc51_v5g. Rerun 52093842.
+- **Caller v6 result** (52093842, 40 min, 1.1 CPU-h). INV/REARR from the
+  caller 52 -> 39; final calls > 100 kb 28 -> 18. The 383 kb INV is gone in
+  all 8 isolates (BND "repeat_copy_join" at 1,980,173; 3 isolates now get
+  DEL 1,980,174-1,981,303, which matches the true 2.6 kb copy loss by its
+  end). Side effect: the INV had merged everything from 1.98-2.36 Mb into
+  one window > 20 kb, never assembled; those candidates are now assembled.
+  Scores (proto_asm, recall / precision):
+    setE callable 1.000 / 0.892 (was 0.896: 2 duplicate true DELs at
+         3,118,5xx in QC_1/QC_6 merged into one each; no new false calls)
+    setE repeat_copy 0.459 / 0.773 (was 0.426 / 0.692); other masked 0.149
+         / 0.619
+    novel callable 0.761 / 0.836 (same); repeat_copy 0.425 / 0.701 (was
+         0.416 / 0.676)
+    controls: 1 false call (same).
+  New: QC_1's true 1,359 bp IS6110 INS at 3,189,869 now assembled as INS
+  of 76,741 bp (same contig reading as the ~430 kb INS: a contig gap read
+  as a tandem duplication). Assembled INS > 20 kb: 6 (QC_10 429 kb, QC_1 77
+  kb, TB2780 269 kb, TB3169 963 kb and 473 kb, TB3334 1.7 Mb). Not fixed.
+  Previous outputs: phaseB/out/qc51_v5g.
