@@ -35,6 +35,10 @@ in the same pass, for comparison.
 --sites writes junction positions with their read counts (split, clip), for
 the cross-sample recurrence step (sites that fold back in many samples are a
 property of the reference, not of one library).
+
+--names writes the names of the reads counted as fold-back (split or clip),
+one per line, for the read-removal experiment (FOLDBACK_SV_EFFECT_PLAN.md,
+part C); removing a name removes both mates and every alignment of the pair.
 """
 import argparse
 import collections
@@ -72,6 +76,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--sites")
     ap.add_argument("--frac", type=float, default=1.0)
+    ap.add_argument("--names")
     a = ap.parse_args()
     bam = pysam.AlignmentFile(a.bam, reference_filename=a.ref)
     fa = pysam.FastaFile(a.ref)
@@ -80,6 +85,7 @@ def main():
     n = collections.Counter()
     sites = collections.Counter()
     rlen, isize = [], []
+    names = set()
     for r in bam.fetch(until_eof=True):
         if r.is_secondary or r.is_supplementary:
             continue
@@ -114,6 +120,7 @@ def main():
             n["split"] += 1
             j = r.reference_end if rcl >= lc else r.reference_start
             sites[(ctg, j, "split")] += 1
+            names.add(r.query_name)
             continue
         if max(lc, rcl) < MINCLIP:
             continue
@@ -135,6 +142,7 @@ def main():
         if rc(near) in win:
             n["clip"] += 1
             sites[(ctg, j, "clip")] += 1
+            names.add(r.query_name)
         elif near in win:
             n["clip_forward"] += 1
         else:
@@ -153,6 +161,9 @@ def main():
                frac=a.frac)
     with open(a.out, "w") as fo:
         fo.write("\t".join(row) + "\n" + "\t".join(str(v) for v in row.values()) + "\n")
+    if a.names:
+        with gzip.open(a.names, "wt") as fo:
+            fo.writelines(x + "\n" for x in sorted(names))
     if a.sites:
         with gzip.open(a.sites, "wt") as fo:
             fo.write("contig\tpos\tkind\treads\n")

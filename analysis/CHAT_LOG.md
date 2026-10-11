@@ -2141,3 +2141,21 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     TruSeq, fold-back tracks short inserts (rho 0.61 adapter, 0.75 trimmed-
     length fraction); within Tn5, weakly (0.07, 0.29).
   - Adapter columns added to `selfcal/collect.py`.
+- **Fold-back effect on SV calls: part C started, D queued (user, 2026-10-11:
+  "start C now and queue D after"; also wants the major pipeline issues
+  wrapped up).** Plan `foldback_qc/FOLDBACK_SV_EFFECT_PLAN.md`. User context
+  (memory `within-host-tn5-short-insert`): their within-host Tn5 short-insert
+  samples could not be called below 10% AF.
+  - Part C isolates: 9 chimeric Phase B controls whose marinB63 reference is
+    their own genome (N0004, N0054, N0145, N0155, N1176, N1202, N1272,
+    N1274, RW_TB008; plan said 8). Cohort `fbremove` (registry row,
+    `runroot/refbias/fbremove` -> netscratch). QC 52219006, kraken2 52219010.
+  - `foldback_v2.py --names` (fold-back read names; test on N0004 5%:
+    1,808 names, rate 7.55).
+  - `removal/make_sets.py` (stage 1 `_all`, stage 2 adds `_fb50`, `_fb100`,
+    `_rand`), `01_sets.sbatch` (names, read sets by samtools view -N ^),
+    `02_post.sbatch` (fold-back, stats, caller v6 + assembly, self_noise).
+    Order by hand: make_qc_cohort -> make_sets 1 -> runner p2 -> 01_sets ->
+    runner p2 -> 02_post.
+  - Part D after selfcal54: reads to the nearest other panel genome, truth
+    from assembly differences.
