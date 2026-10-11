@@ -1805,3 +1805,39 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     not checked.
   Production code not changed (user). Parked in HANDOFF for the production
   update.
+- **Missed true events by cause** (`phaseB/missed.py` ->
+  `out/qc51/missed.tsv`; 44 isolates, all current rules; report only).
+  novel 13 of 67 missed, setE 13+5=18 of 66.
+  - **Truth errors, setE (8, confirmed):** 4 REPL (478-1,406 bp) and 4 INS
+    (QC_4 x2, QC_6 x2, 276-670 bp). Short reads: normal depth, no clipped
+    reads, no HaplotypeCaller SNP or indel inside. The isolate's assembly
+    does differ from R there (only one 300 bp flank aligns), but Nanopore
+    reads of the same isolates match R: mismatch inside = flanks (3-4%), no
+    >= 30 bp indel, clipped long reads no more frequent than in windows
+    10-20 kb away and at scattered positions. The setE assemblies are wrong
+    at these 8 places.
+  - **Same signature, novel (8 REPL, unconfirmed):** no long reads here.
+  - **Tandem repeat expansions (12: setE 10, novel 2):** 2,397,748 (6 setE +
+    TB3396; R has 2 copies of a 58 bp unit, isolates +2 units = +116 bp),
+    801,326 x2, 4,348,983 x2, N1177 1,840,217. Our caller keeps a left-clip
+    cluster at the array start A and a right-clip cluster at its end B
+    (68-110 bp apart) but does not pair them: INS needs the two within 20
+    bp, tandem_dup needs split reads, and the clipped bases continue one
+    unit back inside the array, not at A. Result BND or an INS at B with
+    the wrong size; dysgu calls ~half size at B. Depth across the array
+    does not give the size reliably (estimates 19-166 vs truth 53-116).
+  - **N1177 IS6110 at 1,312:** both clip clusters at 1,312/1,314, but split
+    reads go to another IS6110 copy and our caller formed a 1.3 Mb DEL
+    (1,315-1,298,112) instead of an INS; dysgu lowProb.
+  - TB3334 2.6 kb INS (four breakpoints, dysgu ~330-365 bp pieces); TB3169
+    truth INV (small inverted segment) called INS by both.
+  So on events the reads support (truth errors removed), setE misses 10 of
+  58, all tandem expansions; novel misses 5 of 59 (8 suspect REPL removed).
+- **setE defined**: Marin et al. assembly set E (`MtbSetE`), 17 isolates
+  from one study (ENA PRJNA720906, "Short- and long-read WGS of M.
+  tuberculosis"), Illumina NextSeq 500 + Nanopore on the same BioSample;
+  Phase B group `setE_polished` (assembly = Marin's genome for the isolate).
+  A setE event = a structural difference >= 50 bp between that assembly and
+  the isolate's matched reference R (truth.py: indels in alignments, or
+  DEL/INS/REPL/INV/REARR between alignments), scored when callable (not
+  within 50 bp of R's uncallable mask): 66 in the 15 scored isolates.

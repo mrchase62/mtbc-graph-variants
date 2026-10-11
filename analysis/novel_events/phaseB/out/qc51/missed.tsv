@@ -1,0 +1,32 @@
+group	sample	type	start	end	ref_len	alt_len	is6110_sized	cause	clipped_mapq20	clipped_lowmapq	dysgu
+novel	mar_TB1236	REPL	2578721	2579742	1022	940	0	no_call	1	0	
+novel	mar_TB1236	REPL	3000483	3001154	672	766	0	no_call	0	0	
+novel	mar_TB2661	REPL	1197796	1198625	830	787	0	no_call	0	0	
+novel	mar_TB2661	REPL	1569427	1569904	478	579	0	no_call	0	0	
+novel	mar_TB3334	INS	2354227	2354227	0	2657	0	sized_or_placed	0	0	
+novel	mar_TB2659	REPL	1806734	1807482	749	934	0	no_call	0	0	
+novel	mar_TB3162	REPL	3999133	3999722	590	738	0	no_call	0	0	
+novel	mar_TB2995	REPL	482677	483424	748	821	0	no_call	0	0	
+novel	mar_TB3396	INS	2397748	2397748	0	116	0	no_call	60	6	
+novel	mar_TB3396	REPL	2316805	2317461	657	754	0	no_call	0	0	
+novel	mar_TB3169	INV	2375463	2375474	0	0	0	wrong_type	54	0	
+novel	mar_N1177	INS	1312	1312	0	1358	1	dysgu_filtered	86	0	lowProb AF=0.29
+novel	mar_N1177	INS	1840217	1840217	0	114	0	sized_or_placed	38	1	
+setE_polished	mar_QC_6	INS	225498	225498	0	317	0	no_call	0	0	
+setE_polished	mar_QC_6	INS	1147895	1147895	0	670	0	no_call	0	0	
+setE_polished	mar_4549_04	INS	2397748	2397748	0	116	0	sized_or_placed	20	2	
+setE_polished	mar_696_05	INS	2397748	2397748	0	116	0	sized_or_placed	22	2	
+setE_polished	mar_9050_05	INS	801326	801326	0	108	0	sized_or_placed	84	0	
+setE_polished	mar_9050_05	INS	2397748	2397748	0	116	0	sized_or_placed	31	0	
+setE_polished	mar_9050_05	INS	4348983	4348983	0	53	0	bnd_only	18	0	PASS AF=0.197
+setE_polished	mar_3003_06	INS	2397748	2397748	0	116	0	sized_or_placed	28	4	
+setE_polished	mar_3003_06	INS	4348983	4348983	0	53	0	bnd_only	27	0	
+setE_polished	mar_702_06	INS	801326	801326	0	108	0	sized_or_placed	93	0	
+setE_polished	mar_702_06	INS	2397748	2397748	0	116	0	sized_or_placed	25	1	
+setE_polished	mar_702_06	REPL	1074113	1074793	681	700	0	no_call	0	0	
+setE_polished	mar_706_05	REPL	1015245	1016563	1319	1406	0	no_call	0	0	
+setE_polished	mar_QC_9	REPL	3271846	3273156	1311	1130	0	no_call	1	0	
+setE_polished	mar_8651_04	INS	2397748	2397748	0	116	0	sized_or_placed	15	0	
+setE_polished	mar_8651_04	REPL	677741	678614	874	829	0	no_call	1	0	
+setE_polished	mar_QC_4	INS	4291045	4291045	0	276	0	no_call	0	0	
+setE_polished	mar_QC_4	INS	4317251	4317251	0	294	0	no_call	0	0	
