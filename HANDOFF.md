@@ -399,6 +399,15 @@ dysgu AF>=0.2: novel 0.806 recall / 0.832 precision, setE 0.727 / 0.809,
 controls 0 false calls from dysgu, 1 from ours. Remaining false calls of
 ours in setE: 6 real 24-29 bp indels below the 50 bp truth cutoff, 3 other.
 Production P2/P4b/P5 are not yet updated with these changes.
+Parked for the production update (user: no production code changes yet):
+harmonize small / SV / IS6110 records. scale200_fix's merged VCF writes many
+events twice (analysis/harmonize/overlap.py): 787 SV records (13%) duplicate
+small-class indels, mostly inherited reference-vs-H37Rv differences that P4's
+composed arm writes as exact alleles and the SV block as inherited/interval
+records; 291 called SV INS (14%) are truncated calls of IS6110 insertions the
+IS6110 arm already has; 18 ~1.36 kb SV DEL intervals are IS6110 copy losses.
+Also the SV-caller rules from Phase B (short-anchor, HC hand-off, tatC-helY
+genotype) are evaluation-only.
 
 ## Earlier start-here (2026-10-05)
 

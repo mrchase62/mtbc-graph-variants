@@ -1782,3 +1782,26 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   indels, so one event can be represented more than once (an IS6110
   insertion as an IS6110 key and a dysgu INS; a 30-49 bp indel as a HC
   allele and a dysgu call, dysgu's minimum is 30 bp). Not measured yet.
+- **Double representation in scale200_fix's merged VCF**
+  (`analysis/harmonize/overlap.py` -> `analysis/harmonize/scale200_fix.tsv`;
+  report only, no production change). 200 samples; 3,170 small indels >= 10
+  bp, 752 IS6110 records, 2,029 SV INS, 4,194 SV DEL records. Counts are
+  sample-level pairs (same sample carries both), by proximity and size:
+  - small indel vs SV (within 60 bp, sizes within 70%): 8,629 pairs, 787
+    distinct SV records (13% of SV records). By SV origin: inherited/mixed
+    5,352, graph interval 3,009, called 268. So it is mostly the INHERITED
+    reference-vs-H37Rv differences, written twice: as exact alleles by P4's
+    composed arm (CLASS small, often >= 50 bp, PE/PPE and masked regions)
+    and as SV inherited/interval records. Called SV vs HaplotypeCaller is
+    only 3%.
+  - small-class indels >= 50 bp: 18,988 sample calls (1,961 records), 10,932
+    with an SV record within 60 bp. Not HaplotypeCaller: composed alleles.
+    Some are whole IS6110 copies (e.g. h37rv:3552709).
+  - IS6110: 368 pairs where a called SV INS (291 distinct records, 14% of SV
+    INS; median size 234 bp, i.e. truncated IS6110 calls) sits within 200 bp
+    of an IS6110 insertion the same sample carries. 1,544 sample calls of
+    ~1.36 kb SV DEL graph intervals (18 records) at IS6110 sites: element
+    copy losses written as SV DEL; whether the IS6110 arm also codes them
+    not checked.
+  Production code not changed (user). Parked in HANDOFF for the production
+  update.
