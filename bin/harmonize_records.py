@@ -22,16 +22,20 @@ the arm best placed to call it, on H37Rv-frame records:
      with an indel of >= 50 bp that matches an SV record (start within
      HC_WIN, same direction, sizes within PCTSIZE, ALT carriers overlapping
      by Jaccard >= 0.5) is dropped; its key goes to the SV record's
-     SMALLALLELE, and the SV record's no-call cells take the small record's
-     state. One with no SV match becomes CLASS=sv itself (its exact REF/ALT
+     SMALLALLELE, and the SV record's no-call cells (not those rules 1 and 3
+     set to DUP) take the small record's state. One with no SV match becomes CLASS=sv itself (its exact REF/ALT
      kept, SVSOURCE=small_allele), so every >= 50 bp event is CLASS=sv.
   3. IS6110 insertions belong to the IS6110 arm. In a sample where a caller
      SV insertion of any size is ALT and an IS6110 record within IS_WIN (100
      bp) is ALT, the SV cell is set to no-call (ST=DUP): the callers report
      the element's junctions as truncated insertions (median 234 bp on
      scale200_fix), which the merge's exact-length rule (1,340-1,370 bp
-     within 20 bp) let through.
-  4. IS6110 copy losses get one labelled record. A deletion record whose
+     within 20 bp) let through. Small-class alleles relabelled by rule 2
+     carry their exact sequence, so they are not truncated: they are handed
+     over only when IS6110-sized (IS_LEN, 1,300-1,420 bp). Shorter
+     insertions near an IS6110 site are other events and are kept.
+  4. IS6110 copy losses get one labelled record. A deletion record (either
+     SV source, or a small-class allele relabelled by rule 2) whose
      first and last deleted bases lie within LOSS_TOL (50 bp) of the ends of
      an H37Rv IS6110 copy becomes CLASS=is6110 with IS6110LOSS and LOWCONF:
      the IS6110 arm cannot state a loss (its allele is an insertion), and
@@ -41,8 +45,9 @@ the arm best placed to call it, on H37Rv-frame records:
   5. Every record lists the arms that saw it in SOURCES: small, sv_caller,
      sv_catalogue, is6110, accessory; an arm whose cells or record were
      absorbed is added to the record that kept the event.
-A caller SV record left with no ALT cell is dropped (it is presence-only, so
-it would state nothing).
+A caller SV record, or a relabelled small allele, left with no ALT cell is
+dropped: every carrier's call was absorbed by the arm that owns the event,
+which states the other samples too.
 
 Within a sharded merge, each shard harmonizes its own records; a pair split
 across a shard boundary (within 100 bp of it) is not seen. Counted in the
@@ -53,6 +58,7 @@ import collections
 
 HC_WIN = 60
 IS_WIN = 100
+IS_LEN = (1300, 1420)
 PCTSIZE = 0.7
 LOSS_TOL = 50
 DUP_CELL = ".:DUP"
@@ -171,25 +177,27 @@ def harmonize(recs, h37_contig, copies=()):
                     sources[j].add("sv_caller")
                     n["rule1 SV cells handed to HaplotypeCaller"] += 1
 
+    def hand_to_is6110(cands, src):
+        for i in cands:
+            near = window(is_pos, is_ins, recs[i][1], IS_WIN)
+            if not near:
+                continue
+            c = get_cells(i)
+            for j in near:
+                cj = get_cells(j)
+                for s, x in enumerate(c):
+                    if not _is_alt(x):
+                        continue
+                    if _is_alt(cj[s]):
+                        c[s] = DUP_CELL
+                        sources[j].add(src)
+                        n["rule3 SV INS cells handed to the IS6110 arm"] += 1
+                    elif cj[s].split(":", 1)[-1] in ("REF", "ABSENT"):
+                        n["rule3 SV INS ALT where the IS6110 arm says REF/ABSENT (kept)"] += 1
+
     # rule 3: caller SV insertion cells that are IS6110 insertions
-    for i in sv_idx:
-        if infos[i].get("SVTYPE") != "INS" or infos[i].get("COMPONENT") == "interval":
-            continue
-        near = window(is_pos, is_ins, recs[i][1], IS_WIN)
-        if not near:
-            continue
-        c = get_cells(i)
-        for j in near:
-            cj = get_cells(j)
-            for s, x in enumerate(c):
-                if not _is_alt(x):
-                    continue
-                if _is_alt(cj[s]):
-                    c[s] = DUP_CELL
-                    sources[j].add("sv_caller")
-                    n["rule3 SV INS cells handed to the IS6110 arm"] += 1
-                elif cj[s].split(":", 1)[-1] in ("REF", "ABSENT"):
-                    n["rule3 SV INS ALT where the IS6110 arm says REF/ABSENT (kept)"] += 1
+    hand_to_is6110([i for i in sv_idx if infos[i].get("SVTYPE") == "INS"
+                    and infos[i].get("COMPONENT") != "interval"], "sv_caller")
 
     # rule 2: small-class alleles of >= 50 bp
     for _, j in small_ind:
@@ -218,7 +226,7 @@ def harmonize(recs, h37_contig, copies=()):
         i = best[0]
         ci, cj = get_cells(i), get_cells(j)
         for s, x in enumerate(ci):
-            if x.startswith(".:") and not cj[s].startswith(".:"):
+            if x.startswith(".:") and x != DUP_CELL and not cj[s].startswith(".:"):
                 ci[s] = cj[s]
                 n["rule2 SV no-call cells filled from the small allele"] += 1
             elif _is_alt(x) != _is_alt(cj[s]) and not cj[s].startswith(".:") and not x.startswith(".:"):
@@ -231,15 +239,24 @@ def harmonize(recs, h37_contig, copies=()):
         drop.add(j)
         n["rule2 small alleles >= 50 bp merged into an SV record"] += 1
 
+    relabelled = [j for j in h37 if j not in drop and infos[j].get("SVSOURCE") == "small_allele"]
+    # rule 3 for small-class alleles relabelled by rule 2: exact sequence, not
+    # truncated, so only IS6110-sized ones are the IS6110 arm's insertion
+    hand_to_is6110([j for j in relabelled if infos[j].get("SVTYPE") == "INS"
+                    and IS_LEN[0] <= _sv_len(infos[j]) <= IS_LEN[1]], "small")
+
     # rule 4: deletions that are an H37Rv IS6110 copy
-    for i in sv_idx:
+    for i in sv_idx + relabelled:
         if i in drop or infos[i].get("SVTYPE") != "DEL":
             continue
-        first = recs[i][1] + 1                       # symbolic DEL: anchor base before
-        try:
-            last = int(infos[i].get("END", ""))
-        except ValueError:
-            continue
+        first = recs[i][1] + 1     # symbolic DEL: anchor base before; allele: shared first base
+        if infos[i].get("SVSOURCE") == "small_allele":
+            last = recs[i][1] + len(recs[i][3]) - 1
+        else:
+            try:
+                last = int(infos[i].get("END", ""))
+            except ValueError:
+                continue
         if any(abs(first - a) <= LOSS_TOL and abs(last - b) <= LOSS_TOL for a, b in copies):
             info = _set_info(_set_info(_set_info(recs[i][5], "CLASS", "is6110"), "IS6110LOSS"), "LOWCONF")
             recs[i] = recs[i][:5] + (info,) + recs[i][6:]
@@ -252,7 +269,8 @@ def harmonize(recs, h37_contig, copies=()):
             continue
         if i in cells:
             c = cells[i]
-            if infos[i].get("CLASS") == "sv" and infos[i].get("COMPONENT") in ("called", "mixed", "inherited") \
+            if infos[i].get("CLASS") == "sv" and (infos[i].get("COMPONENT") in ("called", "mixed", "inherited")
+                                                  or infos[i].get("SVSOURCE") == "small_allele") \
                     and not any(_is_alt(x) for x in c):
                 n["caller SV records dropped: no ALT cell left"] += 1
                 continue

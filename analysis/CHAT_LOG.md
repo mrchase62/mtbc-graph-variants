@@ -2045,3 +2045,42 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     the most. Fold-back is one noise source, mixing another.
   Conclusion: v2 is somewhat more sensitive and better defined, but ranks
   isolates the same; the earlier QC decisions stand.
+- **Harmonization in production** (`bin/harmonize_records.py`, called by
+  `merge_cohort_vcf.py` before sorting; `--is6110-gff` passed by
+  `p5_finish.sh` from `<build>/assets/is6110_elements.gff`, 16 H37Rv copies;
+  `--no-harmonize` to skip; header: SOURCES, SMALLALLELE, IS6110LOSS,
+  LOWCONF, ST=DUP). Tests: `tests/test_harmonize.py` (16), plus
+  run_tests.py (369) and the audit suites, all pass. Merge-only rerun of
+  scale200_fix (runner `--only p5vcf`; 52143216, then 52143721 and 52144022
+  after two fixes found by the before/after check; ~45 s each; vcf_gate
+  passed). Previous VCF kept as
+  `scale200_fix/p5/merged.preharmonize_20261011.vcf.gz`.
+  - Fix 1: rule 2's fill of no-call cells overwrote DUP cells set by rules
+    1/3 (2 cells went ALT -> REF); now DUP cells are left alone.
+  - Fix 2: rules 3 and 4 did not see small alleles that rule 2 relabelled
+    CLASS=sv, so two H37Rv copy losses (3,551,230, 169 carriers; 2,635,577)
+    and 16 IS6110-sized exact insertions were missed. Rule 3 now also takes
+    relabelled insertions of 1,300-1,420 bp (exact sequence, so not
+    truncated; shorter ones near IS6110 are other events); rule 4 takes
+    relabelled deletions.
+  Result (`analysis/harmonize/compare_scale200_fix.txt`):
+    records small 79,007 -> 77,104 (400 merged into SV records, 1,503
+    relabelled CLASS=sv); sv 6,223 -> 7,374 (319 caller records dropped,
+    all calls absorbed); is6110 copy losses 0 -> 23 (LOWCONF).
+    Cells: 30,605 SV no-calls now REF, 854 ABSENT, 476 ALT (from the merged
+    small allele); 135 SV ALT -> DUP. 944 SV INS ALT cells where the IS6110
+    arm says REF/ABSENT, kept and counted.
+    Drug-resistance windows (gyrA, rpoB, rpoC, rpsL, rrs, fabG1-inhA, katG,
+    pncA, eis, embB, gid, ethA): identical records and genotypes.
+  overlap.py after (`scale200_fix_harmonized.tsv`) vs before:
+    small_sv pairs 8,629 -> 64 (SV records 787 -> 15); small_ge50 with an SV
+    record 10,932 -> 0; IS6110-near SV INS records 291 -> 103 (69 under 200
+    bp, 29 other sizes: flank variants, not the element; 5 IS-sized where
+    the arm disagrees or > 100 bp away); IS6110-sized DEL records 18 -> 14,
+    pairs 1,544 -> 203: the rest are not within 50 bp of an H37Rv copy's
+    ends (e.g. svi:DEL:2635522:1408 starts 54 bp before the copy at
+    2,635,577, 179 carriers) or lie at copies H37Rv lacks.
+  Not rerun: P6 annotation and the association tail of scale200_fix;
+  scale200 and gwas1000 merged VCFs predate this code.
+- **Open decision**: copy-loss tolerance 50 bp (approved) misses
+  svi:DEL:2635522:1408 by 4 bp; 100 bp would take it.

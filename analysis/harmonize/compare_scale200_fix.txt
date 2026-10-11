@@ -1,0 +1,28 @@
+records by class: before -> after
+  accessory_presence           204 ->     204
+  is6110                       752 ->     752
+  is6110+IS6110LOSS              0 ->      23
+  small                     79,007 ->  77,104
+  sv                         6,223 ->   7,374
+removed: {'small': 410, 'sv': 319}  added: {}
+GT changes in kept records (class, change, new ST):
+  ('sv', '.->0', 'REF'): 30,605
+  ('sv', '.->2', 'ABSENT'): 854
+  ('sv', '.->1', 'ALT'): 476
+  ('sv', '1->.', 'DUP'): 135
+  ('is6110+IS6110LOSS', '.->0', 'REF'): 9
+  ('is6110+IS6110LOSS', '.->1', 'ALT'): 8
+  ('is6110+IS6110LOSS', '.->2', 'ABSENT'): 2
+drug-resistance gene windows (+-200 bp):
+  gyrA        records   69 ->   69; removed []; added 0; non-DUP GT changes 0; DUP cells 0
+  rpoB        records   45 ->   45; removed []; added 0; non-DUP GT changes 0; DUP cells 0
+  rpoC        records  107 ->  107; removed []; added 0; non-DUP GT changes 0; DUP cells 0
+  rpsL        records    9 ->    9; removed []; added 0; non-DUP GT changes 0; DUP cells 0
+  rrs         records   31 ->   31; removed []; added 0; non-DUP GT changes 0; DUP cells 0
+  fabG1-inhA  records   21 ->   21; removed []; added 0; non-DUP GT changes 0; DUP cells 0
+  katG        records   20 ->   20; removed []; added 0; non-DUP GT changes 0; DUP cells 0
+  pncA        records   50 ->   50; removed []; added 0; non-DUP GT changes 0; DUP cells 0
+  eis         records   24 ->   24; removed []; added 0; non-DUP GT changes 0; DUP cells 0
+  embB        records   66 ->   66; removed []; added 0; non-DUP GT changes 0; DUP cells 0
+  gid         records   43 ->   43; removed []; added 0; non-DUP GT changes 0; DUP cells 0
+  ethA        records   45 ->   45; removed []; added 0; non-DUP GT changes 0; DUP cells 0

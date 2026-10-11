@@ -78,6 +78,16 @@ class Rule2SvBlockOwnsLarge(unittest.TestCase):
         self.assertEqual(r[6].split("\t"), ["1:ALT", "0:REF", ".:NOCALL"])
         self.assertEqual(info(r)["SOURCES"], "small,sv_catalogue")
 
+    def test_dup_cell_not_refilled(self):
+        # rule 3 hands sample 0's SV call to the IS6110 arm; rule 2's fill
+        # from a merged small allele must not turn that DUP into REF
+        big = "A" + "C" * 1382
+        recs = [isrec(9000, ["ALT", "REF"]),
+                small(9020, "A", big, ["REF", "ALT"]),
+                sv(9020, "INS", 1382, ["ALT", "ALT"])]
+        out, _ = h.harmonize(recs, C)
+        self.assertEqual(by_id(out)["sv:INS:9020:1382"][6].split("\t")[0], h.DUP_CELL)
+
     def test_unmatched_large_small_allele_relabelled(self):
         recs = [small(3000, "G", "G" + "A" * 120, ["ALT"])]
         out, _ = h.harmonize(recs, C)
@@ -101,6 +111,16 @@ class Rule3IS6110OwnsInsertions(unittest.TestCase):
         self.assertEqual(n["rule3 SV INS ALT where the IS6110 arm says REF/ABSENT (kept)"], 1)
         self.assertIn("sv_caller", info(by_id(out)["h37rv:5000"])["SOURCES"])
 
+    def test_relabelled_is_sized_allele_handed_over(self):
+        recs = [isrec(6000, ["ALT"]), small(6010, "A", "A" + "C" * 1355, ["ALT"])]
+        out, _ = h.harmonize(recs, C)
+        self.assertNotIn(recs[1][2], by_id(out))     # its only ALT cell went to IS6110
+
+    def test_relabelled_short_allele_near_is6110_kept(self):
+        recs = [isrec(6000, ["ALT"]), small(6010, "A", "A" + "C" * 73, ["ALT"])]
+        out, _ = h.harmonize(recs, C)
+        self.assertEqual(by_id(out)[recs[1][2]][6], "1:ALT")
+
     def test_far_ins_untouched(self):
         recs = [isrec(5000, ["ALT"]), sv(5200, "INS", 234, ["ALT"])]
         out, _ = h.harmonize(recs, C)
@@ -115,6 +135,13 @@ class Rule4CopyLoss(unittest.TestCase):
         self.assertEqual(i["CLASS"], "is6110")
         self.assertIn("IS6110LOSS", i)
         self.assertIn("LOWCONF", i)
+
+    def test_relabelled_small_allele_copy_loss(self):
+        ref = "T" + "G" * 1355
+        recs = [small(889020, ref, "T", ["ALT", "REF"])]
+        out, _ = h.harmonize(recs, C, copies=[(889021, 890375)])
+        i = info(out[0])
+        self.assertEqual((i["CLASS"], "IS6110LOSS" in i), ("is6110", True))
 
     def test_other_deletion_not_labelled(self):
         recs = [sv(880000, "DEL", 1355, ["ALT"], component="interval", end=881355)]
