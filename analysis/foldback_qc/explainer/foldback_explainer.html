@@ -1,0 +1,399 @@
+<title>Fold-back Chimeras and False SVs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column (~68ch) with full-width figure panels; the two DNA strands carry the colour system (forward = blue, reverse = amber). */
+:root{
+  --bg:#f6f8fa; --panel:#ffffff; --fg:#17202a; --muted:#56616d; --rule:#d9e0e7;
+  --fwd:#1f6fb2; --rev:#c9821b; --bad:#b8402f; --good:#2f7d4f; --grid:#e6ebf0;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f141a; --panel:#161d25; --fg:#e4e9ee; --muted:#9aa6b2; --rule:#2a3540;
+  --fwd:#5aa7e6; --rev:#e8a94a; --bad:#e2735f; --good:#5cbf85; --grid:#222c36; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141a; --panel:#161d25; --fg:#e4e9ee; --muted:#9aa6b2; --rule:#2a3540;
+  --fwd:#5aa7e6; --rev:#e8a94a; --bad:#e2735f; --good:#5cbf85; --grid:#222c36; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:16px/1.6 var(--body);margin:0}
+.wrap{max-width:980px;margin:0 auto;padding-inline:20px;padding-block:40px 64px}
+.col{max-width:68ch}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:clamp(28px,4.4vw,42px);font-weight:700;letter-spacing:-.01em}
+h2{font-size:clamp(21px,2.6vw,26px);font-weight:700;margin-top:56px}
+h3{font-size:17px;font-weight:700;margin-top:4px}
+p{margin:12px 0}
+.lede{font-size:18px;color:var(--fg);margin-top:16px}
+.eyebrow{font:600 12px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.step{display:flex;gap:10px;align-items:baseline;margin-top:56px}
+.step .n{font:600 13px var(--mono);color:var(--muted);border:1px solid var(--rule);border-radius:999px;padding:2px 9px;flex:none}
+.step h2{margin-top:0}
+.fwd{color:var(--fwd);font-weight:700}.rev{color:var(--rev);font-weight:700}
+figure{margin:20px 0 8px;background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:18px 18px 14px}
+figcaption{font-size:14px;color:var(--muted);margin-top:10px;max-width:80ch}
+.scroll{overflow-x:auto}
+svg text{font-family:var(--body)}
+svg .mono{font-family:var(--mono)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.grid2>figure{margin:0;min-width:0}
+.key{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--muted);margin:4px 0 8px}
+.key i{display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:-1px;margin-right:6px}
+.summary{display:grid;gap:10px;margin-top:22px;padding:16px 18px;border-left:3px solid var(--fwd);background:var(--panel);border-radius:0 8px 8px 0}
+.summary p{margin:0}
+table{border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums;width:100%}
+th,td{text-align:right;padding:6px 10px;border-bottom:1px solid var(--rule);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-weight:700;color:var(--muted);font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+.src{font-size:13px;color:var(--muted);margin-top:40px;border-top:1px solid var(--rule);padding-top:14px}
+code{font-family:var(--mono);font-size:.88em}
+</style>
+
+<div class="wrap">
+  <div class="col">
+    <div class="eyebrow">mtbc-graph-variants · SV calling · 2026-10-11</div>
+    <h1 style="margin-top:10px">How fold-back chimeras make false SV calls</h1>
+    <p class="lede">A fold-back chimera is a single library molecule that reads along the genome and then turns back on itself, continuing along the opposite strand. Aligned, it looks exactly like a read crossing an inversion breakpoint. When enough of these reads pile up at one spot, SV callers report a small inversion that is not in the genome.</p>
+    <div class="summary">
+      <p><b>What the read-removal experiment showed.</b> In 9 chimeric libraries mapped to their own finished genomes, where every SV call is false, deleting only the fold-back read pairs (1.3–10.7% of pairs) removed 95% of our caller's false calls and 90% of dysgu's. Deleting the same number of random pairs removed none.</p>
+    </div>
+  </div>
+
+  <!-- STEP 1 -->
+  <div class="step"><span class="n">1</span><h2>The molecule folds back during library prep</h2></div>
+  <div class="col">
+    <p>Fragmenting DNA (sonication, nuclease or Tn5) leaves ends with single-stranded stretches. If that stretch contains an <b>inverted repeat</b>, a short sequence followed nearby by its reverse complement, the end can pair with itself. A polymerase in end repair or gap filling then copies back along the template, joining the <span class="fwd">forward strand</span> to the <span class="rev">reverse complement</span> of nearby sequence. This is the mechanism Haile et al. (2019) described for sonicated and enzymatically fragmented libraries.</p>
+  </div>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 920 250" width="100%" style="min-width:640px" role="img" aria-label="Diagram of a DNA end folding back at an inverted repeat and being extended into a chimeric molecule">
+      <defs>
+        <marker id="aF" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--fwd)"/></marker>
+        <marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--rev)"/></marker>
+        <marker id="aM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+      </defs>
+      <!-- panel a -->
+      <text x="10" y="22" font-size="13" font-weight="700" fill="var(--fg)">a  Genome around an inverted repeat</text>
+      <line x1="20" y1="80" x2="270" y2="80" stroke="var(--fwd)" stroke-width="6" stroke-linecap="round"/>
+      <rect x="80" y="70" width="40" height="20" rx="3" fill="none" stroke="var(--fg)" stroke-width="1.5"/>
+      <rect x="190" y="70" width="40" height="20" rx="3" fill="none" stroke="var(--fg)" stroke-width="1.5"/>
+      <text x="100" y="62" font-size="12" text-anchor="middle" fill="var(--fg)" class="mono">ACGGTC</text>
+      <text x="210" y="62" font-size="12" text-anchor="middle" fill="var(--fg)" class="mono">GACCGT</text>
+      <path d="M100,100 C120,128 190,128 210,100" fill="none" stroke="var(--muted)" stroke-dasharray="3 3"/>
+      <text x="155" y="140" font-size="12" text-anchor="middle" fill="var(--muted)">reverse complements</text>
+      <text x="20" y="170" font-size="12" fill="var(--muted)">stem 8–12 bp, loop up to ~100 bp</text>
+
+      <!-- arrow -->
+      <line x1="290" y1="90" x2="330" y2="90" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#aM)"/>
+
+      <!-- panel b -->
+      <text x="345" y="22" font-size="13" font-weight="700" fill="var(--fg)">b  Single-stranded end pairs with itself</text>
+      <line x1="355" y1="80" x2="520" y2="80" stroke="var(--fwd)" stroke-width="6" stroke-linecap="round"/>
+      <path d="M520,80 C575,80 590,118 545,124" fill="none" stroke="var(--fwd)" stroke-width="6" stroke-linecap="round"/>
+      <rect x="470" y="70" width="40" height="20" rx="3" fill="none" stroke="var(--fg)" stroke-width="1.5"/>
+      <rect x="470" y="114" width="40" height="20" rx="3" fill="none" stroke="var(--fg)" stroke-width="1.5"/>
+      <line x1="545" y1="124" x2="515" y2="124" stroke="var(--fwd)" stroke-width="6" stroke-linecap="round"/>
+      <g stroke="var(--muted)" stroke-width="1.2"><line x1="478" y1="92" x2="478" y2="112"/><line x1="488" y1="92" x2="488" y2="112"/><line x1="498" y1="92" x2="498" y2="112"/></g>
+      <line x1="465" y1="124" x2="372" y2="124" stroke="var(--rev)" stroke-width="6" stroke-dasharray="2 0" marker-end="url(#aR)"/>
+      <text x="420" y="152" font-size="12" text-anchor="middle" fill="var(--rev)">polymerase copies back</text>
+      <text x="355" y="190" font-size="12" fill="var(--muted)">the stem acts as a primer on its own strand</text>
+
+      <!-- arrow -->
+      <line x1="610" y1="90" x2="650" y2="90" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#aM)"/>
+
+      <!-- panel c -->
+      <text x="665" y="22" font-size="13" font-weight="700" fill="var(--fg)">c  Chimeric molecule, sequenced</text>
+      <line x1="675" y1="90" x2="780" y2="90" stroke="var(--fwd)" stroke-width="8" marker-end="url(#aF)"/>
+      <line x1="782" y1="90" x2="900" y2="90" stroke="var(--rev)" stroke-width="8" marker-end="url(#aR)"/>
+      <line x1="781" y1="72" x2="781" y2="108" stroke="var(--fg)" stroke-width="1.5"/>
+      <text x="781" y="64" font-size="12" text-anchor="middle" fill="var(--fg)">junction</text>
+      <text x="727" y="124" font-size="12" text-anchor="middle" fill="var(--fwd)">genome, + strand</text>
+      <text x="841" y="124" font-size="12" text-anchor="middle" fill="var(--rev)">nearby genome, − strand</text>
+      <text x="675" y="170" font-size="12" fill="var(--muted)">one read = forward sequence, then the</text>
+      <text x="675" y="187" font-size="12" fill="var(--muted)">reverse complement of sequence nearby</text>
+    </svg>
+    </div>
+    <figcaption>Schematic. The DNA that is sequenced is real Mtb sequence on both sides of the junction; only the way the two halves are joined is artificial. That is why haploid SNP calling barely notices these reads, while SV calling, which reads joins, is fooled.</figcaption>
+  </figure>
+
+  <!-- STEP 2 -->
+  <div class="step"><span class="n">2</span><h2>The aligner splits the read across both strands</h2></div>
+  <div class="col">
+    <p>bwa aligns the first part of the read on one strand and the second part on the other strand a short distance away. The second part is recorded as a supplementary alignment (the SA tag), or, when it is too short to place, as a soft clip. Below is a real read from isolate N1176, a 151 bp Tn5 library.</p>
+  </div>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 920 210" width="100%" style="min-width:640px" role="img" aria-label="A real fold-back read from N1176 aligned in two pieces on opposite strands about 500 bp apart">
+      <!-- genome axis 550..1350 => x 40..880 -->
+      <line x1="40" y1="150" x2="880" y2="150" stroke="var(--muted)" stroke-width="1.5"/>
+      <g font-size="11" fill="var(--muted)" class="mono" text-anchor="middle">
+        <line x1="92.5" y1="146" x2="92.5" y2="154" stroke="var(--muted)"/><text x="92.5" y="170">600</text>
+        <line x1="302.5" y1="146" x2="302.5" y2="154" stroke="var(--muted)"/><text x="302.5" y="170">800</text>
+        <line x1="512.5" y1="146" x2="512.5" y2="154" stroke="var(--muted)"/><text x="512.5" y="170">1,000</text>
+        <line x1="722.5" y1="146" x2="722.5" y2="154" stroke="var(--muted)"/><text x="722.5" y="170">1,200</text>
+      </g>
+      <text x="40" y="196" font-size="12" fill="var(--muted)">position on the isolate's own genome (NZ_CP069069.1, bp)</text>
+      <!-- primary 619-695 forward -->
+      <line x1="112.45" y1="110" x2="190.9" y2="110" stroke="var(--fwd)" stroke-width="10" marker-end="url(#aF)"/>
+      <text x="151" y="96" font-size="12" text-anchor="middle" fill="var(--fwd)">read bases 75–151</text>
+      <text x="151" y="132" font-size="11" text-anchor="middle" fill="var(--muted)" class="mono">619–695, + strand</text>
+      <!-- SA 1197-1275 reverse -->
+      <line x1="822.6" y1="110" x2="740.9" y2="110" stroke="var(--rev)" stroke-width="10" marker-end="url(#aR)"/>
+      <text x="782" y="96" font-size="12" text-anchor="middle" fill="var(--rev)">read bases 1–79</text>
+      <text x="782" y="132" font-size="11" text-anchor="middle" fill="var(--muted)" class="mono">1,197–1,275, − strand</text>
+      <!-- connector -->
+      <path d="M191,104 C320,40 620,40 741,104" fill="none" stroke="var(--fg)" stroke-dasharray="4 4"/>
+      <text x="466" y="44" font-size="12" text-anchor="middle" fill="var(--fg)">same read, continues on the opposite strand ~500 bp away</text>
+      <text x="40" y="22" font-size="12" fill="var(--muted)" class="mono">CIGAR 74S77M · SA: NZ_CP069069.1,1197,−,72S79M,MAPQ 60</text>
+    </svg>
+    </div>
+    <figcaption>One read, two alignments on opposite strands. A genuine inversion breakpoint produces exactly this pattern, which is the problem.</figcaption>
+  </figure>
+
+  <div class="col">
+    <p>The distance between the two pieces depends on the library. In most of these libraries the second piece lands back on top of the first (a tight hairpin, pieces overlapping). In N1176, the worst library, it usually lands 100–600 bp away (a wider loop).</p>
+  </div>
+  <figure>
+    <div class="key" id="gapKey"></div>
+    <div class="scroll"><svg id="gapChart" viewBox="0 0 900 260" width="100%" style="min-width:560px" role="img" aria-label="Distribution of distance between the two pieces of fold-back reads in four isolates"></svg></div>
+    <figcaption>Distance between the two aligned pieces of 15,000 split fold-back reads per isolate (negative = the pieces overlap). Share of reads in 25 bp bins; values beyond 600 bp are pooled in the last bin.</figcaption>
+  </figure>
+
+  <!-- STEP 3 -->
+  <div class="step"><span class="n">3</span><h2>Callers read the split as an inversion</h2></div>
+  <div class="col">
+    <p>An SV caller collects reads whose pieces join opposite strands, clusters them by position, and calls an event once enough reads agree. Opposite-strand joins within a few hundred bases are the signature of a small inversion, so that is what comes out. The size reported is roughly the distance between the two pieces.</p>
+    <p>The difference from a real inversion is in what the other reads at the site show. At a real inversion every read that spans the breakpoint carries the join, there is a matching second breakpoint, and read depth is normal. At a fold-back junction only a few reads carry the join and every other read shows the reference.</p>
+  </div>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 920 270" width="100%" style="min-width:640px" role="img" aria-label="Comparison of read evidence at a real inversion and at a fold-back junction">
+      <text x="20" y="22" font-size="13" font-weight="700" fill="var(--fg)">Real inversion</text>
+      <text x="480" y="22" font-size="13" font-weight="700" fill="var(--fg)">Fold-back junction</text>
+      <!-- real: genome with inverted segment -->
+      <line x1="30" y1="60" x2="160" y2="60" stroke="var(--fwd)" stroke-width="7"/>
+      <line x1="300" y1="60" x2="160" y2="60" stroke="var(--rev)" stroke-width="7" marker-end="url(#aR)"/>
+      <line x1="300" y1="60" x2="430" y2="60" stroke="var(--fwd)" stroke-width="7"/>
+      <line x1="160" y1="46" x2="160" y2="250" stroke="var(--fg)" stroke-dasharray="3 4"/>
+      <line x1="300" y1="46" x2="300" y2="250" stroke="var(--fg)" stroke-dasharray="3 4"/>
+      <g id="realReads"></g>
+      <text x="30" y="262" font-size="12" fill="var(--muted)">all spanning reads split at BOTH breakpoints</text>
+      <!-- foldback -->
+      <line x1="490" y1="60" x2="890" y2="60" stroke="var(--fwd)" stroke-width="7"/>
+      <line x1="690" y1="46" x2="690" y2="250" stroke="var(--fg)" stroke-dasharray="3 4"/>
+      <g id="fbReads"></g>
+      <text x="490" y="262" font-size="12" fill="var(--muted)">a few split reads at ONE point; the rest show the reference</text>
+    </svg>
+    </div>
+    <figcaption>Schematic read pileups. Blue: read aligned on the + strand. Amber tail: the part of a split read that aligns to the − strand. Callers count the split reads; a caller that does not check what fraction of reads carry the join, or whether a partner breakpoint exists, calls both.</figcaption>
+  </figure>
+
+  <div class="col">
+    <p>The calls that disappeared when the fold-back reads were removed are almost all inversions (or our caller's unpaired breakends, which are the same signal without a partner). Nearly all are 50–500 bp.</p>
+  </div>
+  <figure>
+    <div class="key" id="typeKey"></div>
+    <div class="scroll"><svg id="typeChart" viewBox="0 0 900 200" width="100%" style="min-width:560px" role="img" aria-label="False calls removed by fold-back removal, by SV type and caller"></svg></div>
+    <figcaption>False calls removed by deleting fold-back read pairs (all reads minus 100% removed), 9 isolates summed, callable sequence. BND = our caller's unpaired breakend. dysgu counts are all PASS calls.</figcaption>
+  </figure>
+
+  <!-- STEP 4 -->
+  <div class="step"><span class="n">4</span><h2>Recurrence turns noise into a call</h2></div>
+  <div class="col">
+    <p>A single fold-back read is ignored: callers need several reads supporting the same junction. Two things stack reads at one junction.</p>
+    <p><b>PCR copies.</b> One chimeric molecule amplified during library PCR gives several identical reads. P2 does not mark duplicates, so each copy counts as support. In N0004 only 42% of reads at junctions with 5 or more reads were distinct molecules.</p>
+    <p><b>Sequence hotspots.</b> Even after collapsing copies, many junctions hold 5 or more independent molecules. Those sites are enriched for inverted repeats, the sequence that lets the end fold back in step 1.</p>
+  </div>
+  <div class="grid2">
+    <figure>
+      <h3>Inverted repeats at junctions</h3>
+      <div class="key" id="irKey"></div>
+      <svg id="irChart" viewBox="0 0 440 250" width="100%" role="img" aria-label="Share of sites with an inverted repeat: hotspot junctions, single-read junctions, random sites"></svg>
+      <figcaption>Share of sites with a 10-mer whose reverse complement occurs within the surrounding 120 bp. Up to 1,000 sites of each kind per isolate.</figcaption>
+    </figure>
+    <figure>
+      <h3>Recurrent junctions predict false calls</h3>
+      <svg id="recChart" viewBox="0 0 440 250" width="100%" role="img" aria-label="False calls against the number of junctions with 5 or more reads, 9 isolates"></svg>
+      <figcaption>Each point is one isolate: junctions with ≥5 fold-back reads (log scale) against dysgu calls at AF ≥ 0.2. Spearman 0.95 for recurrent junctions against 0.88 for the overall fold-back rate. RW_TB008 has a high rate but few recurrent junctions and almost no false calls.</figcaption>
+    </figure>
+  </div>
+
+  <!-- AF -->
+  <div class="step"><span class="n">5</span><h2>Why an allele-fraction floor is not enough</h2></div>
+  <div class="col">
+    <p>The allele fraction a caller reports is the share of reads at the site carrying the join. At a hotspot that can easily reach 10–20%, and dysgu, which counts reads differently, sometimes reports 50% or more. A 10% floor removes about half of our caller's fold-back calls; a 20% floor removes most of ours but leaves 1,703 dysgu calls in these 9 libraries.</p>
+  </div>
+  <figure>
+    <div class="key" id="afKey"></div>
+    <div class="scroll"><svg id="afChart" viewBox="0 0 900 230" width="100%" style="min-width:560px" role="img" aria-label="False calls by allele fraction bin, our caller and dysgu"></svg></div>
+    <figcaption>False calls on all reads, by the allele fraction the caller reported (ours: supporting reads over reads at the position; dysgu: its FORMAT AF). 9 chimeric isolates.</figcaption>
+  </figure>
+
+  <!-- PROOF -->
+  <div class="step"><span class="n">6</span><h2>Removing the fold-back reads removes the calls</h2></div>
+  <div class="col">
+    <p>Each library was run four ways: all reads; half of the fold-back pairs removed; all of them removed; and the same number of random non-fold-back pairs removed, which controls for the loss of depth. Insert size, library, genome and everything else stayed the same.</p>
+  </div>
+  <figure>
+    <div class="key" id="remKey"></div>
+    <div class="scroll"><svg id="remChart" viewBox="0 0 900 290" width="100%" style="min-width:600px" role="img" aria-label="False calls under four read sets for each caller"></svg></div>
+    <figcaption>False calls in callable sequence, 9 isolates summed. delly keeps 6,373 calls with every fold-back read gone, mostly below AF 0.1; it was dropped from production on this basis. Halving the fold-back reads cuts our caller's calls by 72%, more than half, because a call needs several reads at one junction.</figcaption>
+  </figure>
+
+  <div class="col">
+    <h2>What this means for the pipeline</h2>
+    <p>Small inversions and unpaired breakends from short reads are the calls to distrust; the agreed robust tier already leaves them out. Sample QC should catch libraries with many recurrent junctions, which the fold-back rate tracks well and the count of recurrent junctions may track better. The selfcal54 isolates will test where the false calls start, and whether insert size or junction recurrence adds to the rate.</p>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>Isolate</th><th>Fold-back /1,000</th><th>Junctions ≥5 reads</th><th>Ours, typed</th><th>dysgu AF≥0.2</th></tr></thead>
+      <tbody id="isoTable"></tbody>
+    </table>
+    </div>
+    <p class="src">Data: <code>analysis/foldback_qc/removal/</code> (read-removal experiment, cohort fbremove; <code>RESULTS.md</code>), fold-back scan v2 on all reads, our breakpoint caller v6 with local assembly, dysgu 1.9 and delly 1.3.3 from P2. Mechanism after Haile et al., Nucleic Acids Research 2019. Isolates: 9 Phase B in-panel controls with fold-back rates of 6.5–66.5 per 1,000, reads QC'd as the cohort standard and mapped to their own Marin 2024 genomes.</p>
+  </div>
+</div>
+
+<script>
+const D = {
+  gapBins: [-100,-75,-50,-25,0,25,50,75,100,125,150,175,200,225,250,275,300,325,350,375,400,425,450,475,500,525,550,575,600],
+  gaps: {"mar_N0004_all": [0.0, 0.0312, 0.3802, 0.2249, 0.1335, 0.0673, 0.0372, 0.0259, 0.0155, 0.0116, 0.0085, 0.0085, 0.0071, 0.0079, 0.0052, 0.0054, 0.0039, 0.0038, 0.0029, 0.0033, 0.0024, 0.0017, 0.0022, 0.0019, 0.0013, 0.0012, 0.0007, 0.0009, 0.004], "mar_RW_TB008_all": [0.0085, 0.1655, 0.4031, 0.132, 0.0897, 0.0416, 0.0235, 0.0204, 0.0154, 0.0099, 0.0098, 0.0086, 0.0065, 0.0059, 0.006, 0.0047, 0.0045, 0.0033, 0.0041, 0.0032, 0.0029, 0.0029, 0.0027, 0.0028, 0.0021, 0.0017, 0.0021, 0.0018, 0.0147], "mar_N0145_all": [0.0, 0.0233, 0.3363, 0.229, 0.1405, 0.0719, 0.0449, 0.029, 0.0185, 0.0133, 0.0113, 0.0075, 0.0068, 0.0055, 0.005, 0.0043, 0.0039, 0.0041, 0.0035, 0.0037, 0.0036, 0.0033, 0.0029, 0.0027, 0.0023, 0.0034, 0.0023, 0.0021, 0.0151], "mar_N1176_all": [0.0013, 0.0253, 0.0605, 0.0924, 0.1295, 0.0471, 0.0513, 0.0476, 0.0422, 0.0392, 0.0364, 0.0349, 0.0338, 0.0323, 0.0263, 0.0281, 0.0244, 0.0243, 0.0203, 0.0202, 0.0153, 0.0145, 0.015, 0.0121, 0.0123, 0.0098, 0.0103, 0.0089, 0.0846]},
+  types: [
+    {t:"INV", ours:753, dysgu:3451},
+    {t:"BND (ours)", ours:721, dysgu:0},
+    {t:"DEL", ours:9, dysgu:62},
+    {t:"INS", ours:0, dysgu:37}
+  ],
+  ir: [
+    {s:"N1176", hot:0.14, single:0.08, rnd:0.08},
+    {s:"N0145", hot:0.30, single:0.13, rnd:0.07},
+    {s:"RW_TB008", hot:0.39, single:0.14, rnd:0.07},
+    {s:"N0004", hot:0.26, single:0.16, rnd:0.08}
+  ],
+  iso: [
+    {s:"N0004", fb:7.7, hot:1089, ours:22, dy:21},
+    {s:"N0054", fb:29.9, hot:1989, ours:51, dy:277},
+    {s:"N0145", fb:13.0, hot:1976, ours:95, dy:197},
+    {s:"N0155", fb:6.5, hot:347, ours:9, dy:30},
+    {s:"N1176", fb:66.5, hot:8828, ours:463, dy:504},
+    {s:"N1202", fb:24.0, hot:1442, ours:23, dy:178},
+    {s:"N1272", fb:20.2, hot:1221, ours:35, dy:72},
+    {s:"N1274", fb:32.3, hot:2410, ours:81, dy:423},
+    {s:"RW_TB008", fb:10.9, hot:478, ours:2, dy:1}
+  ],
+  af: {bins:["< 0.1","0.1–0.2","0.2–0.5","≥ 0.5"], ours:[894,616,55,0], dysgu:[735,1561,1279,424]},
+  rem: {sets:["All reads","Half of fold-backs removed","All fold-backs removed","Random pairs removed"],
+        rows:[{c:"Ours, typed", v:[781,207,19,919]},{c:"dysgu AF ≥ 0.2", v:[1703,916,27,2133]},{c:"dysgu AF < 0.2", v:[2296,2191,428,2390]},{c:"delly", v:[16343,10528,6373,16237]}]}
+};
+const NS="http://www.w3.org/2000/svg";
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+function el(tag,attrs,parent,text){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;parent&&parent.appendChild(e);return e}
+function key(id,items){const k=document.getElementById(id);k.innerHTML="";items.forEach(([lab,col])=>{const s=document.createElement("span");s.innerHTML=`<i style="background:${col}"></i>`;s.append(lab);k.appendChild(s)})}
+const fmt=n=>n.toLocaleString("en-US");
+
+function axisY(svg,x0,y0,y1,max,ticks,fmtf){for(const t of ticks){const y=y0-(t/max)*(y0-y1);el("line",{x1:x0,x2:x0+(svg.viewBox.baseVal.width-x0-10),y1:y,y2:y,stroke:"var(--grid)"},svg);el("text",{x:x0-6,y:y+4,"font-size":11,"text-anchor":"end",fill:"var(--muted)",class:"mono"},svg,fmtf(t))}}
+
+function gapChart(){
+  const svg=document.getElementById("gapChart");svg.innerHTML="";
+  const series=[["N0004","mar_N0004_all","var(--fwd)"],["RW_TB008","mar_RW_TB008_all","var(--good)"],["N0145","mar_N0145_all","var(--muted)"],["N1176","mar_N1176_all","var(--rev)"]];
+  key("gapKey",series.map(s=>[s[0],css(s[2].slice(4,-1))]));
+  const x0=50,x1=880,y0=220,y1=16,max=0.3,b=D.gapBins,n=b.length;
+  axisY(svg,x0,y0,y1,max,[0,0.1,0.2,0.3],t=>Math.round(t*100)+"%");
+  const X=i=>x0+(i+0.5)*(x1-x0)/n;
+  b.forEach((v,i)=>{if(v%100===0)el("text",{x:X(i),y:y0+16,"font-size":11,"text-anchor":"middle",fill:"var(--muted)",class:"mono"},svg,v===600?"≥600":v)});
+  el("text",{x:(x0+x1)/2,y:y0+34,"font-size":12,"text-anchor":"middle",fill:"var(--muted)"},svg,"distance between the two pieces (bp)");
+  const zi=b.indexOf(0);el("line",{x1:X(zi)-(x1-x0)/n/2,x2:X(zi)-(x1-x0)/n/2,y1:y1,y2:y0,stroke:"var(--fg)","stroke-dasharray":"3 3"},svg);
+  el("text",{x:X(zi)-(x1-x0)/n/2-6,y:y1+10,"font-size":11,"text-anchor":"end",fill:"var(--muted)"},svg,"overlapping");
+  el("text",{x:X(zi)-(x1-x0)/n/2+6,y:y1+10,"font-size":11,fill:"var(--muted)"},svg,"spaced");
+  for(const [lab,k,col] of series){const v=D.gaps[k];const pts=v.map((y,i)=>`${X(i)},${y0-(Math.min(y,max)/max)*(y0-y1)}`).join(" ");el("polyline",{points:pts,fill:"none",stroke:col,"stroke-width":2.2,"stroke-linejoin":"round"},svg)}
+}
+
+function pileups(){
+  const r=document.getElementById("realReads"),f=document.getElementById("fbReads");r.innerHTML="";f.innerHTML="";
+  // real inversion: reads spanning 160 and 300 all split
+  const rows=[[40,140],[95,200],[120,170],[150,250],[60,155],[210,320],[260,360],[280,330],[230,310],[330,420],[100,180],[270,380],[175,285],[300,410],[20,110]];
+  rows.forEach(([a,b],i)=>{const y=78+(i%12)*14;
+    const cross=[160,300].find(p=>a<p&&b>p);
+    if(cross){el("line",{x1:a,x2:cross,y1:y,y2:y,stroke:"var(--fwd)","stroke-width":5},r);el("line",{x1:cross,x2:b,y1:y,y2:y,stroke:"var(--rev)","stroke-width":5},r)}
+    else el("line",{x1:a,x2:b,y1:y,y2:y,stroke:"var(--fwd)","stroke-width":5},r)});
+  // fold-back: reads around 690, only 3 split
+  const fr=[[500,590],[540,640],[600,700],[640,740],[660,760],[700,800],[720,820],[760,860],[520,620],[580,680],[650,690,1],[690,790],[610,690,1],[690,780],[560,660],[670,690,1]];
+  fr.forEach(([a,b,s],i)=>{const y=78+(i%12)*14;
+    if(s){el("line",{x1:a,x2:b,y1:y,y2:y,stroke:"var(--fwd)","stroke-width":5},f);el("line",{x1:b,x2:b+45,y1:y,y2:y,stroke:"var(--rev)","stroke-width":5},f)}
+    else el("line",{x1:a,x2:b,y1:y,y2:y,stroke:"var(--fwd)","stroke-width":5},f)});
+}
+
+function typeChart(){
+  const svg=document.getElementById("typeChart");svg.innerHTML="";
+  key("typeKey",[["Ours",css("--fwd")],["dysgu",css("--rev")]]);
+  const x0=110,x1=870,max=3500,rowH=40,top=16;
+  D.types.forEach((d,i)=>{const y=top+i*rowH;
+    el("text",{x:x0-10,y:y+20,"font-size":13,"text-anchor":"end",fill:"var(--fg)"},svg,d.t);
+    const w1=(d.ours/max)*(x1-x0),w2=(d.dysgu/max)*(x1-x0);
+    el("rect",{x:x0,y:y+4,width:Math.max(w1,0.5),height:13,fill:"var(--fwd)",rx:2},svg);
+    el("rect",{x:x0,y:y+19,width:Math.max(w2,0.5),height:13,fill:"var(--rev)",rx:2},svg);
+    el("text",{x:x0+w1+6,y:y+15,"font-size":11,fill:"var(--muted)",class:"mono"},svg,fmt(d.ours));
+    el("text",{x:x0+w2+6,y:y+30,"font-size":11,fill:"var(--muted)",class:"mono"},svg,fmt(d.dysgu));
+  });
+}
+
+function irChart(){
+  const svg=document.getElementById("irChart");svg.innerHTML="";
+  key("irKey",[["Junctions with ≥5 reads",css("--rev")],["Junctions with 1 read",css("--fwd")],["Random sites",css("--muted")]]);
+  const x0=44,x1=430,y0=210,y1=14,max=0.4;
+  axisY(svg,x0,y0,y1,max,[0,0.1,0.2,0.3,0.4],t=>Math.round(t*100)+"%");
+  const gw=(x1-x0)/D.ir.length,bw=gw/4.2;
+  D.ir.forEach((d,i)=>{const gx=x0+i*gw+gw*0.1;
+    [["hot","var(--rev)"],["single","var(--fwd)"],["rnd","var(--muted)"]].forEach(([k,c],j)=>{const h=(d[k]/max)*(y0-y1);el("rect",{x:gx+j*bw*1.05,y:y0-h,width:bw,height:h,fill:c,rx:1.5},svg)});
+    el("text",{x:gx+bw*1.55,y:y0+16,"font-size":11,"text-anchor":"middle",fill:"var(--fg)"},svg,d.s)});
+}
+
+function recChart(){
+  const svg=document.getElementById("recChart");svg.innerHTML="";
+  const x0=50,x1=425,y0=205,y1=14,lx=[2.5,4],ymax=600;
+  const X=v=>x0+(Math.log10(v)-lx[0])/(lx[1]-lx[0])*(x1-x0), Y=v=>y0-(v/ymax)*(y0-y1);
+  axisY(svg,x0,y0,y1,ymax,[0,200,400,600],t=>t);
+  [300,1000,3000,10000].forEach(v=>el("text",{x:X(v),y:y0+16,"font-size":11,"text-anchor":"middle",fill:"var(--muted)",class:"mono"},svg,fmt(v)));
+  el("text",{x:(x0+x1)/2,y:y0+34,"font-size":11,"text-anchor":"middle",fill:"var(--muted)"},svg,"junctions with ≥5 fold-back reads");
+  D.iso.forEach(d=>{const cx=X(d.hot),cy=Y(d.dy);el("circle",{cx,cy,r:5.5,fill:"var(--rev)",stroke:"var(--panel)","stroke-width":1.5},svg);
+    const right=cx<x1-80;el("text",{x:right?cx+9:cx-9,y:cy+4,"font-size":11,"text-anchor":right?"start":"end",fill:"var(--fg)"},svg,d.s)});
+}
+
+function afChart(){
+  const svg=document.getElementById("afChart");svg.innerHTML="";
+  key("afKey",[["Ours",css("--fwd")],["dysgu",css("--rev")]]);
+  const x0=60,x1=880,y0=190,y1=14,max=1600;
+  axisY(svg,x0,y0,y1,max,[0,400,800,1200,1600],t=>fmt(t));
+  const gw=(x1-x0)/4,bw=gw*0.32;
+  D.af.bins.forEach((b,i)=>{const gx=x0+i*gw+gw*0.16;
+    [[D.af.ours[i],"var(--fwd)"],[D.af.dysgu[i],"var(--rev)"]].forEach(([v,c],j)=>{const h=(v/max)*(y0-y1);const x=gx+j*(bw+6);el("rect",{x,y:y0-h,width:bw,height:Math.max(h,0.5),fill:c,rx:2},svg);el("text",{x:x+bw/2,y:y0-h-5,"font-size":11,"text-anchor":"middle",fill:"var(--muted)",class:"mono"},svg,fmt(v))});
+    el("text",{x:gx+bw+3,y:y0+18,"font-size":12,"text-anchor":"middle",fill:"var(--fg)"},svg,"AF "+b)});
+  const fx=x0+gw;el("line",{x1:fx,x2:fx,y1:y1,y2:y0,stroke:"var(--bad)","stroke-dasharray":"4 3"},svg);
+  el("text",{x:fx+5,y:y1+12,"font-size":11,fill:"var(--bad)"},svg,"10% floor");
+  const fx2=x0+2*gw;el("line",{x1:fx2,x2:fx2,y1:y1,y2:y0,stroke:"var(--bad)","stroke-dasharray":"4 3"},svg);
+  el("text",{x:fx2+5,y:y1+12,"font-size":11,fill:"var(--bad)"},svg,"20% floor");
+}
+
+function remChart(){
+  const svg=document.getElementById("remChart");svg.innerHTML="";
+  const cols=["var(--fwd)","color-mix(in srgb, var(--fwd) 50%, var(--panel))","var(--good)","var(--muted)"];
+  key("remKey",D.rem.sets.map((s,i)=>[s,i===1?"color-mix(in srgb, "+css("--fwd")+" 50%, "+css("--panel")+")":css(cols[i].slice(4,-1))]));
+  // per-caller groups, each scaled to its own "all reads" value (100%)
+  const x0=60,x1=880,y0=220,y1=20;
+  axisY(svg,x0,y0,y1,1.2,[0,0.5,1],t=>Math.round(t*100)+"%");
+  el("text",{x:14,y:(y0+y1)/2,"font-size":11,fill:"var(--muted)",transform:`rotate(-90 14 ${(y0+y1)/2})`,"text-anchor":"middle"},svg,"share of all-reads count");
+  const gw=(x1-x0)/D.rem.rows.length,bw=gw/5.4;
+  D.rem.rows.forEach((r,i)=>{const gx=x0+i*gw+gw*0.08;
+    r.v.forEach((v,j)=>{const f=v/r.v[0],h=(f/1.2)*(y0-y1),x=gx+j*(bw+4);el("rect",{x,y:y0-h,width:bw,height:Math.max(h,0.5),fill:cols[j],rx:2},svg);el("text",{x:x+bw/2,y:y0-h-5,"font-size":10,"text-anchor":"middle",fill:"var(--muted)",class:"mono"},svg,fmt(v))});
+    el("text",{x:gx+2*(bw+4)-2,y:y0+18,"font-size":12,"text-anchor":"middle",fill:"var(--fg)"},svg,r.c)});
+}
+
+function table(){
+  const tb=document.getElementById("isoTable");tb.innerHTML="";
+  [...D.iso].sort((a,b)=>a.fb-b.fb).forEach(d=>{const tr=document.createElement("tr");tr.innerHTML=`<td>${d.s}</td><td>${d.fb.toFixed(1)}</td><td>${fmt(d.hot)}</td><td>${d.ours}</td><td>${d.dy}</td>`;tb.appendChild(tr)});
+}
+function draw(){gapChart();pileups();typeChart();irChart();recChart();afChart();remChart();table()}
+draw();
+try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",draw);new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]})}catch(e){}
+</script>

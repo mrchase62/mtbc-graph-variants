@@ -2188,3 +2188,22 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   Existing cohorts' SV records still include delly calls until rerun
   (wrap-up item 5). dysgu AF >= 0.2 is not yet a production rule (item 3).
   User will ask the CRAM owner before any copy (purge about 2026-10-26).
+- **Fold-back mechanism explainer (user asked for figures).** Page
+  https://claude.ai/artifact/6mTMff14Ts66rLgU8maQdu (private; source
+  `foldback_qc/explainer/foldback_explainer.html`). New measurements on the
+  9 removal isolates (all-reads sets):
+  - Calls removed by fold-back removal are almost all small INV (ours 753,
+    dysgu 3,451) and our unpaired BND (721), mostly 50-500 bp.
+  - Read geometry: the two pieces of a split fold-back read overlap
+    (hairpin) in 59-71% of reads in most libraries; in N1176 they are
+    usually 100-600 bp apart. Spaced fraction did not predict calls beyond
+    the rate (n = 9).
+  - Junction recurrence predicts false calls better than the rate:
+    junctions with >= 5 reads vs dysgu AF >= 0.2, Spearman 0.95 (rate 0.88);
+    ours 0.92 (0.77). RW_TB008: 478 such junctions, 1 call; N0145: 1,976, 197.
+  - Recurrence comes from PCR copies (P2 marks no duplicates; distinct
+    molecules at hotspots 42% N0004, 72% N0145, 82% N1176, 97% RW_TB008)
+    and sequence hotspots: inverted repeats (10-mer stem within 120 bp) at
+    14-39% of hotspots vs 7-8% of random sites.
+  - Open: duplicate marking in P2 would remove part of the support (not
+    tested); junction recurrence as a QC metric, to test on selfcal54.
