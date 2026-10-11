@@ -54,3 +54,32 @@ scale), so the cut-off decides whether roughly 1 in 5 samples is kept.
 - Compute, from Phase B measured costs, per isolate: QC 1.2, kraken2 0.2, P2 0.4, callers 0.15.
 - About 2 billing-hours per isolate, so about 100-110 billing-hours for 54. Isolates failing QC stop after QC.
 - Option: drop the 10 under 70x before download (saves about 2.5 Gb and about 12 billing-hours), and KZN MDR (2009 GA II era).
+
+## Added 2026-10-11 (user): rate plus insert size
+Question: does a rule using the fold-back rate and the insert size keep more
+samples than the rate alone, for the same false-call level? Prompted by
+RW_TB008 (10.9 per 1,000, long inserts, 2 false calls) against N0145 (13.0,
+95 calls).
+
+Fixed before looking at the selfcal54 results:
+- Points:
+  - selfcal54 isolates passing QC;
+  - the 11 clean Phase B controls;
+  - the 9 chimeric controls (`removal/`, all-reads set).
+  All are on QC'd reads, mapped to their own genome.
+- Outcome: false calls in callable sequence, counted for our caller's typed
+  calls and for dysgu at AF >= 0.2 (the current combination).
+- Predictors: fold-back v2 rate. Insert size from the P2 BAM, both as the
+  median and as the share of pairs shorter than 2x the read length (an
+  overlapping-pair proxy for very short inserts). Library type (adapter call)
+  is reported, not fitted.
+- Comparison: for each rule, pick its threshold at the largest value where
+  the kept isolates average at most the clean-control false-call level
+  (mean + 2 SD of the 11 clean controls). Report how many isolates each rule
+  keeps.
+  1. rate <= c;
+  2. rate <= c, or rate <= c2 when the median insert >= i.
+  Rule 2's extra thresholds are fitted on few points, so its gain must hold
+  in leave-one-study-out checks before it is used.
+- Also: Poisson/negative binomial fit of false calls on rate, insert and
+  their interaction (descriptive only).
