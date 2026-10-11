@@ -1,8 +1,8 @@
 #!/bin/bash
 # Fold-back calibration, after P2 of selfcal54 (each isolate on its own
 # genome). Per sample, on the P2 BAM (QC'd reads, downsampled to 100x):
-#   1. fold-back scan v2 (../foldback_v2.py, 25% of reads by name hash, as
-#      the v2 validation);
+#   1. fold-back scan v2 (../foldback_v2.py) on all reads, so the junction
+#      sites are complete for attribution (FOLDBACK_SV_EFFECT_PLAN.md, part A);
 #   2. read metrics: samtools stats SN lines (read length, insert size
 #      mean/sd, error rate, duplicates, pairing);
 #   3. our SV caller v6 + local assembly (as phaseB/11_call_score.sbatch).
@@ -33,7 +33,7 @@ export N S O B E MTB_PY MTB_SAMTOOLS
 } | xargs -P 8 -L 1 bash -c '
     BAM=$2/$0.bam
     "$MTB_PY" ../analysis/foldback_qc/foldback_v2.py --bam $BAM --ref $B/$1.fasta --sample $0 \
-        --frac 0.25 --out $O/foldback/$0.tsv --sites $O/sites/$0.tsv.gz
+        --frac 1.0 --out $O/foldback/$0.tsv --sites $O/sites/$0.tsv.gz
     "$MTB_SAMTOOLS" stats $BAM | grep "^SN" | cut -f2- > $O/stats/$0.tsv
     if [[ $3 == 1 ]]; then
         "$MTB_PY" $N/breakpoint_caller.py --bam $BAM --sample $0 --ref $B/$1.fasta \
