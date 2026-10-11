@@ -1894,3 +1894,20 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   Strict on v5 outputs: ours+dysgu_af20 novel 0.836 / 0.800, setE 1.000 /
   0.744; ours alone novel 0.687 / 0.821, setE 0.776 / 0.870. v5 outputs
   saved in `phaseB/out/qc51_v5`; rerun 51961508.
+- **Assembly guard result** (51961508, 35 min, ~3.5 CPU-h). 24 windows
+  dropped a long contig event and kept the caller's calls; calls > 100 kb
+  67 -> 33. N1177's IS6110 at 1,312 recovered (INS). Strict precision /
+  recall, 44 isolates:
+    novel: ours 0.761 / 0.836 (v5 0.687 / 0.821); ours+dysgu_af20 0.851 /
+           0.808 (v5 0.836 / 0.800); excl. unconfirmed 0.966
+    setE:  ours 1.000 / 0.896 (v5 0.776 / 0.870); ours+dysgu_af20 1.000 /
+           0.769 (v5 1.000 / 0.744)
+    controls: ours 1 false call, dysgu_af20 0.
+  Misses: setE 0; novel 10 = 8 unconfirmed REPL, TB3334 2.6 kb INS, TB3169
+  INV typed INS. In setE, dysgu now adds only false calls to ours (ours alone
+  1.000 / 0.896 vs combo 1.000 / 0.769).
+  Still > 100 kb: 23 INV + 5 REARR from the caller's split-read rules
+  (windows > 20 kb are not assembled; e.g. INV 1,980,173-2,363,063 in the 6
+  setE isolates on GCF_001275565, both ends at IS6110 copies) and 5
+  assembled INS of ~430 kb (contig tandem-dup reading). Same cause: reads
+  in a repeat element linking two copies. Not yet guarded.
