@@ -3,8 +3,9 @@
 # genome). Per sample, on the P2 BAM (QC'd reads, downsampled to 100x):
 #   1. fold-back scan v2 (../foldback_v2.py) on all reads, so the junction
 #      sites are complete for attribution (FOLDBACK_SV_EFFECT_PLAN.md, part A);
-#   2. read metrics: samtools stats SN lines (read length, insert size
-#      mean/sd, error rate, duplicates, pairing);
+#   2. read metrics: samtools stats (SN lines: read length, insert size
+#      mean/sd, error rate, duplicates, pairing; the full output too, for the
+#      insert-size histogram);
 #   3. our SV caller v6 + local assembly (as phaseB/11_call_score.sbatch).
 # Steps 1-2 also for the 11 Phase B own-genome controls on their QC'd
 # marinQC51 BAMs, so every point uses the same read preparation.
@@ -34,7 +35,8 @@ export N S O B E MTB_PY MTB_SAMTOOLS
     BAM=$2/$0.bam
     "$MTB_PY" ../analysis/foldback_qc/foldback_v2.py --bam $BAM --ref $B/$1.fasta --sample $0 \
         --frac 1.0 --out $O/foldback/$0.tsv --sites $O/sites/$0.tsv.gz
-    "$MTB_SAMTOOLS" stats $BAM | grep "^SN" | cut -f2- > $O/stats/$0.tsv
+    "$MTB_SAMTOOLS" stats $BAM > $O/stats/$0.full.txt
+    grep "^SN" $O/stats/$0.full.txt | cut -f2- > $O/stats/$0.tsv
     if [[ $3 == 1 ]]; then
         "$MTB_PY" $N/breakpoint_caller.py --bam $BAM --sample $0 --ref $B/$1.fasta \
             --mask-bed $N/out/masks/$1.bed --out $O/proto/$0.events.tsv
