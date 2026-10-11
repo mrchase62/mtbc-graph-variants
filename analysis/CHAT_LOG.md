@@ -2013,3 +2013,35 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   and TB3251 look like reads and panel genome not being the same DNA.
 - **Tree check method drafted** (user asked): analysis/tree_check/METHOD.md. scale200_fix (200 isolates, tree + p5 sv_matrix 5,845 SV keys in H37Rv frame); close pairs <= 12 SNPs (+13-50, 51-200); per-pair SV disagreement vs SNP distance, noise = intercept; split by same/different matched reference, inherited vs called, callable/masked, type/size/source/tier, IS6110; parsimony gains + lone-isolate calls; lineage RDs as positive control. Awaiting user decisions (threshold, cohort, inherited).
 - **User (2026-10-11): before scale-up, QC samples with a more rigorous fold-back scan and harmonize HC / SV / IS6110 calls.** Plan written: analysis/qc_harmonize/PLAN.md (not run). ArtifactsFinder (asked earlier, not answered then): reference-side blacklist generator (exact inverted repeats >= 8 bp duplex, spacer >= 5; palindromes with 1 mismatch; hg19/hg38), no per-sample rate; complements split_reads.awk. Fold-back v2: all SA entries, MAPQ >= 20, plus reverse-complement soft clips >= 15 bp within 500 bp (current scan finds ~70% of synthetic junctions), recurrent reference sites separated; validate on foldsim + Phase B. Harmonization at merge stage (merge_cohort_vcf.py; ~1 billing-hour rerun vs 362 for P5 states): HC owns < 50 bp, SV block owns >= 50 bp (one record, exact allele in INFO), IS6110 arm owns insertions (any-size SV INS within 100 bp dropped), copy losses relabelled is6110 + flagged, SOURCES= tag. Awaiting decisions.
+- **User approved (2026-10-11): fold-back v2 validation, harmonization rules
+  1-5 in production code with a merge-only rerun of scale200_fix, and IS6110
+  copy losses relabelled + flagged (LOWCONF).**
+- **Fold-back scan v2** (`foldback_qc/foldback_v2.py`; 03_v2_validate.sbatch,
+  52142746 after a refmap-column fix to 52142513; 80 s, 8.4 CPU-min; 25% of
+  reads by name hash). Per read: split = any SA entry MAPQ >= 20, same
+  contig, opposite strand, within 1 kb; clip = quality-trimmed soft clip >=
+  15 bp whose 15 bases next to the alignment end, reverse-complemented,
+  occur within 500 bp. Reads: primary, MAPQ >= 20, not duplicates. A 10 bp
+  clip minimum was tested and rejected: +5-10 points sensitivity but the
+  clean-sample background nearly doubled (0.12 -> 0.20 per 1,000).
+  `validate_v2.py` -> `v2/validation.tsv`:
+  - synthetic (3 genomes x ir 0.5-15%, random 2-15%): sensitivity v2
+    0.74-0.80 (ir) / 0.85-0.88 (random) vs old 0.69-0.74 / 0.74-0.75;
+    background at 0: v2 0.0. Reads whose junction is < 15 bp from an end
+    cannot be seen by either method.
+  - Phase B raw reads: v2 = ~1.27 x old, Spearman 0.991 with the old count;
+    clean <= 1.55 (setE max, 8651_04), chimeric >= 6.45 (N0155): same
+    isolates flagged. Old cutoff 2 corresponds to v2 ~2.5.
+  - Spearman with false SV calls in callable sequence (62 isolates): v2
+    0.49 (dysgu PASS) / 0.64 (ours), old 0.50 / 0.65: no gain.
+    clip_other (clips matching nothing nearby) 0.53 / 0.17, but it also
+    rises with distance to the reference (02_R0894, matched to another
+    isolate's genome: 5.9), so it is not a clean library metric.
+  - Recurrent reference sites (same reference, >= 3 isolates, >= 3
+    carriers): <= 1% of junctions except TB3091 16%, TB3396 40% of tiny
+    counts. Reference-driven fold-backs are negligible here.
+  - Within the clean range, false calls do not follow the fold-back rate
+    (setE 4-24 dysgu false calls at 0.48-1.55); QC_7 (mixed, excluded) has
+    the most. Fold-back is one noise source, mixing another.
+  Conclusion: v2 is somewhat more sensitive and better defined, but ranks
+  isolates the same; the earlier QC decisions stand.
