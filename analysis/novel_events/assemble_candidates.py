@@ -18,6 +18,13 @@ For one sample:
 5. A window whose contigs give events contributes those, typed and sized.
    A window whose contigs give none keeps the prototype's original calls,
    noted "not assembled".
+Long-event guard (2026-10-10, as breakpoint_caller.py v5): a contig event
+(DEL, INV, REARR or REPL) spanning more than LONG_EVENT (5 kb) of R is
+kept only if it is a DEL with depth inside below 30% of the median. A
+contig holding an inserted repeat element (IS6110) aligns to another copy
+anywhere in R and otherwise gave DEL or INV calls of 0.2-3 Mb, replacing a
+correct INS from the caller (N1177, 1,312). If nothing is left, the window
+keeps the caller's calls, noted "long contig event dropped".
 Window selection (Phase B, real reads): a window is assembled only if it has
 a typed candidate (DEL, INS, INV, REARR) or a one-sided cluster (BND) with
 support of at least --bnd-min-frac of the sample's median depth; at most
@@ -43,6 +50,7 @@ from local_assembly import collect_reads, write_fastq  # noqa: E402
 
 PAD = 1500
 MIN = 50
+LONG_EVENT = 5000
 
 
 def contig_events(paf, lo, hi):
@@ -130,6 +138,17 @@ def main():
         cand = sorted((w for w in wins if not w["skip"]), key=lambda w: -w["sup"])
         for w in cand[a.max_windows:]:
             w["skip"] = "cap"
+    def depth_ratio(s, e):
+        pts = range(s + 50, e - 50, max(1, (e - s - 100) // 20))
+        return statistics.mean(bam.count(ctg, x - 1, x) for x in pts) / med if med else 1.0
+
+    def long_unsupported(f):
+        t, s, e, n = f
+        span = max(abs(e - s), n if t in ("DEL", "REPL") else 0)
+        if t not in ("DEL", "INV", "REARR", "REPL") or span <= LONG_EVENT:
+            return False
+        return not (t == "DEL" and depth_ratio(s, e) < 0.3)
+
     rows, n_asm = [], 0
     for i, w in enumerate(wins):
         lo, hi = w["lo"], w["hi"]
@@ -151,6 +170,7 @@ def main():
             cmd += ["-s", ps]
         r = subprocess.run(cmd, capture_output=True, text=True)
         found = []
+        dropped_long = False
         contigs = os.path.join(sp, "contigs.fasta")
         if r.returncode == 0 and os.path.exists(contigs):
             keep = os.path.join(d, "contigs.fasta")
@@ -163,6 +183,10 @@ def main():
                 subprocess.run([a.minimap2, "-cx", "asm5", "--secondary=no", mmi, keep],
                                stdout=fo, stderr=subprocess.DEVNULL, check=True)
             found = contig_events(paf, lo - 100, hi + 100)
+            n0 = len(found)
+            found = [f for f in found if not long_unsupported(f)]
+            if n0 and not found:
+                dropped_long = True
         if os.path.realpath(sp).startswith(os.path.realpath(a.workdir) + os.sep) and os.path.isdir(sp):
             shutil.rmtree(sp)
         for f in (p1, p2, ps):
@@ -174,7 +198,8 @@ def main():
                 rows.append(dict(sample=a.sample, type=t, start=s, end=e, size=n, support="",
                                  left="", right="", depth_ratio="", source="assembled"))
         else:
-            rows += [dict(r, source=r["source"] + ";not assembled") for r in w["ev"]]
+            note = ";long contig event dropped" if dropped_long else ";not assembled"
+            rows += [dict(r, source=r["source"] + note) for r in w["ev"]]
     cols = ["sample", "type", "start", "end", "size", "support", "left", "right",
             "depth_ratio", "source"]
     with open(a.out, "w") as fo:

@@ -26,9 +26,12 @@ A call matches a true event when:
 Typed recall counts only compatible matches. Breakpoint recall also accepts
 any call within 50 bp of the true start or (added 2026-10-10) the true end,
 including the prototype's untyped BND calls.
-Precision: typed calls (BND excluded) that match a true event (above) or lie
-within 50 bp of its start or end, over all typed calls. A call at the far end
-of a true deletion was counted false before.
+Precision (strict, the default from 2026-10-10, user): typed calls (BND
+excluded) that match a true event with a compatible type (the typed-recall
+rule), over all typed calls. precision_lenient keeps the earlier rule: any
+typed call that matches a true event or lies within 50 bp of its start or
+end, whatever its type (a DEL call at a true IS6110 insertion counted
+true); it ran ~0.13 above strict on Phase B.
 
 dysgu_af20 (the dysgu calls used in the combination from 2026-10-10): PASS
 and FORMAT AF >= 0.2. AF is the share of reads at the site with direct
@@ -374,7 +377,7 @@ def main():
                 n_unc_truth["all"] += 1
     for name, by_s in calls.items():
         strata = collections.defaultdict(lambda: [0, 0, 0])  # n, typed hit, bp hit
-        n_calls = n_true_calls = n_unc_calls = 0
+        n_calls = n_true_calls = n_lenient = n_unc_calls = 0
         for s, ts in truth.items():
             m = masks.get(s)
             cs_all = by_s.get(s, [])
@@ -399,12 +402,14 @@ def main():
                 if c["type"] == "BND":
                     continue
                 n_calls += 1
-                n_true_calls += any(at_event(c, t) for t in ts)
+                n_true_calls += any(c["type"] in COMPAT[t["type"]] and matches(c, t) for t in ts)
+                n_lenient += any(at_event(c, t) for t in ts)
         prec = n_true_calls / n_calls if n_calls else float("nan")
+        prec_l = n_lenient / n_calls if n_calls else float("nan")
         for k, (n, h, b) in sorted(strata.items()):
             rows.append(dict(caller=name, stratum=k, n_true=n, typed_recall=round(h / n, 3),
                              breakpoint_recall=round(b / n, 3), typed_calls=n_calls,
-                             precision=round(prec, 3),
+                             precision=round(prec, 3), precision_lenient=round(prec_l, 3),
                              n_true_uncallable=n_unc_truth[k] if k == "all" else "",
                              calls_uncallable=n_unc_calls, calls_element_dropped=n_el[name],
                              calls_hc_dropped=n_hc[name]))

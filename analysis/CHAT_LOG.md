@@ -1885,3 +1885,12 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   in assemble_candidates.py.
   Remaining misses: setE 0 of 58; novel 11 of 67 = 8 unconfirmed REPL,
   N1177 IS6110 (assembly), TB3334 2.6 kb INS, TB3169 INV typed INS.
+- **Assembly guard + strict precision (user approved, 2026-10-10).**
+  `assemble_candidates.py`: a contig event (DEL/INV/REARR/REPL) spanning >
+  5 kb is kept only if it is a DEL with depth inside < 30% of the median;
+  if nothing is left the window keeps the caller's calls ("long contig
+  event dropped"). `score.py`: precision is now strict (compatible type and
+  matches()); precision_lenient alongside; rerun_compare prints both.
+  Strict on v5 outputs: ours+dysgu_af20 novel 0.836 / 0.800, setE 1.000 /
+  0.744; ours alone novel 0.687 / 0.821, setE 0.776 / 0.870. v5 outputs
+  saved in `phaseB/out/qc51_v5`; rerun 51961508.

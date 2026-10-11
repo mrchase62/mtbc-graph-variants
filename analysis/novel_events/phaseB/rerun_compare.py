@@ -10,7 +10,7 @@ Isolates whose P1 reference changed between the runs are left out of both:
 the truth set is in the coordinates of the reference chosen before.
 
 For novel and setE_polished: score.py's typed recall and precision per
-caller. For the in-panel controls (no callable true events): typed calls in
+caller (strict; precision_lenient alongside). For the in-panel controls (no callable true events): typed calls in
 callable sequence per isolate, all of them false by construction, counted
 directly because score.py skips isolates without truth rows.
 
@@ -75,6 +75,7 @@ def main():
                                      n_true=r["n_true"], typed_recall=r["typed_recall"],
                                      breakpoint_recall=r["breakpoint_recall"],
                                      typed_calls=r["typed_calls"], precision=r["precision"],
+                                     precision_lenient=r["precision_lenient"],
                                      n_true_confirmed=exu.get(r["caller"], {}).get("n_true", ""),
                                      recall_confirmed=exu.get(r["caller"], {}).get("typed_recall", "")))
     ctl = [s for s in keep if groups[s] == "in_panel"]
@@ -96,7 +97,7 @@ def main():
                              per_isolate=",".join(map(str, v))))
     with open(f"{out_dir}/compare.tsv", "w") as fo:
         cols = ["group", "run", "isolates", "caller", "n_true", "typed_recall", "breakpoint_recall",
-                "typed_calls", "precision", "n_true_confirmed", "recall_confirmed", "per_isolate"]
+                "typed_calls", "precision", "precision_lenient", "n_true_confirmed", "recall_confirmed", "per_isolate"]
         w = csv.DictWriter(fo, fieldnames=cols, delimiter="\t", restval="")
         w.writeheader()
         w.writerows(rows)
@@ -104,7 +105,8 @@ def main():
           f"excluded (phaseB/exclude.tsv): {', '.join(excluded)}")
     for r in rows:
         print("\t".join(str(r.get(k, "")) for k in ("group", "run", "caller", "n_true", "typed_recall",
-                                                       "typed_calls", "precision", "recall_confirmed",
+                                                       "typed_calls", "precision", "precision_lenient",
+                                                       "recall_confirmed",
                                                        "per_isolate")))
 
 
