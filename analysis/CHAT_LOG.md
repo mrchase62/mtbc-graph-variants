@@ -1911,3 +1911,28 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   setE isolates on GCF_001275565, both ends at IS6110 copies) and 5
   assembled INS of ~430 kb (contig tandem-dup reading). Same cause: reads
   in a repeat element linking two copies. Not yet guarded.
+
+## 2026-10-11
+
+- **383 kb INV 1,980,173-2,363,063 (GCF_001275565) checked with Nanopore**
+  (user: check it first). `novel_events/longread/lr_inversion.py`; output
+  `longread/out/lr_inversion_1980173.txt`. 4 of the 8 calling isolates have
+  long reads (3003_06, 696_05, 702_06, 8651_04). Not an inversion:
+    - end A: 0 reads in R's order across 1,980,173 (+-2 kb); 53-121 reads
+      per isolate carry a 2.6 kb deletion at ~1,978,700 (R's IS6110 copy at
+      1,978,793-1,980,148 plus ~1.2 kb of flank is absent);
+    - end B: 46-63 reads per isolate carry a ~1.3-1.4 kb insertion at
+      ~2,363,100 (a new IS6110 copy);
+    - the "inverted" reads (28-72 per isolate) are reads through the new
+      copy at B whose IS6110 part aligns, reversed, to R's copy at A
+      (segments 1,978,792-1,980,173) - a repeat-placement effect, not an
+      inversion junction.
+  Matches the Marin assemblies exactly (truth: DEL 1,978,689-1,981,303 2,615
+  bp; INS 2,363,130 1,358 bp; in all 6 setE isolates on this R; assemblies
+  colinear with R 1.64-3.93 Mb). The short-read caller turned these into INV
+  + BND 1,981,304 + DEL 2,361,348-2,362,692 (1,345 bp; R's copy at B is
+  still present in long reads and assemblies) + DEL 2,362,820-2,363,129 +
+  BND 2,363,132. None of this is scored: the uncallable mask covers both
+  IS6110 copies, so the true events and the wrong calls are both set aside.
+  So setE recall 1.000 says nothing about IS6110-copy loss/gain in repeat
+  windows; these calls would go to production as they are.
