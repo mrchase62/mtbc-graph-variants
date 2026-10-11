@@ -1936,3 +1936,28 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   IS6110 copies, so the true events and the wrong calls are both set aside.
   So setE recall 1.000 says nothing about IS6110-copy loss/gain in repeat
   windows; these calls would go to production as they are.
+- **Uncallable events now scored (report only; user: go ahead with both).**
+  `score.py`: rows "uncallable:<all|repeat_copy|other>:<stratum>" for the
+  truth events and calls the callable rows set aside; repeat_copy = touching
+  a repeat-element copy (mask paralog stretches merged across <= 50 bp, >= 1
+  kb: IS6110 and other multi-copy elements; breakpoint_caller.repeat_copies).
+  `rerun_compare.py` adds groups <grp>:uncallable / :repeat_copy /
+  :other_masked. Callable rows unchanged. On the assembly-guard outputs
+  (proto_asm; recall / precision):
+    setE: callable 58 events 1.000 / 0.896; uncallable 497 events 0.229 /
+          0.663 (repeat_copy 148: 0.426 / 0.692; other 349: 0.146 / 0.630)
+    novel: callable 67 0.761 / 0.836; uncallable 361 0.319 / 0.592
+          (repeat_copy 113: 0.416 / 0.676; other 248: 0.274 / 0.545)
+  So the callable scores cover ~10% (setE) and ~16% (novel) of true events.
+- **Caller v6: repeat-copy join rule** (`breakpoint_caller.py --mask-bed`).
+  Before it, all 52 of the caller's INV/REARR on Phase B were false (truth
+  has one real INV, TB3169 1.2 Mb, never called as INV: its partner end is
+  in a repeat at MAPQ < 20); 11 had an end within 100 bp of a repeat copy.
+  Rule: no INV/REARR when either end is within 100 bp of a copy; cluster left
+  free (INS pairing or BND "repeat_copy_join"). Not applied to DEL, against
+  the approved wording: at copies 35 clip DELs are real copy losses and 16
+  false, and depth inside cannot separate them (0.6-1.6 for real losses:
+  reads from other copies fill a lost copy). The other 41 false INV/REARR
+  (ends in tandem repeats, short paralogs, or unique sequence; often only
+  2-9 of 10-60 clipped reads with the partner) are not addressed.
+  Snapshot of the previous outputs: phaseB/out/qc51_v5g. Rerun 52093842.

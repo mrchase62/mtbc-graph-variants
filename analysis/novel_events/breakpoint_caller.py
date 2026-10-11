@@ -56,6 +56,20 @@ Events:
         depth across the array measure the copy number (Phase B, 12 missed
         events at 4 sites; phaseB/missed.py)
   BND   one clip cluster with no partner: unresolved breakpoint
+Repeat-copy joins (v6, 2026-10-11, user; needs --mask-bed): an INV or REARR
+is not made when either end lies within REPEAT_PAD (100 bp) of a repeat-
+element copy of R (repeat_copies(): the callable mask's paralog stretches,
+merged across gaps <= 50 bp, of 1 kb or more: IS6110 copies and other
+multi-copy elements). Reads clipped at a copy's edge are partly anchored in
+the copy, and their split partner is the flank of whichever copy the read
+came from; a new IS6110 copy at 2,363,130 next to R's copy at 2,361,341,
+plus the loss of R's copy at 1,978,793, was called as a 383 kb INV in 8
+isolates (Nanopore and assemblies: no inversion; longread/lr_inversion.py).
+On the Phase B outputs all 52 of the caller's INV/REARR calls were false,
+11 with an end at a copy. The cluster is left free (INS pairing or BND,
+noted "repeat_copy_join"). DEL joins are not changed: real copy losses
+(35 on Phase B) and false copy-sized DELs (16) look alike, including depth,
+which reads from the other copies keep near normal inside a lost copy.
 Depth: for DEL the mean depth between A and B, against the sample median,
 is reported, and (v5) used for one guard: a split-read DEL longer than
 LONG_DEL (5 kb) needs depth between A and B below 30% of the median. Split
@@ -79,6 +93,23 @@ JOIN_TOL = 20
 MIN_ANCHOR = 30
 LONG_DEL = 5000
 TANDEM_MAX = 500
+REPEAT_PAD = 100
+MIN_COPY = 1000
+
+
+def repeat_copies(bed, min_len=MIN_COPY):
+    """Repeat-element copies in a callable_mask.py BED: its "paralog"
+    stretches merged across gaps <= 50 bp, of min_len or more, as sorted
+    0-based half-open (start, end)."""
+    iv = sorted((int(f[1]), int(f[2])) for f in (x.rstrip("\n").split("\t") for x in open(bed))
+                if len(f) > 3 and "paralog" in f[3])
+    merged = []
+    for x, y in iv:
+        if merged and x - merged[-1][1] <= 50:
+            merged[-1][1] = max(merged[-1][1], y)
+        else:
+            merged.append([x, y])
+    return [tuple(m) for m in merged if m[1] - m[0] >= min_len]
 
 
 def clip_out(r, n, right, filt):
@@ -122,8 +153,14 @@ def main():
     ap.add_argument("--max-insert", type=int, default=1000)
     ap.add_argument("--no-clip-filter", action="store_true", help="v2 behaviour")
     ap.add_argument("--ref", help="R FASTA: enables the tandem-expansion rule (v5)")
+    ap.add_argument("--mask-bed", help="R's callable_mask.py BED: enables the repeat-copy join rule (v6)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
+    copies = repeat_copies(a.mask_bed) if a.mask_bed else []
+
+    def at_copy(p):
+        return any(x - REPEAT_PAD <= p <= y + REPEAT_PAD for x, y in copies)
+    repeat_join = set()
     filt = not a.no_clip_filter
     bam = pysam.AlignmentFile(a.bam)
     ctg = bam.references[0]
@@ -255,6 +292,10 @@ def main():
                 continue
         if len(opp) >= 2:
             q = int(statistics.median(opp))
+            if at_copy(A) or at_copy(q):
+                repeat_join.add(i)
+                opp = []
+        if len(opp) >= 2:
             events.append(dict(type="INV", start=min(A, q), end=max(A, q), size=abs(q - A),
                                support=len(opp), left=c["n"], right=0, source="clip"))
             used_r.add(i)
@@ -302,6 +343,9 @@ def main():
         back = [p for p in same if p < A - 50 or p > A + 100000]
         if len(back) >= 2:
             q = int(statistics.median(back))
+            if at_copy(A) or at_copy(q):
+                repeat_join.add(i)
+                continue
             events.append(dict(type="REARR", start=min(A, q), end=max(A, q), size=abs(q - A),
                                support=len(back), left=c["n"], right=0, source="clip"))
             used_r.add(i)
@@ -360,7 +404,8 @@ def main():
     for i, c in enumerate(R):
         if i not in used_r:
             events.append(dict(type="BND", start=c["pos"], end=c["pos"], size=0,
-                               support=c["n"], left=c["n"], right=0, source="rclip"))
+                               support=c["n"], left=c["n"], right=0,
+                               source="rclip;repeat_copy_join" if i in repeat_join else "rclip"))
     for j, d in enumerate(Lc):
         if j not in used_l:
             events.append(dict(type="BND", start=d["pos"], end=d["pos"], size=0,

@@ -21,6 +21,9 @@ dropped (score.py --element-gt; element_genotype.py per run), and so are
 SV calls that are HaplotypeCaller 10-49 bp indels (score.py --hc-dir).
 Truth events in phaseB/truth_flags.tsv flagged refuted are removed;
 recall_confirmed also leaves out those flagged unconfirmed.
+Groups "<group>:uncallable", "<group>:repeat_copy", "<group>:other_masked"
+(2026-10-11): score.py's uncallable:<part>:all rows, the events and calls
+that the callable rows set aside (report only).
 
 Writes out/qc51/compare.tsv and prints a summary.
 """
@@ -78,6 +81,14 @@ def main():
                                      precision_lenient=r["precision_lenient"],
                                      n_true_confirmed=exu.get(r["caller"], {}).get("n_true", ""),
                                      recall_confirmed=exu.get(r["caller"], {}).get("typed_recall", "")))
+            part = {"uncallable:all:all": "uncallable", "uncallable:repeat_copy:all": "repeat_copy",
+                    "uncallable:other:all": "other_masked"}
+            for r in sc:
+                if r["stratum"] in part and r["caller"] in CALLERS:
+                    rows.append(dict(group=f"{grp}:{part[r['stratum']]}", run=run, isolates=len(iso), caller=r["caller"],
+                                     n_true=r["n_true"], typed_recall=r["typed_recall"],
+                                     breakpoint_recall=r["breakpoint_recall"], typed_calls=r["typed_calls"],
+                                     precision=r["precision"], precision_lenient=r["precision_lenient"]))
     ctl = [s for s in keep if groups[s] == "in_panel"]
     for run, p in RUNS.items():
         masks = load_masks(p["rm"], f"{N}/out/masks")

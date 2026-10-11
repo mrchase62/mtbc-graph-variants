@@ -65,6 +65,20 @@ under evaluation, user 2026-10-10) is uncallable. Recall is then measured over c
 events only, and uncallable calls are flagged, not counted in precision.
 n_true_uncallable and calls_uncallable report how many were set aside.
 
+Uncallable strata (report only, with --mask-dir; added 2026-10-11, user):
+the events and calls set aside above, scored rather than hidden, split into
+  repeat_copy  touching a repeat-element copy of R: a "paralog" stretch of
+               the mask (merged across gaps <= 50 bp) of 1 kb or more, i.e.
+               IS6110 copies and the other multi-copy elements
+  other        the rest of the mask (shorter paralogs, tandem repeats, the
+               lifted H37Rv mask)
+IS6110 copy gains and losses next to existing copies were never measured
+(the 383 kb INV at 1,980,173-2,363,063 on GCF_001275565 was a copy loss
+plus a new copy, longread/lr_inversion.py). Rows "uncallable:<part>:
+<stratum>": recall of these truth events against all of the isolate's calls
+(callable or not), and precision over the uncallable typed calls of that
+part, against all truth events. They do not change the callable rows.
+
 Truth flags (--truth-flags, phaseB/truth_flags.tsv; sample, type, r_start,
 flag): events flagged refuted (the isolate's reads, long reads included,
 show the reference sequence: the assembly is wrong) are removed from the
@@ -192,6 +206,18 @@ def load_masks(refmap, mask_dir, artifacts=False):
         iv = sorted((int(f[1]), int(f[2])) for p in beds for f in (x.split("\t") for x in open(p)))
         masks[s] = ([x[0] for x in iv], iv)
     return masks
+
+
+def load_repeat_copies(refmap, mask_dir):
+    """Per sample: R's repeat-element copies (breakpoint_caller.repeat_copies,
+    the caller's v6 rule uses the same), in masked()'s format."""
+    from breakpoint_caller import repeat_copies
+    ref = {r["sample"]: r["reference"] for r in csv.DictReader(open(refmap), delimiter="\t")}
+    by_ref = {}
+    for g in set(ref.values()):
+        keep = repeat_copies(os.path.join(mask_dir, f"{g}.bed"))
+        by_ref[g] = ([x[0] for x in keep], keep)
+    return {s: by_ref[g] for s, g in ref.items()}
 
 
 def load_element_gt(path):
@@ -325,6 +351,7 @@ def main():
             flags[(r["sample"], r["type"], int(r["r_start"]))] = r["flag"]
     egt = load_element_gt(a.element_gt) if a.element_gt else {}
     masks = load_masks(a.refmap, a.mask_dir, a.artifact_mask) if a.mask_dir else {}
+    rcopies = load_repeat_copies(a.refmap, a.mask_dir) if a.mask_dir else {}
     truth = collections.defaultdict(list)
     for r in csv.DictReader(open(a.truth), delimiter="\t"):
         flag = flags.get((r["sample"], r["type"], int(r["r_start"])), "")
@@ -373,6 +400,8 @@ def main():
         m = masks.get(s)
         for t in ts:
             t["unc"] = masked(m, t["start"], t["end"])
+            t["part"] = "" if not t["unc"] else \
+                "repeat_copy" if masked(rcopies.get(s), t["start"], t["end"]) else "other"
             if t["unc"]:
                 n_unc_truth["all"] += 1
     for name, by_s in calls.items():
@@ -406,6 +435,40 @@ def main():
                 n_lenient += any(at_event(c, t) for t in ts)
         prec = n_true_calls / n_calls if n_calls else float("nan")
         prec_l = n_lenient / n_calls if n_calls else float("nan")
+        rc_strata = collections.defaultdict(lambda: [0, 0, 0])
+        rc_prec = collections.defaultdict(lambda: [0, 0, 0])  # calls, strict true, lenient true
+        if rcopies:
+            for s, ts in truth.items():
+                cs_all = by_s.get(s, [])
+                for t in ts:
+                    if not t["part"]:
+                        continue
+                    keys = [f"uncallable:{p}:{x}" for p in ("all", t["part"])
+                            for x in ["all", f"type={t['type']}"] + (["IS6110-sized INS"] if t["is6110"] else [])]
+                    typed = any(c["type"] in COMPAT[t["type"]] and matches(c, t) for c in cs_all)
+                    bp = any(at_event(c, t) for c in cs_all)
+                    for k in keys:
+                        rc_strata[k][0] += 1
+                        rc_strata[k][1] += typed
+                        rc_strata[k][2] += bp
+                for c in cs_all:
+                    if c["type"] == "BND" or not masked(masks.get(s), c["start"], c["end"]):
+                        continue
+                    part = "repeat_copy" if masked(rcopies.get(s), c["start"], c["end"]) else "other"
+                    st = any(c["type"] in COMPAT[t["type"]] and matches(c, t) for t in ts)
+                    le = any(at_event(c, t) for t in ts)
+                    for p in ("all", part):
+                        rc_prec[p][0] += 1
+                        rc_prec[p][1] += st
+                        rc_prec[p][2] += le
+        for k, (n, h, b) in sorted(rc_strata.items()):
+            nc, st, le = rc_prec[k.split(":")[1]]
+            rows.append(dict(caller=name, stratum=k, n_true=n, typed_recall=round(h / n, 3),
+                             breakpoint_recall=round(b / n, 3), typed_calls=nc,
+                             precision=round(st / nc, 3) if nc else "",
+                             precision_lenient=round(le / nc, 3) if nc else "",
+                             n_true_uncallable="", calls_uncallable="", calls_element_dropped="",
+                             calls_hc_dropped=""))
         for k, (n, h, b) in sorted(strata.items()):
             rows.append(dict(caller=name, stratum=k, n_true=n, typed_recall=round(h / n, 3),
                              breakpoint_recall=round(b / n, 3), typed_calls=n_calls,

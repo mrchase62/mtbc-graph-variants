@@ -25,7 +25,8 @@ export C N O E MTB_PY
 awk -F'\t' 'NR>1{print $1"\t"$5}' $RM | xargs -P 6 -L 1 bash -c '
     B=refbias/work/${C}_p2/$0.bam
     R=refbias/build/7713a8d71d8e-fix1/refs/$1.fasta
-    "$MTB_PY" $N/breakpoint_caller.py --bam $B --sample $0 --ref $R --out $O/proto/$0.events.tsv
+    "$MTB_PY" $N/breakpoint_caller.py --bam $B --sample $0 --ref $R \
+        --mask-bed $N/out/masks/$1.bed --out $O/proto/$0.events.tsv
     "$MTB_PY" $N/assemble_candidates.py --events $O/proto/$0.events.tsv --bam $B \
         --ref $R --sample $0 --spades "$E/python $E/spades.py" --minimap2 $E/minimap2 \
         --bnd-min-frac 0.2 --max-windows 40 \
