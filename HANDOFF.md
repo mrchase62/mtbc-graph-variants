@@ -409,6 +409,40 @@ IS6110 arm already has; 18 ~1.36 kb SV DEL intervals are IS6110 copy losses.
 Also the SV-caller rules from Phase B (short-anchor, HC hand-off, tatC-helY
 genotype) are evaluation-only.
 
+**Update 2026-10-11.**
+- **Harmonization done, in production code.** `bin/harmonize_records.py`,
+  called by `merge_cohort_vcf.py`:
+  - HaplotypeCaller owns indels under 50 bp;
+  - the SV block owns events of 50 bp and over (small alleles merged or
+    relabelled CLASS=sv);
+  - the IS6110 arm owns its insertions;
+  - H37Rv IS6110 copy losses become CLASS=is6110 with IS6110LOSS and LOWCONF;
+  - every record gets SOURCES.
+
+  scale200_fix's merge was rerun:
+  - small-vs-SV duplicates 787 -> 15 SV records;
+  - IS6110-INS duplicates 291 -> 103 (the rest are flank variants);
+  - drug-resistance windows unchanged.
+
+  Before/after: `analysis/harmonize/compare_scale200_fix.txt`. P6 and the
+  association tail are not rerun. scale200 and gwas1000 VCFs predate this.
+- **Open:** whether the copy-loss end tolerance should be 100 bp instead of
+  the approved 50 (svi:DEL:2635522:1408 misses by 4 bp).
+- **Fold-back scan v2** (`analysis/foldback_qc/foldback_v2.py`):
+  - it counts all split alignments at MAPQ >= 20 plus reverse-complement soft
+    clips;
+  - against the old scan, synthetic sensitivity is 0.74-0.88 vs 0.69-0.75;
+  - on real isolates it ranks samples the same as the old scan (Spearman
+    0.991), and old cutoff 2 ≈ v2 2.5.
+
+  Not yet run on the 1,200 cohort isolates: that awaits the user's cutoff
+  decision.
+- **Robust call set agreed** (DEL/INS in callable sequence, both
+  breakpoints; everything else flagged). Not built yet.
+- **Tree check method:** `analysis/tree_check/METHOD.md`. It waits for a
+  large cohort.
+- **Phase B caller v6 and the contig-length guard** are evaluation-only.
+
 ## Earlier start-here (2026-10-05)
 
 **Audit (section 0m): 97 findings, and the current association results are
