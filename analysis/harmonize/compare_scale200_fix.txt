@@ -1,9 +1,9 @@
 records by class: before -> after
   accessory_presence           204 ->     204
   is6110                       752 ->     752
-  is6110+IS6110LOSS              0 ->      23
+  is6110+IS6110LOSS              0 ->      25
   small                     79,007 ->  77,104
-  sv                         6,223 ->   7,374
+  sv                         6,223 ->   7,372
 removed: {'small': 410, 'sv': 319}  added: {}
 GT changes in kept records (class, change, new ST):
   ('sv', '.->0', 'REF'): 30,605

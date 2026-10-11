@@ -36,12 +36,16 @@ the arm best placed to call it, on H37Rv-frame records:
      insertions near an IS6110 site are other events and are kept.
   4. IS6110 copy losses get one labelled record. A deletion record (either
      SV source, or a small-class allele relabelled by rule 2) whose
-     first and last deleted bases lie within LOSS_TOL (50 bp) of the ends of
+     first and last deleted bases lie within LOSS_TOL (100 bp) of the ends of
      an H37Rv IS6110 copy becomes CLASS=is6110 with IS6110LOSS and LOWCONF:
      the IS6110 arm cannot state a loss (its allele is an insertion), and
      short reads do not separate real losses from false ones (Phase B: 35
      real, 16 false at copies; depth inside a lost copy stays near normal
-     from reads of the other copies).
+     from reads of the other copies). LOSS_TOL was 50 bp, widened to 100
+     bp (user, 2026-10-11): on scale200_fix it added 2 deletions, both
+     removing the whole copy plus 40-80 bp of flank; no deletion within 300
+     bp of the 16 H37Rv copies removes only part of one. SVLEN keeps the
+     full size.
   5. Every record lists the arms that saw it in SOURCES: small, sv_caller,
      sv_catalogue, is6110, accessory; an arm whose cells or record were
      absorbed is added to the record that kept the event.
@@ -60,7 +64,7 @@ HC_WIN = 60
 IS_WIN = 100
 IS_LEN = (1300, 1420)
 PCTSIZE = 0.7
-LOSS_TOL = 50
+LOSS_TOL = 100
 DUP_CELL = ".:DUP"
 
 
@@ -288,7 +292,7 @@ HEADER = [
     '##INFO=<ID=SMALLALLELE,Number=1,Type=String,Description="Key of the '
     'small-class allele (exact sequence) merged into this SV record">\n',
     '##INFO=<ID=IS6110LOSS,Number=0,Type=Flag,Description="A deletion of an '
-    'H37Rv IS6110 copy (ends within 50 bp of the copy)">\n',
+    'H37Rv IS6110 copy (ends within 100 bp of the copy\'s ends)">\n',
     '##INFO=<ID=LOWCONF,Number=0,Type=Flag,Description="Short reads cannot '
     'reliably call this event class (IS6110 copy losses: depth inside a lost '
     'copy stays near normal from reads of the other copies); keep out of '

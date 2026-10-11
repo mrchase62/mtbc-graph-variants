@@ -2084,3 +2084,23 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   scale200 and gwas1000 merged VCFs predate this code.
 - **Open decision**: copy-loss tolerance 50 bp (approved) misses
   svi:DEL:2635522:1408 by 4 bp; 100 bp would take it.
+- **Copy-loss tolerance widened to 100 bp (user).** On scale200_fix it adds
+  2 deletions (svi:DEL:2635522:1408, 179 carriers; h37rv:3551190 small
+  allele, 2 carriers), both removing the whole copy plus 40-80 bp of flank;
+  no deletion within 300 bp of the 16 H37Rv copies removes only part of one.
+  Merge rerun 52146472 (49 s; a watcher was first started on a mistyped id,
+  52146893, and replaced): 25 IS6110LOSS records, DR windows unchanged,
+  vcf_gate passed. Note: most of these "losses" have 159-199 of 200
+  carriers, i.e. H37Rv-specific copies the isolates never had.
+- **Fold-back calibration, step 1 (user: yes)**: `foldback_qc/panel_illumina.py`
+  -> `panel_illumina.tsv` (NCBI assembly summary for BioSamples, ENA portal
+  API metadata, no reads). Of 333 panel genomes, 69 have Illumina WGS runs
+  of the same BioSample (68 paired); 13 of them are already Phase B in-panel
+  controls; 2 are among the 54,461 production CRAMs. 56 new candidates,
+  77 Gbases in all; instruments MiSeq 22, HiSeq 2500 8, HiSeq 4000 8,
+  NextSeq 2000 8, NextSeq 550 3, others 7; largest studies PRJDB10923 (9),
+  PRJNA1480832 (8), PRJNA1113402 (6), PRJEB49093 (5).
+  Earlier answer (user asked about scanning Peter's ~54K): the 500 random
+  production samples already give the distribution (<=0.3 50%, 0.3-1 10%,
+  1-2 8%, 2-5 11%, >5 22%, old count); what is missing is the false-call
+  rate between 0.4 and 6.4 per 1,000, where no control exists.
