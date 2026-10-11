@@ -1857,3 +1857,31 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     novel REPL unconfirmed (kept; recall_confirmed leaves them out).
     `score.py --truth-flags`, rerun_compare passes it.
   - v4 outputs saved in `phaseB/out/qc51_v4`; rerun 51952533.
+- **v5 result** (51952533, 37 min, ~3.7 CPU-h). 44 isolates, all rules,
+  refuted truth removed. recall / precision (lenient = score.py's rule, a
+  call within 50 bp of a true event counts true whatever its type):
+    novel: ours 0.687 / 0.929 (v4 0.537 / 0.854); ours+dysgu AF>=0.2 0.836 /
+           0.913 (v4 0.806 / 0.879); excl. 8 unconfirmed REPL: recall 0.949
+    setE (58 events): ours 0.776 / 0.981 (v4 0.485 / 0.929, 66 events);
+           ours+dysgu AF>=0.2 1.000 / 0.880 (v4 0.727 / 0.848)
+    controls: ours 1 false call, dysgu_af20 0 (unchanged).
+  Strict precision (type compatible and matches()): ours+dysgu_af20 novel
+  0.766 -> 0.800, setE 0.705 -> 0.744. **All precision figures reported
+  before today were lenient**, ~0.13 above strict.
+  Call diff v5 vs v4 (44 isolates, typed): gained 97 true / 12 false, lost
+  52 true / 23 false (many are the same event re-placed). Tandem expansion
+  calls: 2397739 x6, 1897936 x4, 422355 x3, 4121239 x3, 2991082 x2,
+  4348983, 3236299 x2, 3593748 true; 3943165 x2, 79189 false. Left-aligned
+  tandem_dup: 801326 x2, 1840217, 28469 x2, 2076726 x2, ... now true; 5
+  false (TB3054 x2, TB3237, TB3334 x2). Sizes stay unknown or under-
+  estimated (matched by position).
+  **New problem**: where the long-DEL guard freed an IS6110 insertion, the
+  local assembly step (assemble_candidates.py) now writes a giant event
+  from the contig: DEL 449 kb-2.3 Mb or INV 171 kb-3 Mb at IS6110 insertion
+  sites in 15 isolates (contig's IS6110 aligns to another copy). Most are
+  in uncallable sequence, so scores barely move (2 callable >100 kb calls,
+  as in v4), but N1177's IS6110 at 1,312 (caller: INS, correct) was
+  replaced by assembly with DEL 1,315-1,298,112. Needs the same depth guard
+  in assemble_candidates.py.
+  Remaining misses: setE 0 of 58; novel 11 of 67 = 8 unconfirmed REPL,
+  N1177 IS6110 (assembly), TB3334 2.6 kb INS, TB3169 INV typed INS.

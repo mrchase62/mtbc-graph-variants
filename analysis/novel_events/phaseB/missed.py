@@ -7,7 +7,7 @@ reference unchanged, phaseB/exclude.tsv removed; calls are our caller +
 local assembly (proto_asm) and dysgu PASS AF >= 0.2, after the tatC-helY
 genotype rule and the HaplotypeCaller hand-off. A miss is a callable true
 event (novel or setE_polished) with no compatible matching call (score.py's
-typed recall).
+typed recall). Events flagged refuted in phaseB/truth_flags.tsv are left out.
 
 Cause, first that applies:
   sized_or_placed  a compatible-type call within 500 bp failed score.py's
@@ -88,6 +88,8 @@ def main():
     keep = [s for s in ref if ref[s] == refb.get(s) and s not in excl and groups.get(s) in ("novel", "setE_polished")]
     masks = score.load_masks(RM, f"{N}/out/masks")
     egt = score.load_element_gt(f"{N}/phaseB/out/element_gt.marinQC51.tsv")
+    refuted = {(r["sample"], r["type"], int(r["r_start"])) for r in
+               csv.DictReader(open(f"{N}/phaseB/truth_flags.tsv"), delimiter="\t") if r["flag"] == "refuted"}
     rows = []
     for g in ("novel", "setE_polished"):
         for r in csv.DictReader(open(f"{Q}/truth.{g}.tsv"), delimiter="\t"):
@@ -96,7 +98,7 @@ def main():
                 continue
             t = dict(type=r["type"], start=int(r["r_start"]), end=int(r["r_end"]),
                      size=max(int(r["ref_len"]), int(r["alt_len"])), ref_len=int(r["ref_len"]), alt_len=int(r["alt_len"]))
-            if score.masked(masks[s], t["start"], t["end"]):
+            if score.masked(masks[s], t["start"], t["end"]) or (s, t["type"], t["start"]) in refuted:
                 continue
             rows.append((g, s, t))
     out = []

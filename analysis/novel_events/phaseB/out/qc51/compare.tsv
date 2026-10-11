@@ -1,27 +1,27 @@
-group	run	isolates	caller	n_true	typed_recall	breakpoint_recall	typed_calls	precision	per_isolate
-novel	before	17	dysgu_pass	67	0.731	0.761	232	0.25	
-novel	before	17	dysgu_af20	67	0.687	0.716	66	0.818	
-novel	before	17	proto_asm	67	0.537	0.746	50	0.78	
-novel	before	17	proto_asm+dysgu_pass	67	0.806	0.836	282	0.344	
-novel	before	17	proto_asm+dysgu_af20	67	0.806	0.836	116	0.802	
-novel	after	17	dysgu_pass	67	0.746	0.761	112	0.509	
-novel	after	17	dysgu_af20	67	0.687	0.701	59	0.898	
-novel	after	17	proto_asm	67	0.537	0.746	48	0.854	
-novel	after	17	proto_asm+dysgu_pass	67	0.806	0.821	160	0.613	
-novel	after	17	proto_asm+dysgu_af20	67	0.806	0.821	107	0.879	
-setE_polished	before	15	dysgu_pass	66	0.697	0.697	163	0.38	
-setE_polished	before	15	dysgu_af20	66	0.636	0.636	66	0.788	
-setE_polished	before	15	proto_asm	66	0.515	0.727	48	0.854	
-setE_polished	before	15	proto_asm+dysgu_pass	66	0.818	0.833	211	0.488	
-setE_polished	before	15	proto_asm+dysgu_af20	66	0.803	0.818	114	0.816	
-setE_polished	after	15	dysgu_pass	66	0.667	0.667	105	0.571	
-setE_polished	after	15	dysgu_af20	66	0.606	0.606	63	0.794	
-setE_polished	after	15	proto_asm	66	0.485	0.697	42	0.929	
-setE_polished	after	15	proto_asm+dysgu_pass	66	0.742	0.758	147	0.673	
-setE_polished	after	15	proto_asm+dysgu_af20	66	0.727	0.758	105	0.848	
-in_panel	before	12	proto_asm	0			2		0,0,0,0,2,0,0,0,0,0,0,0
-in_panel	before	12	dysgu_pass	0			28		3,3,0,3,6,1,2,1,1,2,3,3
-in_panel	before	12	dysgu_af20	0			0		0,0,0,0,0,0,0,0,0,0,0,0
-in_panel	after	12	proto_asm	0			1		0,0,0,0,1,0,0,0,0,0,0,0
-in_panel	after	12	dysgu_pass	0			22		3,2,1,1,6,1,0,1,1,2,3,1
-in_panel	after	12	dysgu_af20	0			0		0,0,0,0,0,0,0,0,0,0,0,0
+group	run	isolates	caller	n_true	typed_recall	breakpoint_recall	typed_calls	precision	n_true_confirmed	recall_confirmed	per_isolate
+novel	before	17	dysgu_pass	67	0.731	0.761	232	0.25	59	0.831	
+novel	before	17	dysgu_af20	67	0.687	0.716	66	0.818	59	0.78	
+novel	before	17	proto_asm	67	0.537	0.746	50	0.78	59	0.61	
+novel	before	17	proto_asm+dysgu_pass	67	0.806	0.836	282	0.344	59	0.915	
+novel	before	17	proto_asm+dysgu_af20	67	0.806	0.836	116	0.802	59	0.915	
+novel	after	17	dysgu_pass	67	0.746	0.761	112	0.509	59	0.847	
+novel	after	17	dysgu_af20	67	0.687	0.701	59	0.898	59	0.78	
+novel	after	17	proto_asm	67	0.687	0.776	56	0.929	59	0.78	
+novel	after	17	proto_asm+dysgu_pass	67	0.836	0.851	168	0.649	59	0.949	
+novel	after	17	proto_asm+dysgu_af20	67	0.836	0.851	115	0.913	59	0.949	
+setE_polished	before	15	dysgu_pass	58	0.793	0.793	163	0.38	58	0.793	
+setE_polished	before	15	dysgu_af20	58	0.724	0.724	66	0.788	58	0.724	
+setE_polished	before	15	proto_asm	58	0.586	0.828	48	0.854	58	0.586	
+setE_polished	before	15	proto_asm+dysgu_pass	58	0.931	0.948	211	0.488	58	0.931	
+setE_polished	before	15	proto_asm+dysgu_af20	58	0.914	0.931	114	0.816	58	0.914	
+setE_polished	after	15	dysgu_pass	58	0.759	0.759	105	0.571	58	0.759	
+setE_polished	after	15	dysgu_af20	58	0.69	0.69	63	0.794	58	0.69	
+setE_polished	after	15	proto_asm	58	0.776	0.776	54	0.981	58	0.776	
+setE_polished	after	15	proto_asm+dysgu_pass	58	1.0	1.0	159	0.711	58	1.0	
+setE_polished	after	15	proto_asm+dysgu_af20	58	1.0	1.0	117	0.88	58	1.0	
+in_panel	before	12	proto_asm	0			2				0,0,0,0,2,0,0,0,0,0,0,0
+in_panel	before	12	dysgu_pass	0			28				3,3,0,3,6,1,2,1,1,2,3,3
+in_panel	before	12	dysgu_af20	0			0				0,0,0,0,0,0,0,0,0,0,0,0
+in_panel	after	12	proto_asm	0			1				0,0,0,0,1,0,0,0,0,0,0,0
+in_panel	after	12	dysgu_pass	0			22				3,2,1,1,6,1,0,1,1,2,3,1
+in_panel	after	12	dysgu_af20	0			0				0,0,0,0,0,0,0,0,0,0,0,0
