@@ -25,6 +25,12 @@ contig holding an inserted repeat element (IS6110) aligns to another copy
 anywhere in R and otherwise gave DEL or INV calls of 0.2-3 Mb, replacing a
 correct INS from the caller (N1177, 1,312). If nothing is left, the window
 keeps the caller's calls, noted "long contig event dropped".
+Contig-length guard (2026-10-11, user): a tandem duplication read off one
+contig (the next alignment starts before the previous one ended on R) is
+kept only if the duplicated length is at most the contig's length, since
+the contig must hold the segment twice. A contig through an inserted repeat
+copy aligns its copy part to another copy far back in R, which was read as
+duplications of 77 kb-1.7 Mb at true IS6110 insertions (QC_1, 3,189,869).
 Window selection (Phase B, real reads): a window is assembled only if it has
 a typed candidate (DEL, INS, INV, REARR) or a one-sided cluster (BND) with
 support of at least --bnd-min-frac of the sample's median depth; at most
@@ -58,9 +64,9 @@ def contig_events(paf, lo, hi):
     for line in open(paf):
         c = line.rstrip("\n").split("\t")
         cg = next((x[5:] for x in c[12:] if x.startswith("cg:Z:")), "")
-        by.setdefault(c[0], []).append(dict(qs=int(c[2]), qe=int(c[3]), strand=c[4],
+        by.setdefault(c[0], []).append(dict(ql=int(c[1]), qs=int(c[2]), qe=int(c[3]), strand=c[4],
                                             ts=int(c[7]), te=int(c[8]), cg=cg))
-    ev = []
+    ev, n_guard = [], 0
     for name, al in by.items():
         for x in al:  # indels inside an alignment
             p = x["ts"]
@@ -87,14 +93,17 @@ def contig_events(paf, lo, hi):
             if not lo <= st <= hi:
                 continue
             if rg < -MIN:
-                ev.append(("INS", st, st, -rg))  # tandem duplication
+                if -rg <= x["ql"]:  # contig-length guard
+                    ev.append(("INS", st, st, -rg))  # tandem duplication
+                else:
+                    n_guard += 1
             elif rg - qgap >= MIN and qgap < MIN:
                 ev.append(("DEL", st, max(st, en), rg))
             elif qgap - rg >= MIN and rg < MIN:
                 ev.append(("INS", st, st, qgap))
             elif qgap >= MIN and rg >= MIN:
                 ev.append(("REPL", st, max(st, en), max(rg, qgap)))
-    return sorted(set(ev), key=lambda e: e[1])
+    return sorted(set(ev), key=lambda e: e[1]), n_guard
 
 
 def main():
@@ -182,10 +191,10 @@ def main():
             with open(paf, "w") as fo:
                 subprocess.run([a.minimap2, "-cx", "asm5", "--secondary=no", mmi, keep],
                                stdout=fo, stderr=subprocess.DEVNULL, check=True)
-            found = contig_events(paf, lo - 100, hi + 100)
+            found, n_guard = contig_events(paf, lo - 100, hi + 100)
             n0 = len(found)
             found = [f for f in found if not long_unsupported(f)]
-            if n0 and not found:
+            if (n0 or n_guard) and not found:
                 dropped_long = True
         if os.path.realpath(sp).startswith(os.path.realpath(a.workdir) + os.sep) and os.path.isdir(sp):
             shutil.rmtree(sp)
