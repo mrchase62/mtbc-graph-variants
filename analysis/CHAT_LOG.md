@@ -2207,3 +2207,15 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
     14-39% of hotspots vs 7-8% of random sites.
   - Open: duplicate marking in P2 would remove part of the support (not
     tested); junction recurrence as a QC metric, to test on selfcal54.
+
+## 2026-10-11 — duplicate-marking test on the 9 chimeric libraries
+- User: "test duplicate marking on the 9 libraries".
+- Plan: `analysis/foldback_qc/removal/DEDUP_PLAN.md`. On each `_all` P2 BAM:
+  - samtools markdup -S (flags supplementary pieces too);
+  - `_dedup` removes the flagged reads; `_randdup` removes the same number of
+    random pairs (the depth control); `_dupmark` keeps them flagged, to test
+    whether dysgu ignores flagged reads;
+  - dysgu on all three; our caller v6 + assembly on dedup and randdup;
+  - duplicate share among fold-back pairs vs the other pairs.
+  - HaplotypeCaller not rerun.
+- Job 52282456 (array 0-8, `03_dedup.sbatch`), about 5 billing-hours.
