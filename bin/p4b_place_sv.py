@@ -21,15 +21,35 @@ and intersection behaving differently, so which callers found a record is part o
 the record. Calls are merged within a sample on the project's own tolerance --
 position within max(200 bp, 20% of length), length within 50%, type must agree --
 and `SRC` records the callers that agreed.
+
+**Our caller joined dysgu on 2026-10-12** (the user's decision, after Phase B
+and part D: analysis/novel_events/phaseB, analysis/foldback_qc/recall). P2
+writes its events table (<sample>.ours.events.tsv, R coordinates) and the
+tatC-helY genotype. Before merging, every call of either caller passes the
+production rules, evaluated together as `proto_asm+dysgu_af20` with the HC
+hand-off and the genotype rule (combined typed recall 0.885, strict precision
+0.785 on 26 isolates, kept by the fold-back cut-off):
+  - dysgu: FORMAT AF >= 0.2 (here) and FILTER PASS (P5's --keep-filter);
+  - ours: one-sided BND candidates are not events and are not read; the AF
+    floor 0.1 was applied in P2;
+  - both: the HaplotypeCaller hand-off and the tatC-helY genotype rule
+    (bin/sv_rules.py, the same functions score.py uses).
+`callable` says whether the call's span +-50 bp avoids R's uncallable mask
+(callable_mask.py); recall and precision were measured on callable calls
+only. It labels, it does not drop.
 """
 import argparse, bisect, collections, csv, gzip, os, subprocess, sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from sv_rules import (element_artifact, hc_small_indel, load_bed,  # noqa: E402
+                      load_element_gt, load_hc_small, masked)
 
 
 def op(path):
     return gzip.open(path, "rt") if path.endswith(".gz") else open(path)
 
 
-def parse_sv_vcf(path, caller):
+def parse_sv_vcf(path, caller, min_af=None):
     out = []
     if not path or not os.path.exists(path):
         return out
@@ -57,6 +77,15 @@ def parse_sv_vcf(path, caller):
                 if not any(x.isdigit() and x != "0"
                            for x in gt.replace("|", "/").split("/")):
                     continue
+            # dysgu's AF: the share of reads at the site with direct support.
+            # Below 0.2 most dysgu calls were false on Phase B; a record with
+            # no AF is kept, as score.py's dysgu_af20 keeps it.
+            if min_af is not None and "AF" in fk:
+                try:
+                    if float(fv[fk.index("AF")]) < min_af:
+                        continue
+                except (ValueError, IndexError):
+                    pass
         try:
             pos = int(f[1])
         except ValueError:
@@ -78,6 +107,22 @@ def parse_sv_vcf(path, caller):
     return out
 
 
+def parse_ours(path):
+    """Our caller's events table (assemble_candidates.py) as caller records.
+    BND rows are one-sided candidates, not events. An INS the assembly did
+    not size has size 0: its length is unknown, not zero."""
+    out = []
+    for r in csv.DictReader(open(path), delimiter="\t"):
+        if r["type"] == "BND":
+            continue
+        out.append(dict(caller="ours", chrom="", pos=int(r["start"]),
+                        end=int(r["end"]), svtype=r["type"],
+                        svlen=int(r["size"] or 0), qual="", filt="PASS",
+                        pe="", sr=r["support"], cipos="", ciend="", alt="",
+                        assembled=r["source"].startswith("assembled")))
+    return out
+
+
 def tol(length):
     """The project's own SV matching tolerance."""
     return max(200, int(0.2 * max(length, 1)))
@@ -88,6 +133,8 @@ def same_event(a, b):
         return False
     if abs(a["pos"] - b["pos"]) > tol(max(a["svlen"], b["svlen"])):
         return False
+    if not a["svlen"] or not b["svlen"]:
+        return True       # an unsized INS of ours: position alone
     lo, hi = sorted((max(a["svlen"], 1), max(b["svlen"], 1)))
     return hi / lo <= 1.5
 
@@ -100,14 +147,18 @@ def merge_callers(records):
         for e in events:
             if same_event(e["rep"], r):
                 e["members"].append(r)
-                # keep the call with the most split-read support as the
-                # representative, since that is the one whose breakpoints are
-                # best resolved
-                try:
-                    if int(r["sr"] or 0) > int(e["rep"]["sr"] or 0):
-                        e["rep"] = r
-                except ValueError:
-                    pass
+                # the representative is an event our assembly typed (its
+                # breakpoints and size are read off a contig), else the call
+                # with the most split-read support, since that is the one
+                # whose breakpoints are best resolved
+                if r.get("assembled") and not e["rep"].get("assembled"):
+                    e["rep"] = r
+                elif not e["rep"].get("assembled"):
+                    try:
+                        if int(r["sr"] or 0) > int(e["rep"]["sr"] or 0):
+                            e["rep"] = r
+                    except ValueError:
+                        pass
                 break
         else:
             events.append(dict(rep=r, members=[r]))
@@ -117,9 +168,11 @@ def merge_callers(records):
 FIELDS = ["sample", "reference", "build_id", "svtype", "svlen", "frame",
           "key", "h37rv_pos", "h37rv_end", "r_pos", "r_end", "node_pos",
           "node_end", "src", "n_callers", "sr", "pe", "qual", "filter",
-          "component", "qual_caller"]
+          "component", "qual_caller", "callable"]
 # qual_caller: the caller whose record supplied `qual` (the representative's),
 # so p5_sv_matrix.py bands it on that caller's scale (audit P4P5-11)
+# callable: yes / no for called rows (span +-50 bp clear of R's uncallable
+# mask), blank for inherited rows, which are in H37Rv coordinates
 
 
 def main():
@@ -128,6 +181,15 @@ def main():
     ap.add_argument("--reference", required=True)
     ap.add_argument("--build-id", required=True)
     ap.add_argument("--dysgu")
+    ap.add_argument("--ours", required=True,
+                    help="P2's <sample>.ours.events.tsv (our caller + assembly)")
+    ap.add_argument("--element-gt", required=True,
+                    help="P2's <sample>.element_gt.tsv (tatC-helY genotype)")
+    ap.add_argument("--hc-vcf", required=True,
+                    help="P2's HaplotypeCaller VCF, for the small-indel hand-off")
+    ap.add_argument("--callable-mask", required=True,
+                    help="R's callable_mask.py BED")
+    ap.add_argument("--dysgu-min-af", type=float, default=0.2)
     ap.add_argument("--positions", required=True,
                     help="odgi output for every breakpoint, R -> H37Rv")
     ap.add_argument("--mask", required=True)
@@ -149,7 +211,24 @@ def main():
     # 6,373 false calls on own-genome reads with every fold-back read removed,
     # analysis/foldback_qc/removal/RESULTS.md). P2 outputs made before then
     # still hold a delly VCF; it is not read.
-    recs = parse_sv_vcf(a.dysgu, "dysgu")
+    for p in (a.ours, a.element_gt, a.hc_vcf, a.callable_mask):
+        if not os.path.exists(p):
+            sys.exit(f"FATAL: {p} does not exist")
+    recs = parse_sv_vcf(a.dysgu, "dysgu", a.dysgu_min_af) + parse_ours(a.ours)
+    # the Phase B rules, per call before merging, as score.py applies them
+    egt, hc = load_element_gt(a.element_gt), load_hc_small(a.hc_vcf)
+    n_rule = collections.Counter()
+    kept = []
+    for r in recs:
+        c = dict(type=r["svtype"], start=r["pos"], end=r["end"])
+        if element_artifact(egt, a.sample, c):
+            n_rule[f"element_{r['caller']}"] += 1
+        elif hc_small_indel(hc, c):
+            n_rule[f"hc_{r['caller']}"] += 1
+        else:
+            kept.append(r)
+    recs = kept
+    cmask = load_bed(a.callable_mask)
     # No early return on zero calls. It used to write a header-only table here,
     # BEFORE the inherited half ran, so R's own large differences from H37Rv --
     # which need no calls at all -- were dropped for exactly the samples
@@ -260,7 +339,8 @@ def main():
                          src=",".join(callers), n_callers=len(callers),
                          sr=r["sr"], pe=r["pe"], qual=r["qual"],
                          filter=r["filt"], component="called",
-                         qual_caller=r["caller"]))
+                         qual_caller=r["caller"],
+                         callable="no" if masked(cmask, r["pos"], r["end"]) else "yes"))
 
     # --- the inherited half ---------------------------------------------------
     # P4 composes a sample's small variants from TWO halves: its own calls
@@ -360,7 +440,7 @@ def main():
                     h37rv_pos=pos, h37rv_end=end, r_pos="", r_end="",
                     node_pos="", node_end="", src="graph_vcf", n_callers=0,
                     sr="", pe="", qual="", filter="INHERITED",
-                    component="inherited", qual_caller=""))
+                    component="inherited", qual_caller="", callable=""))
 
     # header-only when there is nothing, never an IndexError on rows[0]; an
     # empty table and a missing file must not look the same downstream
@@ -376,6 +456,9 @@ def main():
     print(f"  {a.sample}: {len(recs)} caller records -> {len(events)} events; "
           f"{counts['placed']} placed on the H37Rv path, "
           f"{counts['breakend']} as breakend pairs")
+    if n_rule:
+        print("    dropped by rule: " + ", ".join(f"{k} {v}" for k, v in sorted(n_rule.items())))
+    print(f"    uncallable called rows: {sum(r['callable'] == 'no' for r in rows)}")
     for k in ("reverse_strand", "span_mismatch"):
         if counts[k]:
             print(f"    {k.replace('_', ' ')}: {counts[k]}")

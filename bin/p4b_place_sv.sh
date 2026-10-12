@@ -15,8 +15,8 @@
 #   bash bin/p4b_place_sv.sh <sample>
 #   bash bin/p4b_place_sv.sh --summary
 #
-# P2 emits a dysgu VCF per sample (delly until 2026-10-11) in the matched reference's
-# coordinates. P4 places only the small-variant VCF, so the matrix has contained
+# P2 emits a dysgu VCF per sample (delly until 2026-10-11) and, from 2026-10-12,
+# our caller's events table, both in the matched reference's coordinates. P4 places only the small-variant VCF, so the matrix has contained
 # zero SV records. This projects both breakpoints of every merged event through
 # the graph and emits them in the same frame as everything else.
 set -euo pipefail
@@ -72,6 +72,16 @@ REFID="$(awk -F'\t' -v s="$SAMPLE" '$1==s{print $5; exit}' "$REFMAP")"
 RPATH="$(grep -m1 "^${REFID}#" "$PATHS" || true)"
 [[ -n "$RPATH" ]] || { echo "FATAL: ${SAMPLE}: ${REFID} not a graph path" >&2; exit 1; }
 DYSGU="${P2DIR}/${SAMPLE}.dysgu.vcf"
+# our caller's events, the tatC-helY genotype and the HC VCF (P2), and R's
+# callable mask (P2 builds it, one folder per build)
+OURS="${P2DIR}/${SAMPLE}.ours.events.tsv"
+ELEMGT="${P2DIR}/${SAMPLE}.element_gt.tsv"
+HCVCF="${P2DIR}/${SAMPLE}.vcf.gz"
+MASKDIR="${MASKDIR:-refbias/callable_masks/$(basename "$BUILD")}"
+CMASK="${MASKDIR}/${REFID}.bed"
+for _f in "$OURS" "$ELEMGT" "$HCVCF" "$CMASK"; do
+    [[ -s "$_f" ]] || { echo "FATAL: ${SAMPLE}: missing ${_f}; P2 predates our caller? rerun P2 (it runs only the caller on a finished sample)" >&2; exit 1; }
+done
 OUT="${OUTDIR}/${SAMPLE}.sv_placed.tsv"
 [[ -s "$OUT" ]] && { echo "[P4b] ${SAMPLE}: already done"; exit 0; }
 
@@ -108,7 +118,10 @@ done
         if (match($8, /(^|;)END=[0-9]+/)) { e=substr($8, RSTART, RLENGTH); sub(/.*END=/, "", e); end=e }
         print p","(pos-1)",+"; print p","(end-1)",+"
     }' "$f"
-  done; } | sort -u \
+  done
+  # our events: the same two breakpoints, from the table (BND rows are not read)
+  awk -F'\t' -v p="$RPATH" 'NR>1 && $2!="BND" {
+      print p","($3-1)",+"; print p","($4-1)",+" }' "$OURS"; } | sort -u \
   | "$MTB_PY" graphframe/bin/frame_convert.py to-panel \
   > "${WORK}/${SAMPLE}.bp.txt"
 NBP=$(wc -l < "${WORK}/${SAMPLE}.bp.txt")
@@ -132,6 +145,7 @@ GRAPH_VCF="${GRAPH_VCF:-${BUILD}/assets/graph_collapsed.vcf.gz}"
 [[ -s "$GRAPH_VCF" ]] || { echo "FATAL: no graph VCF at ${GRAPH_VCF}" >&2; exit 1; }
 "$MTB_PY" bin/p4b_place_sv.py --sample "$SAMPLE" --reference "$REFID" \
     --build-id "$BUILD_ID" --dysgu "$DYSGU" \
+    --ours "$OURS" --element-gt "$ELEMGT" --hc-vcf "$HCVCF" --callable-mask "$CMASK" \
     --graph-vcf "$GRAPH_VCF" \
     --positions "${WORK}/${SAMPLE}.bp.pos" --mask "$MASK" --out "$OUT"
 rm -f "${WORK}/${SAMPLE}.bp.txt"

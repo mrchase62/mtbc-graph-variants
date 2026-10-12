@@ -134,16 +134,38 @@ Raised by the user 2026-10-12 ("I don't know if this is worth it").
 - Wiring our caller into P2/P4b (user asked 2026-10-12) is paused at the
   reading stage; no read-removal step goes in.
 
+### Coming next (user, 2026-10-12)
+"We need to redo the graph because of homopolymeric tracts in some of the
+genomes and reselect a cohort from the ~50K sample set." After the caller
+wiring; ends the graph hold. Production data are regenerated on the new
+graph and cohort, so item 2's rebalancing applies to the new selection.
+
 ### Wrap-up list (the user's order not yet given)
 1. **CRAM purge, around 2026-10-26.** The user is asking the CRAMs' owner;
    do not copy them before then. The rerun needs them.
 2. **Fold-back exclusion:** apply old <= 2.5 and rebalance cohorts (user
    go-ahead needed).
-3. **Production SV caller set.** dysgu AF >= 0.2, our caller v6 + assembly
-   (`--bnd-min-frac 0.2 --max-windows 40 --min-af 0.1`) and the Phase B
-   rules (short-anchor, HC hand-off, tatC-helY genotype) are decided but
-   still evaluation-only: production P2 runs dysgu alone, and our caller is
-   not yet wired into P2/P4b.
+3. **Production SV caller set: wired in, 2026-10-12 (user: "wire our caller
+   into the production pipeline first"); real-data check pending.**
+   - P2 (`bin/p2_call.sh`, `_ours`): R's callable mask (built once per
+     reference into `refbias/callable_masks/<build>/`), `breakpoint_caller.py`
+     v6, `assemble_candidates.py --bnd-min-frac 0.2 --max-windows 40
+     --min-af 0.1`, `element_genotype.py`. Outputs `<s>.ours.events.tsv`,
+     `<s>.element_gt.tsv`. A sample done before this runs only these on its
+     kept BAM. Tools: `MTB_SPADES`, `MTB_SV_MINIMAP2` (autocycler env,
+     minimap2 2.31 as evaluated).
+   - P4b: reads ours (BND rows skipped) beside dysgu; dysgu AF >= 0.2; HC
+     hand-off and tatC-helY genotype rule on both callers before merging
+     (`bin/sv_rules.py`, now shared with score.py, output verified
+     identical); new column `callable`. Unsized INS of ours merge on
+     position; an assembled event of ours is the representative.
+   - P5: unsized INS cluster on position (`size_band` unsized); ours-only
+     rows `qual_band` uncalibrated; REARR dropped by default with INV.
+   - The caller code stays in `analysis/novel_events` (P2 finds it through
+     the bin link); moving it to bin/ would touch ~20 analysis scripts.
+   - Tests: `tests/test_ours_wiring.py`; old P4b/P2 tests updated; all pass.
+   - Next: P2 (our caller only) + P4b on cohort fbrecall, compare with
+     `recall/out/asm_af/keep_na_0.1` and score the P4b rows.
 4. **Robust call tier** (agreed: DEL/INS in callable sequence, both
    breakpoints). Not built. Add the clip-only dysgu INS filter.
 5. **Regenerate production data once**, after the above

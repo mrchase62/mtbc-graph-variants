@@ -190,6 +190,10 @@ def same_event(a, b):
         return False
     if abs(a["pos"] - b["pos"]) > tol(max(a["svlen"], b["svlen"])):
         return False
+    # svlen 0 is an insertion our caller found but its assembly did not size
+    # (P4b, 2026-10-12): unknown, not zero, so it matches on position alone
+    if not a["svlen"] or not b["svlen"]:
+        return True
     lo, hi = sorted((max(a["svlen"], 1), max(b["svlen"], 1)))
     return hi / lo <= 1.5
 
@@ -203,14 +207,16 @@ def main():
                          "4.4 Mb clonal genome, not structural variants")
     ap.add_argument("--keep-filter", default="PASS,INHERITED",
                     help="comma-separated FILTER values to keep, or 'any'")
-    ap.add_argument("--drop-svtype", default="INV,DUP",
+    ap.add_argument("--drop-svtype", default="INV,DUP,REARR",
                     help="comma-separated SVTYPEs to exclude. INV and DUP by "
                          "default, on different grounds: INV because it looks "
                          "like artefact on its own statistics and the callers "
                          "do not describe the one confirmed inversion; DUP "
                          "because it is unmeasured -- no truth class, no "
-                         "composed rows, and 10 of 320 recurrent. Pass an "
-                         "empty string to keep both.")
+                         "composed rows, and 10 of 320 recurrent. REARR "
+                         "(our caller, from 2026-10-12) on INV's grounds: all "
+                         "52 of its INV/REARR calls on Phase B were false. "
+                         "Pass an empty string to keep all.")
     ap.add_argument("--composed-ppv", type=float, default=0.631,
                     help="PPV assigned to an inherited-only cluster. P4 "
                          "measured its inherited half at 0.631-0.823 against "
@@ -320,6 +326,10 @@ def main():
             for c in reversed(open_clusters):
                 if same_event(c["rep"], e):
                     c["members"].append(e)
+                    # a sized event replaces an unsized representative, so
+                    # later events are compared on size where one is known
+                    if e["svlen"] and not c["rep"]["svlen"]:
+                        c["rep"] = e
                     placed = True
                     break
             if not placed:
@@ -334,7 +344,8 @@ def main():
         for m in c["members"]:
             by_s[m["sample"]].append(m)
         pos = int(statistics.median(m["pos"] for m in c["members"]))
-        ln = int(statistics.median(m["svlen"] for m in c["members"]))
+        sized = [m["svlen"] for m in c["members"] if m["svlen"]]
+        ln = int(statistics.median(sized)) if sized else 0
         scored = [m for m in c["members"]
                   if m["qual"].replace(".", "", 1).isdigit()]
         best = max(scored, key=lambda m: float(m["qual"])) if scored else None
@@ -351,7 +362,13 @@ def main():
         comps = {m.get("component", "called") for m in c["members"]}
         component = ("mixed" if len(comps) > 1 else
                      (comps.pop() if comps else "called"))
-        if best is None and component == "inherited":
+        if best is None and component == "called":
+            # only our caller's calls, which carry no QUAL: no stage 11
+            # calibration exists for it (its measured precision is in
+            # analysis/foldback_qc/recall/RESULTS.md)
+            band, ppv = "uncalibrated", ""
+            qual_src = "ours"
+        elif best is None and component == "inherited":
             # no caller QUAL exists for a composed row; banding it on a
             # caller's scale would invent a confidence, and a blank QUAL would
             # put the rows carrying the sensitivity in the lowest band
@@ -365,7 +382,7 @@ def main():
             cells.append("ALT" if s in by_s else "NOCALL")
         rows.append(dict(
             key=f"sv:{c['rep']['svtype']}:{pos}:{ln}", svtype=c["rep"]["svtype"],
-            h37rv_pos=pos, svlen=ln, size_band=size_band(ln),
+            h37rv_pos=pos, svlen=ln, size_band=size_band(ln) if ln else "unsized",
             n_alt=len(by_s), n_both_callers=both,
             src=",".join(sorted({x for m in c["members"] for x in m["src"].split(",")})),
             max_qual=round(best_q, 1) if best else "",

@@ -2403,3 +2403,10 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - Own-genome labels (the removal test): reads at IS6110 insertions removed at 1.4% vs 3.3% random; copy ends 79 vs 154.5 expected. The lost GCF_902459825 event lost 2 of 121 reads: not caused by removal.
 - Shared-reference labels (production): 6 of 145 insertions get 34-61 fold-back reads each, all with a reference IS6110 copy 221-277 bp away (inverted-repeat ends match within the 500 bp clip window). A production removal step would need an IS6110/repeat exemption in the clip rule.
 - User: "Keep the exclusion. We are running into problems that are troubling me about trying to fix downstream consequences of removing the fold-back chimeras." Read removal closed; exclusion at old <= 2.5 stands (wrap-up item 2).
+
+## 2026-10-12 Wiring our caller into production
+- User: "wire our caller into the production pipeline first. we need to redo the graph because of homopolymeric tracts in some of the genomes and reselect a cohort from the ~50K sample set."
+- New `bin/sv_rules.py` (HC hand-off, tatC-helY genotype, mask test moved from score.py; score.py output byte-identical on Phase B).
+- P2 `_ours` step (mask per reference, caller v6, assembly with --min-af 0.1, element genotype; done samples run only this on the kept BAM). P4b reads ours + dysgu AF >= 0.2 + rules + `callable` column. P5 handles unsized INS, uncalibrated band, drops REARR.
+- Tests: new tests/test_ours_wiring.py; older P2/P4b tests updated; full suite passes.
+- Graph redo (homopolymer tracts) and cohort reselection from ~50K recorded as next in HANDOFF.

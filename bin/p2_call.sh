@@ -23,6 +23,8 @@
 #                    decision: with every fold-back read removed from 9 chimeric
 #                    libraries it still made 6,373 false calls on the isolates'
 #                    own genomes, analysis/foldback_qc/removal/RESULTS.md)
+#                    and our breakpoint caller with local assembly (wired in
+#                    2026-10-12; see "our caller" below)
 #
 # Both callsets stay in R coordinates. Nothing is lifted or composed here --
 # T16 showed composition is the defect and that no region rule separates its
@@ -79,6 +81,11 @@ WORK="${WORK:-refbias/work/p2}"
 P1WORK="${P1WORK:-refbias/work/p1}"
 DYSGU="${DYSGU:-refbias/work/svvenv/bin/dysgu}"
 THREADS="${SLURM_CPUS_PER_TASK:-8}"
+
+# R's callable mask (callable_mask.py) is per reference, not per sample, so it
+# is kept across cohorts, one folder per build: it depends on R and on the
+# build's lifted H37Rv repeat mask.
+MASKDIR="${MASKDIR:-refbias/callable_masks/$(basename "$BUILD")}"
 
 [[ -s "$REFMAP" ]] || { echo "FATAL: no P1 refmap at ${REFMAP}; run P1 first" >&2; exit 1; }
 # A refmap selected against another build's panel is refused. p1_summary.py
@@ -157,6 +164,59 @@ _vcf_ref() {
             n=split($0,w," ")
             for(i=1;i<n;i++) if(w[i]=="--reference"||w[i]=="-R"){print w[i+1]; exit}}' || true
 }
+# --- our caller, on the P2 BAM ----------------------------------------------
+# Decided by the user 2026-10-10 to 2026-10-12 on Phase B and part D
+# (analysis/novel_events/phaseB, analysis/foldback_qc/recall/RESULTS.md):
+#   1. R's callable mask (callable_mask.py), built once per reference: the
+#      caller needs it for the repeat-copy join rule (v6), P4b to flag calls
+#      in uncallable sequence.
+#   2. breakpoint_caller.py (v6): clipped, split and discordant reads into
+#      DEL, INS, INV, REARR and one-sided BND candidates, in R coordinates.
+#   3. assemble_candidates.py: SPAdes on the reads of each candidate window,
+#      contigs aligned back to R to type and size the event. Settings as
+#      evaluated: one-sided candidates assembled only with support >= 20% of
+#      median depth, at most 40 windows, and the AF floor 0.1 (a caller event
+#      with read support / depth below 0.1 is dropped; assembly-typed events
+#      are kept).
+#   4. element_genotype.py: the tatC-helY element present or absent from the
+#      reads, for P4b's genotype rule.
+# The other two Phase B rules (HaplotypeCaller hand-off, tatC-helY genotype)
+# drop calls in P4b, where both callers' calls meet; they read this stage's
+# outputs. The short-anchor rule is inside the caller.
+OURS="${OUTDIR}/${SAMPLE}.ours.events.tsv"
+ELEMGT="${OUTDIR}/${SAMPLE}.element_gt.tsv"
+_ours() {
+    local bam="$1" mask="${MASKDIR}/${REFID}.bed" wd novel="${NOVEL:-}"
+    # Our caller's code is the evaluated code in analysis/novel_events, found
+    # through the bin link (runroot/bin -> the repository's bin), which also
+    # works under sbatch, where BASH_SOURCE is the spooled copy.
+    [[ -n "$novel" ]] || novel="$(cd -P bin && cd .. && pwd)/analysis/novel_events"
+    mkdir -p "$MASKDIR"
+    if [[ ! -s "$mask" ]]; then
+        # several array tasks can share R: each builds under its own name and
+        # the rename is atomic, so a reader never sees a partial mask
+        "$MTB_PY" "${novel}/callable_mask.py" --ref "$REF" --h37rv "$MTB_H37RV" \
+            --h37rv-mask "${BUILD}/assets/repeat_mask.bed" --minimap2 "$MTB_SV_MINIMAP2" \
+            --k8 "$MTB_K8" --paftools "$MTB_PAFTOOLS" --out "${mask}.${SAMPLE}.tmp"
+        mv -f "${mask}.${SAMPLE}.tmp" "$mask"
+    fi
+    "$MTB_PY" "${novel}/breakpoint_caller.py" --bam "$bam" --sample "$SAMPLE" \
+        --ref "$REF" --mask-bed "$mask" --out "${WORK}/${SAMPLE}.ours.proto.tsv"
+    wd="$(mktemp -d "${TMPDIR:-/tmp}/ours.${SAMPLE}.XXXXXX")"
+    "$MTB_PY" "${novel}/assemble_candidates.py" --events "${WORK}/${SAMPLE}.ours.proto.tsv" \
+        --bam "$bam" --ref "$REF" --sample "$SAMPLE" --spades "$MTB_SPADES" \
+        --minimap2 "$MTB_SV_MINIMAP2" --bnd-min-frac 0.2 --max-windows 40 --min-af 0.1 \
+        --workdir "${wd}/asm" --out "${OURS}.tmp" 2> "${WORK}/${SAMPLE}.ours.log"
+    [[ -n "$wd" && "$wd" == "${TMPDIR:-/tmp}/ours.${SAMPLE}."* ]] && rm -rf -- "$wd"
+    printf 'sample\treference\n%s\t%s\n' "$SAMPLE" "$REFID" > "${WORK}/${SAMPLE}.element.refmap"
+    "$MTB_PY" "${novel}/element_genotype.py" --refmap "${WORK}/${SAMPLE}.element.refmap" \
+        --bam-dir "$(dirname "$bam")" --refs "$REFSDIR" --out "${ELEMGT}.tmp" > /dev/null
+    mv -f "${ELEMGT}.tmp" "$ELEMGT"
+    mv -f "${OURS}.tmp" "$OURS"
+    echo "[P2] ${SAMPLE}: ours $(( $(wc -l < "$OURS") - 1 )) events," \
+         "element $(awk -F'\t' 'NR==2{print $NF}' "$ELEMGT")"
+}
+
 _m_build="$(mtb_kv "$DONE" build_id)"; _m_ref="$(mtb_kv "$DONE" reference)"
 _v="${OUTDIR}/${SAMPLE}.vcf.gz"
 _v_build="$(mtb_vcf_build_id "$_v")"
@@ -178,6 +238,16 @@ if [[ -n "$_foreign" ]]; then
     exit 1
 fi
 if [[ -n "$_m_build" ]]; then
+    # Done before our caller was wired in: run only it, on the kept BAM, so a
+    # finished cohort gains its calls without realigning.
+    if [[ ! -s "$OURS" || ! -s "$ELEMGT" ]]; then
+        [[ -s "${WORK}/${SAMPLE}.bam" ]] \
+            || { echo "FATAL: ${SAMPLE}: P2 done but our caller's outputs and the BAM are missing" >&2; exit 1; }
+        echo "[P2] ${SAMPLE}: done before our caller; running it on ${WORK}/${SAMPLE}.bam"
+        BAM="${WORK}/${SAMPLE}.bam"
+        _ours "$BAM"
+        exit 0
+    fi
     echo "[P2] ${SAMPLE}: already done (build ${BUILD_ID}, reference ${REFID})"; exit 0
 fi
 # Outputs with no marker that records build and reference (a date-only
@@ -258,6 +328,8 @@ BAM="${WORK}/${SAMPLE}.bam"
 # Stamp the SV VCFs too. simulate_and_call.sh already stamped the small-variant
 # VCF and GVCF, but dysgu writes its own header.
 bash bin/stamp_build_id.sh "${OUTDIR}/${SAMPLE}.dysgu.vcf"
+
+_ours "$BAM"
 
 rm -f "$FQ1" "$FQ2"
 echo "[P2] ${SAMPLE}: small $(zcat "${OUTDIR}/${SAMPLE}.vcf.gz" | grep -vc '^#'), "\

@@ -128,6 +128,22 @@ class GvcfEvidence(unittest.TestCase):
         self.assertFalse(inside(150))
 
 
+def p4b_ours_args(d):
+    """Empty P2 inputs for p4b_place_sv.py's our-caller arguments (required
+    from 2026-10-12): no events of ours, no element site, no HC indels, no
+    mask. Geometry tests are unchanged by them."""
+    for name, text in (("ours.tsv", "sample\ttype\tstart\tend\tsize\tsupport\tleft\tright\tdepth_ratio\tsource\n"),
+                       ("egt.tsv", "sample\treference\tsite_start\tsite_end\tgenotype\n"),
+                       ("cmask.bed", "")):
+        with open(os.path.join(d, name), "w") as fh:
+            fh.write(text)
+    import gzip
+    with gzip.open(os.path.join(d, "hc.vcf.gz"), "wt") as fh:
+        fh.write("##fileformat=VCFv4.2\n")
+    return ["--ours", f"{d}/ours.tsv", "--element-gt", f"{d}/egt.tsv",
+            "--hc-vcf", f"{d}/hc.vcf.gz", "--callable-mask", f"{d}/cmask.bed"]
+
+
 class SvReverseStrand(unittest.TestCase):
     """CODE_REVIEW 5.2: reverse-strand SVs came out start > end, shifted."""
 
@@ -145,7 +161,7 @@ class SvReverseStrand(unittest.TestCase):
         subprocess.run([sys.executable, "bin/p4b_place_sv.py", "--sample", "s",
                         "--reference", "R", "--build-id", "b", "--dysgu", vcf,
                         "--positions", posf, "--mask", mask, "--no-inherited",
-                        "--out", out], check=True, capture_output=True)
+                        "--out", out] + p4b_ours_args(d), check=True, capture_output=True)
         with open(out) as fh:
             return list(csv.DictReader(fh, delimiter="\t"))
 
@@ -185,7 +201,7 @@ class SvReverseStrand(unittest.TestCase):
             subprocess.run([sys.executable, "bin/p4b_place_sv.py", "--sample", "s",
                             "--reference", "R", "--build-id", "b", "--dysgu", empty,
                             "--positions", posf, "--mask", mask, "--no-inherited",
-                            "--out", out], check=True, capture_output=True)
+                            "--out", out] + p4b_ours_args(d), check=True, capture_output=True)
             with open(out) as fh:
                 self.assertTrue(fh.readline().startswith("sample\treference"))
 

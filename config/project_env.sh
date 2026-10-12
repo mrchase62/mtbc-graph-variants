@@ -164,6 +164,13 @@ mtb_require_cram_root() {
 # BLAST+ for the foreign screen's UniVec check (D29); not in the QC env
 : "${MTB_BLASTN:=/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/autocycler/bin/blastn}"
 : "${MTB_MAKEBLASTDB:=/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/autocycler/bin/makeblastdb}"
+# Our SV caller's local assembly (P2, analysis/novel_events/assemble_candidates.py):
+# SPAdes and the minimap2 it aligns contigs with, from the autocycler env. Its
+# minimap2 (2.31) built every callable mask and assembled every event the caller
+# was evaluated on; the QC env's is 2.28, so the two are kept apart.
+: "${MTB_SV_ASM_BIN:=/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/autocycler/bin}"
+: "${MTB_SPADES:=${MTB_SV_ASM_BIN}/python ${MTB_SV_ASM_BIN}/spades.py}"
+: "${MTB_SV_MINIMAP2:=${MTB_SV_ASM_BIN}/minimap2}"
 # NCBI UniVec_Core, fetched into the repository's data/ by bin/fetch_univec.sh
 : "${MTB_UNIVEC:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/data/univec/UniVec_Core}"
 
@@ -363,7 +370,7 @@ mtb_show_config() {
              MTB_REF_FASTA MTB_REF_PATH MTB_H37RV MTB_OUTGROUP MTB_NON_MTBC_TIPS \
              MTB_SNPEFF_JAR MTB_JAVA MTB_SNPEFF_DB MTB_PY MTB_PY_VT MTB_ODGI MTB_MINIMAP2 \
              MTB_SAMTOOLS MTB_BGZIP MTB_TABIX MTB_BEDTOOLS MTB_BCFTOOLS MTB_K8 MTB_PAFTOOLS \
-             MTB_BLASTN MTB_MAKEBLASTDB MTB_UNIVEC \
+             MTB_BLASTN MTB_MAKEBLASTDB MTB_UNIVEC MTB_SPADES MTB_SV_MINIMAP2 \
              MTB_BWA MTB_WGSIM MTB_GATK_SIF \
              MTB_CRAM_ROOT MTB_CRAM_REF MTB_BUILD_DIR MTB_GRAPH_FRAMES \
              MTB_THREADS MTB_PARTITION; do

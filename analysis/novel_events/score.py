@@ -105,8 +105,12 @@ DP 17 of ~100, AD 6,11). calls_hc_dropped counts them.
 import argparse
 import collections
 import csv
-import bisect
 import os
+import sys
+
+# the per-call rules production applies too (P4b); one copy, in bin/
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "bin"))
+from sv_rules import element_artifact, hc_small_indel, load_element_gt, load_hc_small, masked  # noqa: E402,F401
 
 TOL = 50
 COMPAT = {"DEL": {"DEL"}, "INS": {"INS"}, "REPL": {"DEL", "INS"},
@@ -218,70 +222,6 @@ def load_repeat_copies(refmap, mask_dir):
         keep = repeat_copies(os.path.join(mask_dir, f"{g}.bed"))
         by_ref[g] = ([x[0] for x in keep], keep)
     return {s: by_ref[g] for s, g in ref.items()}
-
-
-def load_element_gt(path):
-    """element_genotype.py table -> sample: (1-based start, end, genotype)."""
-    out = {}
-    for r in csv.DictReader(open(path), delimiter="\t"):
-        if r["site_start"] != "":
-            out[r["sample"]] = (int(r["site_start"]) + 1, int(r["site_end"]), r["genotype"])
-    return out
-
-
-def element_artifact(gt, s, c):
-    """A DEL call at the tatC-helY site in an isolate that carries the element."""
-    x = gt.get(s) if gt else None
-    return bool(x) and x[2] == "present" and c["type"] == "DEL" and \
-        c["start"] <= x[1] + TOL and c["end"] >= x[0] - TOL
-
-
-def load_hc_small(path):
-    """HaplotypeCaller VCF -> [(pos, indel length, DP, alt fraction)] for PASS
-    10-49 bp indels, and the median DP of PASS SNPs."""
-    import gzip
-    if not os.path.exists(path):
-        return [], 0
-    ind, snp_dp = [], []
-    for line in gzip.open(path, "rt"):
-        if line.startswith("#"):
-            continue
-        c = line.rstrip("\n").split("\t")
-        if c[6] not in ("PASS", "."):
-            continue
-        fmt = dict(zip(c[8].split(":"), c[9].split(":")))
-        try:
-            dp = int(fmt.get("DP", "0"))
-            ad = [int(x) for x in fmt.get("AD", "").split(",")]
-        except ValueError:
-            continue
-        alts = c[4].split(",")
-        if len(c[3]) == 1 and all(len(a) == 1 for a in alts):
-            snp_dp.append(dp)
-            continue
-        for i, alt in enumerate(alts, 1):
-            d = len(alt) - len(c[3])
-            if 10 <= abs(d) < 50 and len(ad) > i and sum(ad):
-                ind.append((int(c[1]), d, dp, ad[i] / sum(ad)))
-    snp_dp.sort()
-    return ind, (snp_dp[len(snp_dp) // 2] if snp_dp else 0)
-
-
-def hc_small_indel(hc, c):
-    """An SV call that is a HaplotypeCaller 10-49 bp indel explained by every read."""
-    if not hc or c["type"] == "BND":
-        return False
-    ind, med = hc
-    return any(abs(p - c["start"]) <= 60 and dp >= 0.5 * med and af >= 0.9 for p, _, dp, af in ind)
-
-
-def masked(m, s, e):
-    if m is None:
-        return False
-    starts, iv = m
-    lo, hi = s - 1 - TOL, e + TOL  # 1-based event span +-50 bp, as 0-based half-open
-    i = bisect.bisect_right(starts, hi)
-    return any(iv[j][1] > lo for j in range(max(0, i - 8), i))
 
 
 def read_gridss(path, pass_only):

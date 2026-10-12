@@ -114,11 +114,26 @@ class OdgiInvertedStepP4(unittest.TestCase):
                  "--reference", "RREF", "--build-id", "b",
                  "--dysgu", f"{d}/delly.vcf", "--positions", f"{d}/bp.pos",
                  "--mask", f"{d}/mask.bed", "--no-inherited",
-                 "--out", f"{d}/sv.tsv"], capture_output=True, text=True)
+                 "--out", f"{d}/sv.tsv"] + p4b_ours_args(d), capture_output=True, text=True)
             self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
             got = [(q["h37rv_pos"], q["h37rv_end"]) for q in rows(f"{d}/sv.tsv")]
         self.assertEqual(got, [("2499", "2999")])        # was 2500, 3000
 
+
+def p4b_ours_args(d):
+    """Empty P2 inputs for p4b_place_sv.py's our-caller arguments (required
+    from 2026-10-12): no events of ours, no element site, no HC indels, no
+    mask. Geometry tests are unchanged by them."""
+    for name, text in (("ours.tsv", "sample\ttype\tstart\tend\tsize\tsupport\tleft\tright\tdepth_ratio\tsource\n"),
+                       ("egt.tsv", "sample\treference\tsite_start\tsite_end\tgenotype\n"),
+                       ("cmask.bed", "")):
+        with open(os.path.join(d, name), "w") as fh:
+            fh.write(text)
+    import gzip
+    with gzip.open(os.path.join(d, "hc.vcf.gz"), "wt") as fh:
+        fh.write("##fileformat=VCFv4.2\n")
+    return ["--ours", f"{d}/ours.tsv", "--element-gt", f"{d}/egt.tsv",
+            "--hc-vcf", f"{d}/hc.vcf.gz", "--callable-mask", f"{d}/cmask.bed"]
 
 class OdgiInvertedStepIS6110(unittest.TestCase):
     """is6110_project_sites.py read raw odgi output and ignored odgi's own

@@ -207,6 +207,9 @@ class P2Guard(unittest.TestCase):
                  '--output x.vcf.gz",Version="4">\n')
         write_vcf_gz(os.path.join(self.out, "S1.vcf.gz"), ["S1"], build, extra)
         write(os.path.join(self.out, "S1.delly.vcf"), vcf_text(["S1"], build))
+        # our caller's outputs (P2 from 2026-10-12)
+        write(os.path.join(self.out, "S1.ours.events.tsv"), "sample\ttype\n")
+        write(os.path.join(self.out, "S1.element_gt.tsv"), "sample\tgenotype\nS1\tpresent\n")
 
     def test_date_only_marker_from_old_build_refused(self):
         self.outputs("oldbuild", "R1")
@@ -243,6 +246,17 @@ class P2Guard(unittest.TestCase):
         r = self.p2()
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("already done", r.stdout)
+
+    def test_done_before_our_caller_without_bam_refused(self):
+        # a sample finished before our caller was wired in gets it run on
+        # its kept BAM; with no BAM that cannot happen, and it must say so
+        self.outputs("newbuild", "R1")
+        os.remove(os.path.join(self.out, "S1.ours.events.tsv"))
+        write(os.path.join(self.out, "S1.p2.done"),
+              "build_id\tnewbuild\nreference\tR1\n")
+        r = self.p2()
+        self.assertNotEqual(r.returncode, 0, r.stdout)
+        self.assertIn("our caller's outputs and the BAM are missing", r.stderr)
 
     def test_refmap_from_other_build_refused(self):
         write(self.refmap + ".build", "build_id\toldbuild\n")
