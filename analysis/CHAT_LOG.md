@@ -2229,3 +2229,18 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - Corrected the explainer page (v4): hotspots are sequence-driven, not
     PCR copies.
   - Details in `foldback_qc/removal/RESULTS.md`.
+
+## 2026-10-11 — selfcal54: QC done, P2 launched
+- Downloads complete (54). Masks: all 54 present. The masks job reported
+  FAILED only because 5 genomes already had masks from 2026-10-09, so its
+  `mv` of a missing .tmp failed; callable_mask.py is unchanged since then.
+- QC: 1 TB-Profiler crash (a temp file vanished, ps_GCF_042982005); rerun
+  52293507 passed at 77x.
+- 39 of 54 pass QC (the plan guessed about 44). Failures:
+  - depth < 60x: 14, of which 5 are PRJEB49093 runs at exactly 59.5x (the
+    submitters' own 60x) and 2 lose more than 80% of reads in fastp
+    (GCF_037101195 155x to 28x, GCF_040209395 184x to 25x);
+  - MTBC < 85%: 1 (GCF_000023625, KZN MDR 2009, 80.2%).
+- P2 (dysgu only, first production run without delly): array 52294010,
+  summary 52294011; post (`selfcal/03_post.sbatch`) 52294042, after the
+  summary.
