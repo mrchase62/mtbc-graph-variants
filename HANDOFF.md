@@ -114,7 +114,7 @@ Plan: `analysis/foldback_qc/FOLDBACK_SV_EFFECT_PLAN.md` part D. Code:
 4. **Robust call tier** (agreed: DEL/INS in callable sequence, both
    breakpoints). Not built. Add the clip-only dysgu INS filter.
 5. **Regenerate production data once**, after the above
-   ([[finish-fixes-before-rerun]] in memory).
+   (finish and verify every pending fix first).
 6. **Smaller open items:**
    - random removal raised false calls by 13-21% (probably fraction
      thresholds such as `--bnd-min-frac`), unchecked;
