@@ -180,3 +180,39 @@ GCF_035581225) gives the same picture: 0.617 -> 0.692 against kept 0.585.
 - Per isolate the gain is uneven: GCF_019670745 0.67 -> 1.0, GCF_900520315
   0.63 -> 0.71, most others within 0.05.
 - Small: 51 events in 12 isolates, 6 of them from one 2x300 study.
+
+## IS6110 junction check (2026-10-12, `is6110_check.py`)
+Does fold-back read removal take away the reads that show a new IS6110
+insertion? `06_is6110_sites.sbatch` ran `foldback_v2.py --sites` unchanged on
+the 48 part D BAMs (shared reference; about 1 minute on 8 cores). Report:
+`out/is6110_report.txt`; table `out/is6110_check.tsv`. 145 true IS6110-sized
+insertions (1,340-1,370 bp) in 48 isolates.
+
+1. **Labelling on the own genome (what the removal test did): no effect.**
+   Of 9,082 reads overlapping the IS6110 insertion points in the excluded and
+   chimeric isolates, 1.4% were on the removed list, against 3.3% in random
+   windows of the same BAMs. At IS6110 copy ends in the own genomes (475
+   copies, selfcal54 sites): 79 fold-back reads, 154.5 expected by chance.
+2. **The lost event was not caused by removal at the junction.**
+   GCF_902459825 at 2,248,575: 121 reads overlap the point, 2 were removed.
+   With all reads it was matched only by a marginal 61 bp INS call; the
+   change in typing is chance, not lost evidence.
+3. **Labelling on a shared reference (as production would): a specific
+   failure.** Pooled 299 fold-back reads at the 145 insertions against 191
+   expected, almost all at 6 insertions (34-61 reads each, all clip class:
+   every junction read on one side). In each of the 6 the reference has its
+   own IS6110 copy 221-277 bp from the insertion point, inside the clip rule's
+   500 bp search window. IS6110's ends are inverted repeats, so the new copy's
+   clipped end matches the old copy reverse-complemented. 6 of 145 (4%);
+   the other 139 insertions have 0-2 fold-back reads.
+   - Whether removing those reads would lose the 6 events was not run.
+   - A few non-IS6110 true events behave the same way (e.g. a 112 bp REPL in
+     GCF_009664875: 164 fold-back reads, 0.3 expected), probably real local
+     inverted structure.
+
+**Implication.** The removal test itself was fair (labels from the own
+genome). In production the labels would come from the shared reference, and
+then IS6110 insertions within ~500 bp of an existing copy lose the reads on
+one side. A removal step in production would need the clip rule to ignore
+matches that fall in a known IS6110 copy (or other annotated repeat) of the
+reference; not implemented or tested.

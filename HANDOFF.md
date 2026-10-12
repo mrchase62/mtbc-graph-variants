@@ -118,7 +118,15 @@ Raised by the user 2026-10-12 ("I don't know if this is worth it").
   caller's 0.1 floor and the HC hand-off, the 12 excluded isolates go from
   0.863 / 0.664 to 0.843 / 0.742 (recall / precision) with fold-backs
   removed, against kept 0.885 / 0.785. 1 of 51 events lost (an IS6110
-  insertion retyped as INV; IS6110 ends are inverted repeats, untested).
+  insertion retyped as INV).
+- **Check 3, IS6110 junctions (`recall/is6110_check.py`):** the removal
+  test was fair; own-genome labels remove junction reads below chance, and
+  the lost event lost only 2 of 121 reads (chance retyping). But labelled on
+  a shared reference, as production would, 6 of 145 IS6110 insertions lose
+  every junction read on one side: the reference has an IS6110 copy 221-277
+  bp away, inside the clip rule's 500 bp window. Production removal would
+  need the clip rule to ignore matches inside reference IS6110 copies
+  (not built).
   The user decides: keep the exclusion (old <= 2.5, drops 22-28% of
   production isolates) or replace most of it with read removal. It runs
   against the standing "exclude over rescue" preference.

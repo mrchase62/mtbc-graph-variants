@@ -1,0 +1,95 @@
+1. Fold-back reads at true events, labelled on the part D reference (+-50 bp)
+group	event kind	events	fold-back reads at events	expected	events with any
+all	IS6110-sized INS	145	299	191.1	25
+all	other DEL	637	519	3015.7	136
+all	other INS	644	465	319.4	139
+all	other INV	2	7081	7342.1	2
+all	other REARR	3	0	0.3	0
+all	other REPL	177	474	637.4	36
+chimeric	IS6110-sized INS	36	120	139.8	13
+chimeric	other DEL	186	331	2155.7	83
+chimeric	other INS	147	378	223.6	86
+chimeric	other REPL	30	107	366.4	15
+excluded	IS6110-sized INS	27	8	47.7	6
+excluded	other DEL	127	172	720.8	40
+excluded	other INS	127	63	72.7	37
+excluded	other INV	2	7081	7342.1	2
+excluded	other REPL	23	84	120.1	8
+kept	IS6110-sized INS	82	171	3.5	6
+kept	other DEL	324	16	139.2	13
+kept	other INS	370	24	23.0	16
+kept	other REARR	3	0	0.3	0
+kept	other REPL	124	283	150.9	13
+
+2. Reads at IS6110 insertions removed by own-genome labelling, against random windows
+sample	group	IS6110 insertions	reads at them	removed	share	random windows share
+mar_N0004	chimeric	2	232	1	0.0043	0.0136
+mar_N0054	chimeric	8	1225	24	0.0196	0.0473
+mar_N0155	chimeric	2	322	0	0.0000	0.0109
+mar_N1176	chimeric	1	152	7	0.0461	0.1031
+mar_N1202	chimeric	1	176	7	0.0398	0.0435
+mar_N1272	chimeric	4	645	14	0.0217	0.0346
+mar_N1274	chimeric	3	545	12	0.0220	0.0550
+mar_RW_TB008	chimeric	15	2486	35	0.0141	0.0178
+ps_GCF_019670745	excluded	6	727	1	0.0014	0.0093
+ps_GCF_037076315	excluded	1	116	6	0.0517	0.0359
+ps_GCF_037076325	excluded	3	259	7	0.0270	0.0387
+ps_GCF_037076335	excluded	3	292	2	0.0068	0.0180
+ps_GCF_900520315	excluded	4	652	4	0.0061	0.0210
+ps_GCF_902459825	excluded	10	1253	6	0.0048	0.0172
+pooled			9082	126	0.0139	0.0332
+
+3. Fold-back reads at IS6110 copy ends in the own genome (selfcal54, +-50 bp)
+sample	copies	fold-back reads genome	at copy ends	expected
+ps_GCF_001544705	17	34	0	0.03
+ps_GCF_002975475	2	1225	0	0.11
+ps_GCF_009664875	3	5202	0	0.71
+ps_GCF_009730215	14	217	0	0.14
+ps_GCF_009730235	18	231	0	0.19
+ps_GCF_009762675	23	398	0	0.42
+ps_GCF_013267635	17	77	0	0.06
+ps_GCF_013267655	23	210	0	0.22
+ps_GCF_019670745	16	12535	2	9.53
+ps_GCF_022871085	20	5446	2	4.99
+ps_GCF_022871105	19	5126	4	4.47
+ps_GCF_022871125	20	7173	4	6.56
+ps_GCF_022871145	19	1460	0	1.27
+ps_GCF_026185275	17	933	0	0.73
+ps_GCF_026727575	1	7913	0	0.37
+ps_GCF_026727615	1	13442	0	0.62
+ps_GCF_028768425	1	12038	0	0.56
+ps_GCF_035581225	6	4522	1	1.21
+ps_GCF_037076265	1	534	0	0.02
+ps_GCF_037076275	0	405	0	0.00
+ps_GCF_037076285	17	29525	14	22.99
+ps_GCF_037076295	0	37475	0	0.00
+ps_GCF_037076305	0	42186	0	0.00
+ps_GCF_037076315	2	35788	1	3.28
+ps_GCF_037076325	21	41537	27	39.98
+ps_GCF_037076335	15	16394	5	11.26
+ps_GCF_040209325	18	9451	3	7.73
+ps_GCF_042982005	1	14522	0	0.67
+ps_GCF_059622605	13	1235	1	0.74
+ps_GCF_059622665	23	519	0	0.55
+ps_GCF_059622685	13	1477	3	0.88
+ps_GCF_059622705	4	1172	0	0.21
+ps_GCF_059622725	21	966	1	0.93
+ps_GCF_059622745	21	799	0	0.77
+ps_GCF_059622765	22	974	0	0.98
+ps_GCF_059622825	22	449	0	0.45
+ps_GCF_059717755	1	322	0	0.01
+ps_GCF_900520315	12	37815	8	20.79
+ps_GCF_902459825	11	19735	3	10.05
+pooled	475		79	154.5
+
+GCF_902459825: reads overlapping each IS6110 insertion point +-50 bp
+1524389	all reads 136	after removal 136	on removed list 0	fold-back junctions on shared ref 0
+1896764	all reads 118	after removal 118	on removed list 0	fold-back junctions on shared ref 0
+1977775	all reads 142	after removal 141	on removed list 1	fold-back junctions on shared ref 0
+1993181	all reads 83	after removal 81	on removed list 0	fold-back junctions on shared ref 0
+2248575	all reads 121	after removal 119	on removed list 2	fold-back junctions on shared ref 1
+2255223	all reads 143	after removal 143	on removed list 0	fold-back junctions on shared ref 0
+2653575	all reads 141	after removal 141	on removed list 0	fold-back junctions on shared ref 0
+3083657	all reads 122	after removal 121	on removed list 1	fold-back junctions on shared ref 1
+3671426	all reads 115	after removal 113	on removed list 2	fold-back junctions on shared ref 2
+4115483	all reads 132	after removal 132	on removed list 0	fold-back junctions on shared ref 0
