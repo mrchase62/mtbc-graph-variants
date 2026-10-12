@@ -71,24 +71,71 @@ p 0.32, 48 isolates).
    excluded selfcal isolates have recall similar to the kept ones but half
    the precision.
 
-## Open: precision in the kept group is lower than in Phase B
-Kept-group precision is 0.56. Phase B's novel set reached about 0.8-0.83,
-and these same isolates gave 1-2 false calls each on their own genome.
-- **Distance from truth:** of our caller's ~120 false typed calls, 92 lie
-  more than 500 bp from any truth event (54 DEL, 38 INS), so they are not
-  placement offsets.
-- **Shared references:** 15 of the 92 recur at the same reference position
-  in 2 or more isolates mapped to the same reference (9 of 12 on
-  GCF_900520315). Those point to the reference or to truth gaps.
-- **The rest:** not explained yet. The candidates are:
-  - reads mapping to a divergent reference;
-  - events missed by assembly-vs-assembly alignment in truth.py;
-  - assembly errors in either genome.
+## Kept-group precision explained (2026-10-12, `precheck.py`)
+Kept-group precision was 0.567 combined, against about 0.8 in Phase B. Each
+false typed call of the kept isolates was checked by aligning its
+reference window (+-500 bp) to the isolate's own genome. Output:
+`out/precheck.tsv`, `out/precheck_report.txt`.
 
-This affects the precision of the production SV caller set, so it should be
-checked before that set is fixed.
+1. **One isolate is most of it.** GCF_035581225 (L6) has the most distant
+   reference (11,696 SNPs; everyone else 51-2,152). It gives 72 of our
+   caller's 120 false calls and 64 of dysgu's 95.
+   - Most sit where the reference window does not align to the own genome,
+     or aligns only in part (absent, split or inverted).
+   - These are divergent regions the assembly-vs-assembly truth does not
+     describe at the calls' size and position.
+2. **The other 26 isolates: 48 false calls of ours.**
+   - 27 are no SV-scale difference between the genomes: genuine caller
+     false calls, about 1 per isolate.
+   - 15 are real 20-49 bp indels, below truth's 50 bp cut-off.
+   - 2 are real >= 50 bp differences truth did not report.
+   - 4 are complex.
+3. **Part D's scoring did not use the HaplotypeCaller hand-off**
+   (`score.py --hc-dir`: drop SV calls that are 10-49 bp HC indels), which
+   Phase B's numbers used.
 
-## Not done
-- **An AF floor on our caller** (parts A-B suggested 0.2). `score.py` has no
-  AF filter for our caller; testing it needs per-call AF (as
-  `../fb_effect.py`) applied to the asm tables.
+| kept group, scoring | combined recall | combined precision | ours | dysgu AF >= 0.2 |
+|---|---|---|---|---|
+| as in part D | 0.841 | 0.567 | 0.557 | 0.578 |
+| + HC hand-off | 0.830 | 0.615 | 0.610 | 0.620 |
+| + HC hand-off, without GCF_035581225 | 0.885 | 0.743 | 0.716 | 0.774 |
+
+With those two accounted for, precision is close to Phase B's. A reference
+far from the isolate inflates false calls. In production this would hit
+lineages the panel covers sparsely, such as L6.
+- **A per-isolate reference-distance flag is worth considering.** There is
+  only one isolate above 2,152 SNPs here. RW_TB008 at 2,152 had precision
+  0.79, so no threshold can be set from these data.
+
+## AF floor on our caller (2026-10-12, `affloor.py`)
+Our caller's AF is supporting reads / reads at the start position, as
+`../fb_effect.py` computes it. 479 of 4,789 events (assembly-typed, support
+0) have no AF. dysgu stays at AF >= 0.2. Output: `out/affloor.tsv`,
+`out/affloor_report.txt`.
+
+**Dropping events without an AF costs too much.** Our caller's recall
+falls from 0.80 to 0.46 (kept). Any floor must keep them.
+
+Keeping events without an AF, combined (ours + dysgu AF >= 0.2), recall /
+precision:
+
+| our floor | kept | excluded | chimeric | chimeric, fold-backs removed |
+|---|---|---|---|---|
+| none | 0.841 / 0.567 | 0.863 / 0.348 | 0.872 / 0.045 | 0.923 / 0.650 |
+| 0.1 | 0.841 / 0.585 | 0.863 / 0.617 | 0.859 / 0.053 | 0.910 / 0.685 |
+| 0.15 | 0.835 / 0.586 | 0.863 / 0.664 | 0.859 / 0.058 | 0.910 / 0.689 |
+| 0.2 | 0.830 / 0.587 | 0.863 / 0.663 | 0.859 / 0.059 | 0.897 / 0.687 |
+
+Our caller alone at 0.2: kept 0.797 / 0.557 -> 0.742 / 0.595; excluded
+0.784 / 0.280 -> 0.745 / 0.830.
+
+- **A floor of 0.1 on our caller costs no combined recall** in the kept or
+  excluded groups. It nearly doubles precision in the excluded selfcal
+  isolates (0.35 -> 0.62), bringing them close to the kept group.
+- **Higher floors** trade recall for little further gain.
+- **Chimeric controls barely move.** Their false calls are dysgu's.
+- **Implication for the cut-off:** with the floor, the remaining fold-back
+  damage in moderate libraries is mostly dysgu's. The cut-off (old <= 2.5)
+  still protects against hotspot libraries. Whether a floor would justify a
+  looser cut-off rests on only 12 excluded isolates (6 from one 2x300
+  study), so it is not tested here.

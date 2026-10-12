@@ -2341,3 +2341,18 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - 92 of about 120 false typed calls are more than 500 bp from any truth
     event; 15 recur on shared references (GCF_900520315).
   - Cause not yet known; check before fixing the production caller set.
+
+## 2026-10-12 — kept-group precision check and AF floor test (user: "do the kept-group precision check, then the AF floor test")
+- Precision check (`recall/precheck.py`):
+  - GCF_035581225 (reference 11,696 SNPs away) gives 72/120 of our false
+    calls and 64/95 of dysgu's (divergent regions).
+  - Part D scoring lacked the HC hand-off. With hand-off and without
+    GCF_035581225: kept combined 0.885 / 0.743, close to Phase B.
+  - Remaining genuine caller false calls: about 1 per isolate.
+  - Candidate: a reference-distance flag (no threshold settable: n = 1).
+- AF floor on our caller (`recall/affloor.py`):
+  - dropping events without AF (assembly, support 0) halves recall, so
+    they must be kept;
+  - keeping them, floor 0.1: kept 0.841 / 0.567 -> 0.841 / 0.585,
+    excluded 0.863 / 0.348 -> 0.863 / 0.617, chimeric unchanged (dysgu).
+  - Higher floors trade recall for little gain.

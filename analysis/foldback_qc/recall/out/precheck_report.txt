@@ -1,0 +1,17 @@
+kept isolates: 27; false typed calls: 215
+
+ours: 120 false calls
+  truth_gap       4  types {'INS': 3, 'INV': 1}  within 500 bp of a truth event 4
+  indel_20_49    20  types {'INS': 20}  within 500 bp of a truth event 0
+  no_sv          38  types {'INS': 14, 'DEL': 24}  within 500 bp of a truth event 1
+  complex        58  types {'DEL': 40, 'REPL': 4, 'INV': 3, 'INS': 11}  within 500 bp of a truth event 22
+  no_sv per isolate: [11, 3, 3, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1]
+
+dysgu_af20: 95 false calls
+  truth_gap       6  types {'INS': 6}  within 500 bp of a truth event 6
+  indel_20_49    17  types {'DEL': 7, 'INS': 10}  within 500 bp of a truth event 0
+  no_sv          33  types {'INS': 28, 'DEL': 5}  within 500 bp of a truth event 4
+  complex        39  types {'INS': 35, 'INV': 4}  within 500 bp of a truth event 27
+  no_sv per isolate: [21, 2, 2, 2, 2, 1, 1, 1, 1]
+
+SNP density in aligned windows (per kb): median 0.0, 90th pct 10.82
