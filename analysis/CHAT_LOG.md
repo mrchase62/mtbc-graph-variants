@@ -2402,3 +2402,4 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - Ran foldback_v2 --sites on the 48 part D BAMs (job 52442547, 1 min) and `recall/is6110_check.py`.
 - Own-genome labels (the removal test): reads at IS6110 insertions removed at 1.4% vs 3.3% random; copy ends 79 vs 154.5 expected. The lost GCF_902459825 event lost 2 of 121 reads: not caused by removal.
 - Shared-reference labels (production): 6 of 145 insertions get 34-61 fold-back reads each, all with a reference IS6110 copy 221-277 bp away (inverted-repeat ends match within the 500 bp clip window). A production removal step would need an IS6110/repeat exemption in the clip rule.
+- User: "Keep the exclusion. We are running into problems that are troubling me about trying to fix downstream consequences of removing the fold-back chimeras." Read removal closed; exclusion at old <= 2.5 stands (wrap-up item 2).

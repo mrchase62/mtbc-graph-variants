@@ -216,3 +216,7 @@ then IS6110 insertions within ~500 bp of an existing copy lose the reads on
 one side. A removal step in production would need the clip rule to ignore
 matches that fall in a known IS6110 copy (or other annotated repeat) of the
 reference; not implemented or tested.
+
+**Decision (user, 2026-10-12): keep the sample exclusion (old <= 2.5); fold-back
+read removal is not adopted.** Each fix of a removal side effect (AF floor,
+IS6110 exemption) raised new downstream problems.
