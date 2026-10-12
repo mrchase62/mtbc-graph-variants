@@ -2280,3 +2280,20 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - Scale check (job 52345870): production CRAM rates match the calibration
   BAMs for the 2 overlapping isolates (old 0.141 vs 0.151; 8.22 vs 8.30), so
   old <= 2.5 applies to production directly.
+
+## 2026-10-12 — part D launched (fold-back and recall)
+- Cohort fbrecall (`analysis/foldback_qc/recall/`):
+  - 39 selfcal54 QC PASS isolates + 9 chimeric controls (all reads);
+  - each mapped to the nearest OTHER panel genome by panel SNP-profile
+    distance, excluding the own genome and genomes within 50 SNPs
+    (`make_cohort.py`). Distances 51-2,152 SNPs; GCF_035581225 (L6)
+    11,696.
+  - Truth = own genome vs that reference (`novel_events/truth.py`).
+  - Scoring by group (`analyse.py`): kept (v2 <= 4.9), excluded (> 4.9),
+    chimeric.
+- Jobs: masks for 14 new references 52346243 (`01_masks.sbatch`); P2
+  52346255 / summary 52346256; post 52346278 (caller v6 + assembly, truth).
+- Fixed `selfcal/02_masks.sbatch`: `A || B && mv` ran mv when the mask
+  already existed (the earlier spurious FAILED). Now `A || { B && mv; }`.
+- The fb100 removal sets were not included (a causal recall test, +9 P2
+  runs, about 5 billing-hours); offered to the user.

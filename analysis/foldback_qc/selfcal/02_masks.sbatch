@@ -17,7 +17,7 @@ export N O MTB_PY MTB_H37RV MTB_K8 MTB_PAFTOOLS
 export M2=/n/boslfs02/LABS/sfortune_lab/Lab/conda/envs/autocycler/bin/minimap2
 export MASK=refbias/build/7713a8d71d8e-fix1/assets/repeat_mask.bed
 awk -F'\t' 'NR>1{print $2}' ../analysis/foldback_qc/selfcal/genomes.tsv | sort -u |
-  xargs -P 5 -I{} bash -c '[[ -s $O/{}.bed ]] || "$MTB_PY" $N/callable_mask.py \
+  xargs -P 5 -I{} bash -c '[[ -s $O/{}.bed ]] || { "$MTB_PY" $N/callable_mask.py \
       --ref refbias/build/7713a8d71d8e-fix1/refs/{}.fasta --h37rv "$MTB_H37RV" --h37rv-mask $MASK \
-      --minimap2 $M2 --k8 "$MTB_K8" --paftools "$MTB_PAFTOOLS" --out $O/{}.bed.tmp && mv $O/{}.bed.tmp $O/{}.bed'
+      --minimap2 $M2 --k8 "$MTB_K8" --paftools "$MTB_PAFTOOLS" --out $O/{}.bed.tmp && mv $O/{}.bed.tmp $O/{}.bed; }'
 echo "$(awk -F'\t' 'NR>1{print $2}' ../analysis/foldback_qc/selfcal/genomes.tsv | sort -u | while read g; do [[ -s $O/$g.bed ]] && echo $g; done | wc -l) of 54 masks present"
