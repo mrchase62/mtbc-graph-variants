@@ -2297,3 +2297,9 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   already existed (the earlier spurious FAILED). Now `A || { B && mv; }`.
 - The fb100 removal sets were not included (a causal recall test, +9 P2
   runs, about 5 billing-hours); offered to the user.
+- User: "yes, add the fb100 sets to part D". Cohort fbrecall100
+  (`recall/make_fb100.py`): the 9 chimeric controls' fb100 reads, each on the
+  same reference as its all-reads sample; truth reused. P2 52348853 /
+  summary 52348862; caller + assembly 52348867 (`03_post_fb100.sbatch`).
+  `analyse.py` adds group chimeric_fb100 and a per-isolate all vs fb100
+  comparison. About 5 more billing-hours.
