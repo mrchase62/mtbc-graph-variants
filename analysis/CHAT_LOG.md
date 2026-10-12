@@ -2378,3 +2378,16 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   present. The element is safe.
 - Wiring our caller into production (asked earlier) is paused at the
   reading stage; no wiring code changed yet.
+
+## 2026-10-12 — excluded-isolates check launched; explainer screening section (user: "run the excluded-isolates check. please write in how these artifacts are screened ... simple pseudo code and or a diagram")
+- Cohort fbrecallx100 (`recall/make_excl100.py`, `04_excl_sets.sbatch`
+  job 52414142): the 12 excluded selfcal54 isolates (v2 > 4.9) with every
+  fold-back pair removed (names from foldback_v2 on the own-genome BAM),
+  each on its part D reference. 7,229-34,166 pairs removed per isolate.
+- P2 array 52414719, summary 52414721; caller + assembly 52414797
+  (`05_post_excl.sbatch`). Scoring: `recall/excl_analyse.py` (kept,
+  excluded, excluded_fb100; our caller floor 0 and 0.1).
+- No random-removal depth control (cost); noted.
+- Explainer (artifact 6mTMff14Ts66rLgU8maQdu, version 6): new step 7 "How
+  samples are screened": flow diagram, pseudocode of the per-read labels,
+  rate and decision, cut-off derivation, status table.
