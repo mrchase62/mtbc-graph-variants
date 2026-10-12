@@ -2244,3 +2244,19 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - P2 (dysgu only, first production run without delly): array 52294010,
   summary 52294011; post (`selfcal/03_post.sbatch`) 52294042, after the
   summary.
+- selfcal54 calibration (`foldback_qc/selfcal/RESULTS.md`, `calib.py`):
+  - 59 points (39 selfcal, 11 clean, 9 chimeric); clean y (ours typed +
+    dysgu AF >= 0.2) mean 0.73, T = 2.54.
+  - Pre-specified: rule 1 rate <= 5.80 (v2) keeps 29/39 selfcal; rule 2
+    (plus median insert) adds nothing, and in leave-one-study-out it let
+    N0145 / N0155 through. Insert size rejected (Spearman -0.02).
+  - The mean-based criterion is too lenient: all 3 isolates at 3-6 exceed T.
+    By band, < 1: max y 5; 1-3: median 3.5, one 14 (GCF_035581225, 62x,
+    identity unchecked); 3-6: 20-21. A per-isolate criterion points to a
+    cut-off of 1-3 (v2); the user decides.
+  - Exploratory: recurrence (junctions >= 5 reads) rho 0.73 vs rate 0.75;
+    explains PRJDB10923 2x300 (rate 11-28, y 4-8). Not better as a single
+    rule yet.
+  - Mid-range false calls: MiSeq Tn5 short-insert libraries (median insert
+    130-165 bp), mostly from our caller.
+  - Negative binomial fit did not converge.

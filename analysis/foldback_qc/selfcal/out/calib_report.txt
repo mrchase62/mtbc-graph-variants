@@ -1,0 +1,126 @@
+points: 39 selfcal, 11 clean, 9 chimeric
+clean controls: y = ours typed + dysgu AF>=0.2, mean 0.73, SD 0.90; T = 2.54
+
+sample	group	study	instrument	adapter	rate	ins_med	ins_short	read_len	depth	recur5	ours	dysgu	y
+ps_GCF_001544705	selfcal	PRJNA270004	Illumina HiSeq 2500	truseq	0.01	237	0.549	125	100	0	2	1	3
+mar_TB3251	clean	marin2024	Illumina HiSeq 2500	truseq	0.01	365	0.249	150	90	0	0	0	0
+mar_M0016737_0	clean	marin2024	Illumina HiSeq 2500	unclear	0.02	291	0.294	125	100	0	0	0	0
+mar_M0017522_5	clean	marin2024	Illumina HiSeq 2500	unclear	0.02	292	0.294	125	83	0	1	1	2
+mar_M0003941_3	clean	marin2024	Illumina HiSeq 2500	unclear	0.02	244	0.531	125	100	0	1	0	1
+ps_GCF_013267635	selfcal	PRJNA231221	Illumina HiSeq 4000	truseq	0.03	418	0.119	151	100	0	0	0	0
+mar_02_R1896	clean	marin2024	Illumina HiSeq 2500	unclear	0.07	257	0.464	125	100	0	1	1	2
+ps_GCF_013267655	selfcal	PRJNA231221	Illumina HiSeq 4000	truseq	0.07	381	0.231	151	100	0	1	0	1
+ps_GCF_009730215	selfcal	PRJNA231221	Illumina HiSeq 4000	truseq	0.08	352	0.268	151	100	0	0	0	0
+ps_GCF_009730235	selfcal	PRJNA231221	Illumina HiSeq 4000	truseq	0.08	373	0.329	150	100	0	1	0	1
+mar_02_R1708	clean	marin2024	Illumina HiSeq 2500	unclear	0.09	208	0.888	150	100	0	1	0	1
+ps_GCF_009762675	selfcal	PRJNA505382	Illumina HiSeq 2500	unclear	0.09	219	0.320	101	100	0	1	1	2
+ps_GCF_059717755	selfcal	PRJDB40385	Illumina NovaSeq X	truseq	0.11	490	0.043	151	100	0	0	0	0
+ps_GCF_059622825	selfcal	PRJNA1480832	NextSeq 2000	nextera_tn5	0.15	360	0.329	146	100	0	0	0	0
+mar_01_R1134	clean	marin2024	Illumina HiSeq 2500	unclear	0.17	173	0.922	125	71	0	0	0	0
+ps_GCF_059622665	selfcal	PRJNA1480832	NextSeq 2000	nextera_tn5	0.17	330	0.397	143	100	0	0	0	0
+mar_02_R1179	clean	marin2024	Illumina HiSeq 2500	unclear	0.19	205	0.888	150	100	0	0	0	0
+mar_01_R1430	clean	marin2024	Illumina HiSeq 2500	unclear	0.21	237	0.567	125	100	0	1	1	2
+ps_GCF_059622745	selfcal	PRJNA1480832	NextSeq 2000	nextera_tn5	0.27	330	0.397	144	100	0	0	0	0
+ps_GCF_037076275	selfcal	PRJDB6149	Illumina MiSeq	truseq	0.28	474	0.838	298	100	0	3	1	4
+ps_GCF_002975475	selfcal	PRJNA428763	Illumina HiSeq 2000	truseq	0.28	270	0.216	100	100	0	0	0	0
+mar_M0010874_7	clean	marin2024	Illumina HiSeq 2500	unclear	0.30	232	0.363	100	100	0	0	0	0
+ps_GCF_037076265	selfcal	PRJDB6149	Illumina MiSeq	truseq	0.31	431	0.726	250	100	0	3	2	5
+ps_GCF_026185275	selfcal	PRJNA836783	Illumina NovaSeq 6000	nextera_tn5	0.32	343	0.353	148	100	0	0	0	0
+ps_GCF_059622725	selfcal	PRJNA1480832	NextSeq 2000	nextera_tn5	0.32	335	0.383	145	100	1	0	0	0
+ps_GCF_059622765	selfcal	PRJNA1480832	NextSeq 2000	nextera_tn5	0.33	345	0.361	145	100	1	0	0	0
+mar_M0014888_3	clean	marin2024	Illumina HiSeq 2500	unclear	0.33	235	0.359	100	86	0	0	0	0
+ps_GCF_059622705	selfcal	PRJNA1480832	NextSeq 2000	nextera_tn5	0.39	343	0.368	146	100	0	0	0	0
+ps_GCF_059622605	selfcal	PRJNA1480832	NextSeq 2000	nextera_tn5	0.41	366	0.335	144	100	3	0	0	0
+ps_GCF_059622685	selfcal	PRJNA1480832	NextSeq 2000	nextera_tn5	0.49	339	0.378	145	100	0	0	0	0
+ps_GCF_022871145	selfcal	PRJNA820632	Illumina HiSeq 4000	truseq	0.51	346	0.274	150	100	0	1	1	2
+ps_GCF_009664875	selfcal	PRJNA556438	NextSeq 550	unclear	1.77	346	0.362	149	100	0	0	0	0
+ps_GCF_022871105	selfcal	PRJNA820632	Illumina HiSeq 4000	truseq	1.79	292	0.546	150	100	0	3	2	5
+ps_GCF_022871085	selfcal	PRJNA820632	Illumina HiSeq 4000	truseq	1.89	289	0.559	150	100	0	2	0	2
+ps_GCF_035581225	selfcal	PRJNA823537	NextSeq 500	nextera_tn5	2.39	413	0.282	143	62	0	2	12	14
+ps_GCF_022871125	selfcal	PRJNA820632	Illumina HiSeq 4000	truseq	2.50	322	0.388	150	100	1	2	1	3
+ps_GCF_026727575	selfcal	PRJNA902023	Illumina MiSeq	nextera_tn5	2.97	163	1.000	164	100	11	3	1	4
+ps_GCF_040209325	selfcal	PRJNA1113402	Illumina MiSeq	truseq	4.88	151	0.943	145	65	1	3	1	4
+ps_GCF_028768425	selfcal	PRJNA930491	Illumina MiSeq	nextera_tn5	5.55	165	1.000	183	91	20	19	1	20
+ps_GCF_026727615	selfcal	PRJNA902023	Illumina MiSeq	nextera_tn5	5.80	130	0.995	189	100	13	14	7	21
+mar_N0155	chimeric	marin2024			6.54	389	0.037	101	100	115	9	30	39
+ps_GCF_019670745	selfcal	PRJDB11640	Illumina MiSeq	nextera_tn5	7.42	148	0.913	163	64	27	11	0	11
+mar_N0004	chimeric	marin2024			7.72	354	0.052	101	100	541	22	21	43
+ps_GCF_042982005	selfcal	PRJNA1089215	Illumina MiSeq	nextera_tn5	8.24	165	0.999	191	77	23	16	5	21
+ps_GCF_902459825	selfcal	PRJEB33636	Illumina HiSeq 2500	nextera_tn5	10.69	384	0.672	237	100	57	11	0	11
+mar_RW_TB008	chimeric	marin2024			10.92	267	0.551	144	100	104	2	1	3
+ps_GCF_037076335	selfcal	PRJDB10923	Illumina MiSeq	truseq	11.12	395	0.999	296	100	0	5	1	6
+ps_GCF_900520315	selfcal	PRJEB20214	Illumina MiSeq	nextera_tn5	12.51	265	0.568	144	100	88	8	0	8
+mar_N0145	chimeric	marin2024			13.04	501	0.037	101	100	617	95	197	292
+ps_GCF_037076285	selfcal	PRJDB10923	Illumina MiSeq	truseq	20.11	415	1.000	298	100	0	7	1	8
+mar_N1272	chimeric	marin2024			20.20	249	0.648	146	100	419	35	72	107
+mar_N1202	chimeric	marin2024			24.00	292	0.506	147	100	481	23	178	201
+ps_GCF_037076315	selfcal	PRJDB10923	Illumina MiSeq	truseq	24.84	387	0.993	294	97	2	5	0	5
+ps_GCF_037076295	selfcal	PRJDB10923	Illumina MiSeq	truseq	25.43	415	1.000	298	100	2	2	2	4
+ps_GCF_037076325	selfcal	PRJDB10923	Illumina MiSeq	truseq	28.13	381	1.000	295	100	3	6	1	7
+ps_GCF_037076305	selfcal	PRJDB10923	Illumina MiSeq	truseq	28.50	388	1.000	296	100	2	6	1	7
+mar_N0054	chimeric	marin2024			29.87	275	0.561	146	100	721	51	277	328
+mar_N1274	chimeric	marin2024			32.35	318	0.423	148	100	858	81	423	504
+mar_N1176	chimeric	marin2024			66.53	235	0.678	144	100	3258	463	504	967
+
+Rule 1: rate <= 5.80: keeps 40 of 59 points, 29 of 39 selfcal
+Rule 2: rate <= 5.80, or rate <= 5.80 with median insert >= 130: keeps 40 of 59, 29 of 39 selfcal
+  rule 2 adds: none
+  rule 2 drops: none
+
+Leave-one-study-out (fit on the rest, apply to the held-out study):
+study	n	c1	rule1 kept (y)	rule2 (c, c2, i)	rule2 kept (y)
+PRJDB10923	6	5.80	0 (0)	(5.80, 5.80, 130)	0 (0)
+PRJDB11640	1	5.80	0 (0)	(5.80, 5.80, 130)	0 (0)
+PRJDB40385	1	5.55	1 (0)	(5.55, 11.12, 395)	1 (0)
+PRJDB6149	2	5.80	2 (9)	(5.80, 11.12, 395)	2 (9)
+PRJEB20214	1	5.80	0 (0)	(5.80, 5.80, 130)	0 (0)
+PRJEB33636	1	5.80	0 (0)	(5.80, 5.80, 130)	0 (0)
+PRJNA1089215	1	5.80	0 (0)	(5.80, 5.80, 130)	0 (0)
+PRJNA1113402	1	5.80	1 (4)	(5.80, 11.12, 395)	1 (4)
+PRJNA1480832	8	5.55	8 (0)	(5.55, 5.55, 130)	8 (0)
+PRJNA231221	4	5.55	4 (2)	(5.55, 11.12, 395)	4 (2)
+PRJNA270004	1	5.80	1 (3)	(5.80, 5.80, 130)	1 (3)
+PRJNA428763	1	5.55	1 (0)	(5.55, 11.12, 395)	1 (0)
+PRJNA505382	1	5.80	1 (2)	(5.80, 5.80, 130)	1 (2)
+PRJNA556438	1	5.55	1 (0)	(5.55, 11.12, 395)	1 (0)
+PRJNA820632	4	5.80	4 (12)	(5.80, 11.12, 395)	4 (12)
+PRJNA823537	1	5.80	1 (14)	(5.80, 11.12, 395)	1 (14)
+PRJNA836783	1	5.55	1 (0)	(5.55, 11.12, 395)	1 (0)
+PRJNA902023	2	5.55	1 (4)	(5.55, 11.12, 395)	1 (4)
+PRJNA930491	1	5.80	1 (20)	(5.80, 11.12, 395)	1 (20)
+marin2024	20	5.55	11 (8)	(4.88, 28.50, 387)	13 (339)
+held-out kept: rule 1 39, rule 2 41; isolates only rule 2 kept: 2, y = [292, 39]
+
+Spearman with y (not pre-specified except rate and insert):
+  all points    rate      rho +0.75  p 1.3e-11
+  all points    recur     rho +0.73  p 4.1e-11
+  all points    ins_med   rho -0.02  p 0.86
+  all points    ins_short rho +0.40  p 0.0015
+  all points    read_len  rho +0.23  p 0.085
+  selfcal only  rate      rho +0.71  p 4.4e-07
+  selfcal only  recur     rho +0.57  p 0.00018
+  selfcal only  ins_med   rho -0.12  p 0.48
+  selfcal only  ins_short rho +0.71  p 4.5e-07
+  selfcal only  read_len  rho +0.53  p 0.00048
+
+Exploratory rule 3 (not pre-specified): junctions >= 5 reads <= 11: keeps 44 of 59, 33 of 39 selfcal
+  LOSO PRJDB10923: rule 1 (c 5.80) keeps 0 y=[]; rule 3 (h 20) keeps 6 y=[8, 4, 7, 5, 7, 6]
+  LOSO PRJNA1480832: rule 1 (c 5.55) keeps 8 y=[0, 0, 0, 0, 0, 0, 0, 0]; rule 3 (h 2) keeps 7 y=[0, 0, 0, 0, 0, 0, 0]
+  LOSO PRJNA902023: rule 1 (c 5.55) keeps 1 y=[4]; rule 3 (h 20) keeps 2 y=[4, 21]
+  LOSO PRJNA930491: rule 1 (c 5.80) keeps 1 y=[20]; rule 3 (h 11) keeps 0 y=[]
+  held-out kept: rule 1 39, rule 3 44
+
+False calls (y) by fold-back rate band, all points:
+band	n	median y	max y	n with y > T	n with y >= 10
+0-1	31	0	5	3	0
+1-3	6	3.5	14	4	1
+3-6	3	20	21	3	2
+6-13	8	11.0	43	8	5
+13-	11	107	967	11	6
+
+Negative binomial (descriptive): y ~ log10 rate + insert/100 + interaction
+  const        -3.690  SE nan
+  log10 rate   +7.009  SE nan
+  insert/100   +1.379  SE nan
+  interaction  -1.256  SE nan
+  alpha        +inf  SE nan
