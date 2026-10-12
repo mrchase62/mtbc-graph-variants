@@ -2411,3 +2411,8 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - Tests: new tests/test_ours_wiring.py; older P2/P4b tests updated; full suite passes.
 - Graph redo (homopolymer tracts) and cohort reselection from ~50K recorded as next in HANDOFF.
 - User: "yes, run the real-data check". Job 52446924 (23 min, 8 cores) on fbrecall: P2's new step reproduced caller and event tables 48/48 and both rebuilt masks; P4b recall unchanged (kept 0.885), false calls unchanged (28 vs 29); per-event precision 0.76 (merging removes double-counted true events). `analysis/sv_wiring/RESULTS.md`.
+
+## 2026-10-12 Homopolymer tracts in the panel
+- User: "yes, find the genomes with homopolymer tracts".
+- `analysis/homopolymer_scan/scan.py` on the 333 build references (3 min): pure runs >= 15 bp placed on H37Rv, plus near-pure tracts (>= 90% one base per 50 bp window).
+- Three genomes with kilobase tracts, the same as the 2026-10-04 QC: GCF_050259585 (1,137 bp G), GCF_045348265 (970 bp A + 225 bp T), GCF_039770655 (520 bp T, only L9). Others <= 48 bp, at recurrent natural G/C loci (2,338,189: 23 genomes). Decision needed: mask, replace or exclude.

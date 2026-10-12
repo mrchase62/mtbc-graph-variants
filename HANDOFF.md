@@ -139,6 +139,14 @@ Raised by the user 2026-10-12 ("I don't know if this is worth it").
 genomes and reselect a cohort from the ~50K sample set." After the caller
 wiring; ends the graph hold. Production data are regenerated on the new
 graph and cohort, so item 2's rebalancing applies to the new selection.
+- **Homopolymer scan done** (`analysis/homopolymer_scan/RESULTS.md`): of
+  the 333 panel genomes, exactly three carry kilobase single-base tracts
+  (the 2026-10-04 set): GCF_050259585 (1,137 bp poly-G), GCF_045348265
+  (970 bp poly-A + 225 bp poly-T), GCF_039770655 (520 bp poly-T; the only
+  L9 genome). Every other genome's longest pure run is <= 48 bp, at natural
+  variable G/C loci. Users as matched reference: GCF_039770655 by 14
+  gwas1000 and 2 in each scale cohort; GCF_045348265 by 1 gwas1000.
+  Decision needed per genome: mask with N, replace or exclude.
 
 ### Wrap-up list (the user's order not yet given)
 1. **CRAM purge, around 2026-10-26.** The user is asking the CRAMs' owner;
