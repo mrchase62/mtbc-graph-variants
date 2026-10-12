@@ -194,3 +194,85 @@ measurements:
 
 So the cut-off of old <= 2.5 applies directly to production rates.
 Only 2 isolates were available, one low and one high.
+
+## Parts A and B on selfcal54 (2026-10-12, `fb_ab.py`)
+- Report: `out/fb_ab_report.txt`.
+- Inputs: `../fb_effect.py` on selfcal54 (`out/effect.*.tsv`, 2,025 callable
+  calls), plus the 9 chimeric controls (all reads) from `../removal`.
+- Bands by v2 rate:
+  - < 1 (20 isolates);
+  - 1-4.9 (7, kept by the cut-off);
+  - > 4.9 (12, excluded);
+  - chimeric (9).
+
+### A. How many false calls sit on fold-back junctions?
+A call counts as "near" a junction when a breakpoint lies within 20 bp of
+one. Attributable share = (near - expected by chance) / (calls - expected).
+
+| band | ours typed | ours BND | dysgu PASS |
+|---|---|---|---|
+| < 1 | 0 of 12 near | 0 of 92 | 0 of 77 |
+| 1-4.9 | 0.12 | -0.04 | 0.21 |
+| > 4.9 | 0.42 | 0.66 | 0.66 |
+| chimeric | 0.99 | 0.97 | 0.92 |
+
+- **Below 1, no false call is near a junction.** The baseline noise there
+  (ours BND, dysgu low-AF) has another cause.
+- **The fold-back share rises with the rate.** In the chimeric controls,
+  chance alone puts 52-73% of calls near a junction, so attribution is
+  weak there. The read-removal experiment is the causal evidence.
+- **By type, for isolates at >= 1:**
+  - INV calls are 91-100% attributable;
+  - dysgu DEL < 0.2 AF are 54-66% attributable;
+  - INS calls are 17-24% attributable, and about 0 at AF >= 0.2.
+
+  Fold-backs make inversions and low-AF deletions. False insertions mostly
+  come from somewhere else, such as the clip-only dysgu INS seen in
+  GCF_035581225.
+
+### B1-B2. Allele-fraction floor by band
+Mean false calls per isolate, ours typed + dysgu, with AF >= floor. The
+clean level is the < 1 band's mean + 2 SD at the same floor.
+- **Kept band (1-4.9):** reaches the clean level at AF >= 0.25. At the
+  current dysgu floor of 0.2 it has 2.7 against a clean level of 1.7.
+  Without a floor, most of its excess is dysgu calls below AF 0.1 (15 per
+  isolate vs 3).
+- **Excluded selfcal isolates (> 4.9):** reach the clean level at
+  AF >= 0.2 (1.6 per isolate). Their false calls are low-AF (ours typed 8.2
+  per isolate below 0.1; dysgu 106 below 0.1).
+- **Chimeric controls:** never reach the clean level, still 47 per isolate
+  at AF >= 0.5.
+
+Consequences:
+- **An AF floor rescues moderate libraries but not hotspot libraries.**
+  The earlier statement "an AF floor does not rescue chimeric libraries"
+  holds for the Phase B chimeric controls only.
+- **Floor on our caller.** Our caller has no AF floor in the current
+  combination. A floor of 0.2 on it would make the > 4.9 selfcal isolates
+  clean. Its cost to recall is unknown; part D can measure it.
+
+### B3. Negative binomial regression, selfcal (descriptive)
+Outcome y: ours typed + dysgu AF >= 0.2.
+- **All 39 isolates:**
+  - rate RR 1.60 per 10-fold (p 0.08);
+  - insert RR 0.58 per 100 bp (p 0.004);
+  - read length RR 2.79 per 100 bp (p 0.01);
+  - depth RR 0.02 per 100x (p 0.01).
+- **The depth term is GCF_035581225 alone.** Its 14 calls are not
+  fold-back, and it has the lowest depth (62x).
+- **Without GCF_035581225 (38 isolates):**
+  - rate alone: RR 3.11 (p 2e-7);
+  - with insert and read length: rate RR 1.35 (p 0.2), insert RR 0.37 per
+    100 bp (p 1e-8), read length RR 4.41 per 100 bp (p 6e-5);
+  - library type (Tn5 vs TruSeq): about 1 in every fit.
+
+Reading: in wild libraries at moderate rates, read geometry (long reads
+on short inserts, so the reads overlap and run into adapter) predicts false
+calls better than the fold-back rate does. This is a separate mechanism.
+Fold-back attribution is weak in this range (0.12-0.21 in the kept band).
+Caveats:
+- 38 isolates, clustered by study (PRJDB10923: 6 isolates, 2x300 reads);
+- read length and insert are correlated;
+- the pre-specified insert-only rule failed;
+- a rule built on insert relative to read length would be fitted to these
+  data, and needs independent data before use.

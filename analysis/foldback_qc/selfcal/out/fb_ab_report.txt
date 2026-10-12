@@ -1,0 +1,67 @@
+A. Attribution to fold-back junctions (within 20 bp; chance from callable share)
+band	isolates	caller	calls	near	expected	attributable	chance share
+<1	20	ours typed	12	0	0.1	-0.01	0.01
+<1	20	ours BND	92	0	0.7	-0.01	0.01
+<1	20	dysgu	77	0	0.7	-0.01	0.01
+1-4.9	7	ours typed	15	3	1.3	0.12	0.09
+1-4.9	7	ours BND	20	0	0.8	-0.04	0.04
+1-4.9	7	dysgu	136	36	9.7	0.21	0.07
+>4.9	12	ours typed	110	62	26.8	0.42	0.24
+>4.9	12	ours BND	17	12	2.2	0.66	0.13
+>4.9	12	dysgu	1546	1227	595.9	0.66	0.39
+chimeric	9	ours typed	781	778	568.4	0.99	0.73
+chimeric	9	ours BND	795	782	413.4	0.97	0.52
+chimeric	9	dysgu	3999	3873	2472.6	0.92	0.62
+
+A2. Attributable share by type and AF bin, all isolates with rate >= 1 (selfcal) pooled
+caller	type	af_bin	calls	near	expected	attributable
+dysgu	DEL	0.1-0.2	38	30	14.3	0.66
+dysgu	DEL	0.2-0.5	7	3	1.9	0.21
+dysgu	DEL	<0.1	466	319	143.6	0.54
+dysgu	DUP	<0.1	9	3	1.7	0.18
+dysgu	INS	0.1-0.2	37	13	5.5	0.24
+dysgu	INS	0.2-0.5	24	2	2.4	-0.02
+dysgu	INS	<0.1	259	97	63.6	0.17
+dysgu	INV	0.1-0.2	195	185	87.7	0.91
+dysgu	INV	<0.1	642	609	283.8	0.91
+ours BND	BND	0.1-0.2	16	6	1.2	0.32
+ours BND	BND	0.2-0.5	10	0	0.4	-0.04
+ours BND	BND	<0.1	10	6	1.4	0.54
+ours typed	DEL	<0.1	86	34	20.2	0.21
+ours typed	DEL	na	7	4	1.5	0.45
+ours typed	INV	0.1-0.2	5	5	0.9	1.00
+ours typed	INV	<0.1	19	19	4.0	1.00
+
+B1. Mean false calls per isolate by AF bin (ours typed / dysgu PASS)
+band	isolates	ours <0.1	ours 0.1-0.2	ours 0.2-0.5	ours >=0.5	dysgu <0.1	dysgu 0.1-0.2	dysgu 0.2-0.5	dysgu >=0.5
+<1	20	0.2	0.1	0.1	0.0	3.0	0.5	0.2	0.1
+1-4.9	7	1.1	0.1	0.1	0.1	15.0	2.0	2.1	0.3
+>4.9	12	8.2	0.6	0.0	0.0	105.9	21.3	1.6	0.0
+chimeric	9	53.9	29.1	2.6	0.0	81.7	173.4	142.1	47.1
+
+B2. Mean false calls per isolate (ours typed + dysgu) with AF >= floor; clean = < 1 band mean + 2 SD
+floor	clean level	1-4.9	>4.9	chimeric
+0.0	12.9	21.0	137.7	529.9
+0.05	6.3	6.6	81.9	499.1
+0.1	3.6	4.9	23.5	394.3
+0.15	2.9	3.4	4.2	268.6
+0.2	1.7	2.7	1.6*	191.8
+0.25	1.7	1.3*	0.8*	141.9
+0.3	1.7	1.0*	0.2*	111.7
+0.4	0.9	0.4*	0.0*	69.8
+0.5	0.7	0.4*	0.0*	47.1
+(* at or below the clean level)
+  1-4.9: lowest floor reaching the clean level: 0.25
+  >4.9: lowest floor reaching the clean level: 0.2
+  chimeric: lowest floor reaching the clean level: none up to 0.5
+
+B3. Negative binomial: y (ours typed + dysgu AF >= 0.2) ~ log10 rate + library + insert + read length + depth (selfcal)
+  dispersion alpha 0.42
+  negative binomial, n 39; rate ratios (exp coefficient)
+  const              RR   85.79  (95% CI 3.63-2029.17)  p 0.0058
+  log10 rate         RR    1.60  (95% CI 0.95-2.70)  p 0.077
+  Tn5 vs TruSeq      RR    1.14  (95% CI 0.51-2.58)  p 0.75
+  unclear vs TruSeq  RR    0.83  (95% CI 0.14-5.06)  p 0.84
+  insert/100         RR    0.58  (95% CI 0.40-0.84)  p 0.0039
+  read len/100       RR    2.79  (95% CI 1.25-6.19)  p 0.012
+  depth/100          RR    0.02  (95% CI 0.00-0.41)  p 0.01

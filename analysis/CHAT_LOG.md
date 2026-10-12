@@ -2303,3 +2303,23 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   summary 52348862; caller + assembly 52348867 (`03_post_fb100.sbatch`).
   `analyse.py` adds group chimeric_fb100 and a per-isolate all vs fb100
   comparison. About 5 more billing-hours.
+
+## 2026-10-12 — parts A and B on selfcal54 (user: "run parts A and B on selfcal54 while waiting")
+- `fb_effect.py` on selfcal54, then `selfcal/fb_ab.py`; details in
+  `foldback_qc/selfcal/RESULTS.md`.
+- A (attributable to fold-back junctions):
+  - < 1: none;
+  - kept 1-4.9: dysgu 0.21, ours typed 0.12;
+  - excluded selfcal > 4.9: dysgu 0.66, ours 0.42;
+  - chimeric: 0.92-0.99.
+  - INV 91-100% attributable; INS about 0 at AF >= 0.2 (other cause).
+- B (AF floor reaching the clean level):
+  - kept band 0.25;
+  - excluded selfcal 0.2 (their false calls are low-AF);
+  - chimeric controls: never (47 per isolate at AF >= 0.5).
+  - An AF floor rescues moderate libraries, not hotspot ones. Our caller
+    has no AF floor today; a 0.2 floor on it needs a recall check (part D).
+- NB regression (selfcal, without GCF_035581225): rate alone RR 3.1 per
+  10-fold. With insert (RR 0.37 per 100 bp) and read length (RR 4.4 per
+  100 bp), the rate drops to 1.35 (ns). Read geometry is a separate
+  predictor; a hypothesis only (38 isolates, study-clustered).
