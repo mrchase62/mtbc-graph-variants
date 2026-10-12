@@ -90,3 +90,74 @@ The rate alone does not predict the count. RW_TB008 (10.9, MiSeq, long
 inserts) has almost no false calls, while N0145 (13.0) has 95 typed calls.
 So junction recurrence and insert size probably matter as well as the rate.
 selfcal54 will test this across isolates.
+
+## Duplicate marking (2026-10-11, `DEDUP_PLAN.md`, job 52282456)
+Question: P2 does not mark PCR duplicates. Would marking them remove
+fold-back false calls? Method: samtools markdup -S on each `_all` BAM.
+- `dedup`: duplicates removed.
+- `randdup`: the same number of random pairs removed.
+- `dupmark`: duplicates flagged only.
+
+dysgu ran on all three; our caller on dedup and randdup only. Outputs are in
+`out/dedup/` (`self_noise.tsv`, `effect.*.tsv`, `dups/`).
+
+### Duplicates are not concentrated in fold-back reads
+| isolate | pairs duplicated | fold-back pairs duplicated | other pairs duplicated | fold-back /1,000 before → after |
+|---|---|---|---|---|
+| N0004 | 42.8% | 32.3% | 42.9% | 7.7 → 9.2 |
+| N0145 | 24.7% | 16.1% | 25.0% | 13.0 → 14.6 |
+| N0155 | 19.5% | 13.0% | 19.6% | 6.5 → 7.1 |
+| N0054 | 6.8% | 6.2% | 6.8% | 29.9 → 30.2 |
+| N1176 | 6.1% | 6.7% | 6.0% | 66.5 → 66.2 |
+| N1202 | 6.0% | 5.0% | 6.0% | 24.0 → 24.3 |
+| N1272 | 7.0% | 5.8% | 7.0% | 20.2 → 20.5 |
+| N1274 | 5.2% | 4.8% | 5.3% | 32.3 → 32.5 |
+| RW_TB008 | 1.2% | 0.4% | 1.2% | 10.9 → 11.0 |
+
+Duplicate shares were measured after downsampling to 100x, as production
+does.
+
+### False calls, 9 isolates summed, callable sequence
+| caller | AF | all | dedup | randdup | fb100 |
+|---|---|---|---|---|---|
+| ours, typed | all | 781 | 623 | 748 | 19 |
+| ours, BND | all | 795 | 590 | 809 | 74 |
+| dysgu PASS | all | 3,999 | 4,862 | 4,451 | 455 |
+| dysgu | < 0.1 | 735 | 737 | 740 | 306 |
+| dysgu | 0.1-0.2 | 1,561 | 1,939 | 1,757 | 122 |
+| dysgu | 0.2-0.5 | 1,279 | 1,671 | 1,498 | 26 |
+| dysgu | >= 0.5 | 424 | 515 | 456 | 1 |
+
+dysgu on `dupmark` matched `dedup` to within 1 call per isolate, so dysgu
+already skips flagged reads.
+
+### What it shows
+1. **Duplicate marking does not fix fold-back false calls.**
+   - dysgu: duplicate removal raised false calls by 22% overall and by 28%
+     at AF >= 0.2 (1,703 to 2,186). Random removal of the same number of
+     pairs raised them by 11% and 15%. The rise is largest in the
+     high-duplicate libraries: N0004 21 to 124 at AF >= 0.2, N0145 197 to
+     355, N0155 30 to 63.
+   - Ours: duplicate removal cut typed calls by 20% (random removal: 4%).
+     Most of the cut is in N1176 (463 to 345) and N1274 (81 to 50), both
+     libraries with low duplication. The remaining 623 are still 33 times
+     the 19 left after full fold-back removal.
+2. **Why.** Fold-back pairs are duplicated no more often than other pairs,
+   and in high-duplicate libraries less often (N0004 32% vs 43%). Removing
+   duplicates therefore removes ordinary reads at least as fast as chimeric
+   ones, so the chimeric share at each site goes up (N0004 7.7 to 9.2 per
+   1,000). It also lowers depth (N0004 loses 43% of pairs), and dysgu
+   gains false calls with lower depth even under random removal.
+3. **This corrects the explainer page.** The page had said PCR copies
+   inflate the hotspots. The 42% distinct molecules at N0004 hotspots is
+   simply that library's overall duplication. Recurrence at hotspots comes
+   from sequence (inverted repeats), not PCR. The page was corrected
+   (version 4).
+4. **For production:**
+   - No case for adding duplicate marking to P2 as a fold-back fix.
+   - Duplicate marking for other reasons (HaplotypeCaller, depth) is a
+     separate question that this test does not answer.
+   - A high duplicate rate leaves fewer distinct molecules than nominal
+     depth, which is a sample-quality signal in itself (N0004: 100x
+     nominal, about 57x distinct). It is worth adding to the selfcal54 QC
+     table.

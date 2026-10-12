@@ -2219,3 +2219,13 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - duplicate share among fold-back pairs vs the other pairs.
   - HaplotypeCaller not rerun.
 - Job 52282456 (array 0-8, `03_dedup.sbatch`), about 5 billing-hours.
+- Result: duplicate marking does not fix fold-back false calls. dysgu false
+  calls rose by 22% with duplicates removed (random removal of the same
+  number of pairs: 11%); our typed calls fell 20% (random: 4%), still 33x
+  the fold-back-removed level.
+  - Fold-back pairs are duplicated no more often than other pairs (N0004
+    32% vs 43%), so dedup raises the chimeric share.
+  - dysgu already ignores flagged duplicates (dupmark = dedup).
+  - Corrected the explainer page (v4): hotspots are sequence-driven, not
+    PCR copies.
+  - Details in `foldback_qc/removal/RESULTS.md`.

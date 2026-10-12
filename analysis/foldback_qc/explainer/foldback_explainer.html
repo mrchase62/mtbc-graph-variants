@@ -49,6 +49,16 @@ th:first-child,td:first-child{text-align:left}
 th{font-weight:700;color:var(--muted);font-size:12px;letter-spacing:.04em;text-transform:uppercase}
 .src{font-size:13px;color:var(--muted);margin-top:40px;border-top:1px solid var(--rule);padding-top:14px}
 code{font-family:var(--mono);font-size:.88em}
+.prep th,.prep td{text-align:left;white-space:normal;vertical-align:top;min-width:9em}
+.prep{margin-top:8px;max-width:900px}
+.forms{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin:12px 0 4px}
+.form{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:12px 14px;min-width:0}
+.form p{margin:6px 0 0;font-size:14.5px}
+.tag{font:600 11px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--rev)}
+details{margin-top:16px;border:1px solid var(--rule);border-radius:8px;background:var(--panel);padding:10px 14px}
+summary{cursor:pointer;font-weight:700}
+summary:focus-visible{outline:2px solid var(--fwd);outline-offset:3px}
+pre{overflow-x:auto;background:var(--bg);border:1px solid var(--rule);border-radius:6px;padding:12px;font-size:12.5px;line-height:1.5;margin:8px 0 4px}
 </style>
 
 <div class="wrap">
@@ -64,59 +74,220 @@ code{font-family:var(--mono);font-size:.88em}
   <!-- STEP 1 -->
   <div class="step"><span class="n">1</span><h2>The molecule folds back during library prep</h2></div>
   <div class="col">
-    <p>Fragmenting DNA (sonication, nuclease or Tn5) leaves ends with single-stranded stretches. If that stretch contains an <b>inverted repeat</b>, a short sequence followed nearby by its reverse complement, the end can pair with itself. A polymerase in end repair or gap filling then copies back along the template, joining the <span class="fwd">forward strand</span> to the <span class="rev">reverse complement</span> of nearby sequence. This is the mechanism Haile et al. (2019) described for sonicated and enzymatically fragmented libraries.</p>
+    <p>Fragmenting DNA leaves ends with single-stranded stretches. If a single-stranded 3′ end contains one arm of an <b>inverted repeat</b> (a short sequence whose reverse complement occurs nearby), it can pair with the other arm. A polymerase in end repair or gap filling then extends that 3′ end, using the strand it has paired with as a template. The new sequence is a copy of the <span class="rev">opposite strand</span>, attached directly to the <span class="fwd">original strand</span>. Haile et al. (2019) traced chimeric reads of this kind, which they called strand-split artifact reads, to single-stranded DNA in sonicated FFPE libraries. Chen et al. (2024) found the same in enzymatically fragmented libraries.</p>
   </div>
   <figure>
     <div class="scroll">
-    <svg viewBox="0 0 920 250" width="100%" style="min-width:640px" role="img" aria-label="Diagram of a DNA end folding back at an inverted repeat and being extended into a chimeric molecule">
+    <svg viewBox="0 0 920 590" width="100%" style="min-width:680px" role="img" aria-label="Top: normal end repair trims a single-stranded tail and gives a normal read. Bottom: the tail folds back at an inverted repeat, a polymerase extends it, and the hairpin is amplified into a chimeric molecule">
       <defs>
-        <marker id="aF" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--fwd)"/></marker>
-        <marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--rev)"/></marker>
-        <marker id="aM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+        <marker id="aF" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="13" markerHeight="13" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--fwd)"/></marker>
+        <marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="13" markerHeight="13" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--rev)"/></marker>
+        <marker id="aM" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="13" markerHeight="13" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
       </defs>
-      <!-- panel a -->
-      <text x="10" y="22" font-size="13" font-weight="700" fill="var(--fg)">a  Genome around an inverted repeat</text>
-      <line x1="20" y1="80" x2="270" y2="80" stroke="var(--fwd)" stroke-width="6" stroke-linecap="round"/>
-      <rect x="80" y="70" width="40" height="20" rx="3" fill="none" stroke="var(--fg)" stroke-width="1.5"/>
-      <rect x="190" y="70" width="40" height="20" rx="3" fill="none" stroke="var(--fg)" stroke-width="1.5"/>
-      <text x="100" y="62" font-size="12" text-anchor="middle" fill="var(--fg)" class="mono">ACGGTC</text>
-      <text x="210" y="62" font-size="12" text-anchor="middle" fill="var(--fg)" class="mono">GACCGT</text>
-      <path d="M100,100 C120,128 190,128 210,100" fill="none" stroke="var(--muted)" stroke-dasharray="3 3"/>
-      <text x="155" y="140" font-size="12" text-anchor="middle" fill="var(--muted)">reverse complements</text>
-      <text x="20" y="170" font-size="12" fill="var(--muted)">stem 8–12 bp, loop up to ~100 bp</text>
 
-      <!-- arrow -->
-      <line x1="290" y1="90" x2="330" y2="90" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#aM)"/>
+      <!-- ROW 1: usual path -->
+      <text x="10" y="22" font-size="14" font-weight="700" fill="var(--good)">What usually happens</text>
+      <text x="180" y="22" font-size="12" fill="var(--muted)">end repair removes the single-stranded tail before anything can pair with it</text>
 
-      <!-- panel b -->
-      <text x="345" y="22" font-size="13" font-weight="700" fill="var(--fg)">b  Single-stranded end pairs with itself</text>
-      <line x1="355" y1="80" x2="520" y2="80" stroke="var(--fwd)" stroke-width="6" stroke-linecap="round"/>
-      <path d="M520,80 C575,80 590,118 545,124" fill="none" stroke="var(--fwd)" stroke-width="6" stroke-linecap="round"/>
-      <rect x="470" y="70" width="40" height="20" rx="3" fill="none" stroke="var(--fg)" stroke-width="1.5"/>
-      <rect x="470" y="114" width="40" height="20" rx="3" fill="none" stroke="var(--fg)" stroke-width="1.5"/>
-      <line x1="545" y1="124" x2="515" y2="124" stroke="var(--fwd)" stroke-width="6" stroke-linecap="round"/>
-      <g stroke="var(--muted)" stroke-width="1.2"><line x1="478" y1="92" x2="478" y2="112"/><line x1="488" y1="92" x2="488" y2="112"/><line x1="498" y1="92" x2="498" y2="112"/></g>
-      <line x1="465" y1="124" x2="372" y2="124" stroke="var(--rev)" stroke-width="6" stroke-dasharray="2 0" marker-end="url(#aR)"/>
-      <text x="420" y="152" font-size="12" text-anchor="middle" fill="var(--rev)">polymerase copies back</text>
-      <text x="355" y="190" font-size="12" fill="var(--muted)">the stem acts as a primer on its own strand</text>
+      <text x="20" y="54" font-size="12" font-weight="700" fill="var(--fg)">1  Fragment with a ragged end</text>
+      <line x1="40" y1="92" x2="270" y2="92" stroke="var(--fwd)" stroke-width="5" stroke-linecap="round"/>
+      <line x1="40" y1="106" x2="196" y2="106" stroke="var(--muted)" stroke-width="5" stroke-linecap="round"/>
+      <text x="32" y="96" font-size="11" text-anchor="end" fill="var(--muted)" class="mono">5′</text>
+      <text x="278" y="96" font-size="11" fill="var(--muted)" class="mono">3′</text>
+      <text x="32" y="110" font-size="11" text-anchor="end" fill="var(--muted)" class="mono">3′</text>
+      <text x="204" y="110" font-size="11" fill="var(--muted)" class="mono">5′</text>
+      <path d="M200,80 L200,74 L270,74 L270,80" fill="none" stroke="var(--fg)" stroke-width="1"/>
+      <text x="235" y="68" font-size="11" text-anchor="middle" fill="var(--fg)">single-stranded 3′ tail</text>
+      <text x="40" y="136" font-size="11" fill="var(--muted)">left by shearing, nicks or partial denaturation</text>
 
-      <!-- arrow -->
-      <line x1="610" y1="90" x2="650" y2="90" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#aM)"/>
+      <line x1="300" y1="99" x2="334" y2="99" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#aM)"/>
 
-      <!-- panel c -->
-      <text x="665" y="22" font-size="13" font-weight="700" fill="var(--fg)">c  Chimeric molecule, sequenced</text>
-      <line x1="675" y1="90" x2="780" y2="90" stroke="var(--fwd)" stroke-width="8" marker-end="url(#aF)"/>
-      <line x1="782" y1="90" x2="900" y2="90" stroke="var(--rev)" stroke-width="8" marker-end="url(#aR)"/>
-      <line x1="781" y1="72" x2="781" y2="108" stroke="var(--fg)" stroke-width="1.5"/>
-      <text x="781" y="64" font-size="12" text-anchor="middle" fill="var(--fg)">junction</text>
-      <text x="727" y="124" font-size="12" text-anchor="middle" fill="var(--fwd)">genome, + strand</text>
-      <text x="841" y="124" font-size="12" text-anchor="middle" fill="var(--rev)">nearby genome, − strand</text>
-      <text x="675" y="170" font-size="12" fill="var(--muted)">one read = forward sequence, then the</text>
-      <text x="675" y="187" font-size="12" fill="var(--muted)">reverse complement of sequence nearby</text>
+      <text x="350" y="54" font-size="12" font-weight="700" fill="var(--fg)">2  End repair makes it blunt</text>
+      <line x1="360" y1="92" x2="510" y2="92" stroke="var(--fwd)" stroke-width="5" stroke-linecap="round"/>
+      <line x1="516" y1="92" x2="584" y2="92" stroke="var(--fwd)" stroke-width="3" stroke-dasharray="3 4" opacity=".45"/>
+      <line x1="360" y1="106" x2="510" y2="106" stroke="var(--muted)" stroke-width="5" stroke-linecap="round"/>
+      <text x="550" y="80" font-size="11" text-anchor="middle" fill="var(--muted)">tail trimmed</text>
+      <text x="360" y="136" font-size="11" fill="var(--muted)">polymerase trims 3′ tails and fills in 5′ ones</text>
+
+      <line x1="604" y1="99" x2="638" y2="99" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#aM)"/>
+
+      <text x="655" y="54" font-size="12" font-weight="700" fill="var(--fg)">3  Adapters on both ends</text>
+      <rect x="660" y="84" width="22" height="30" rx="3" fill="var(--grid)" stroke="var(--rule)"/>
+      <line x1="684" y1="92" x2="856" y2="92" stroke="var(--fwd)" stroke-width="5"/>
+      <line x1="684" y1="106" x2="856" y2="106" stroke="var(--muted)" stroke-width="5"/>
+      <rect x="858" y="84" width="22" height="30" rx="3" fill="var(--grid)" stroke="var(--rule)"/>
+      <line x1="690" y1="136" x2="850" y2="136" stroke="var(--fwd)" stroke-width="7" marker-end="url(#aF)"/>
+      <text x="660" y="160" font-size="11" fill="var(--muted)">read = one strand, one contiguous alignment</text>
+
+      <line x1="10" y1="182" x2="910" y2="182" stroke="var(--rule)"/>
+
+      <!-- ROW 2: fold-back path -->
+      <text x="10" y="210" font-size="14" font-weight="700" fill="var(--bad)">When the tail folds back first</text>
+      <text x="236" y="210" font-size="12" fill="var(--muted)">the tail pairs with itself before it is trimmed, and the polymerase extends it instead</text>
+
+      <!-- 2a -->
+      <text x="20" y="246" font-size="12" font-weight="700" fill="var(--fg)">a  Inverted repeat in the tail</text>
+      <line x1="30" y1="300" x2="270" y2="300" stroke="var(--fwd)" stroke-width="5" stroke-linecap="round"/>
+      <rect x="80" y="291" width="44" height="18" rx="3" fill="var(--panel)" stroke="var(--fg)" stroke-width="1.4"/>
+      <rect x="190" y="291" width="44" height="18" rx="3" fill="var(--panel)" stroke="var(--fg)" stroke-width="1.4"/>
+      <text x="102" y="283" font-size="12" text-anchor="middle" fill="var(--fg)" class="mono">ACGGTC</text>
+      <text x="212" y="283" font-size="12" text-anchor="middle" fill="var(--fg)" class="mono">GACCGT</text>
+      <text x="102" y="268" font-size="11" text-anchor="middle" fill="var(--muted)">arm A</text>
+      <text x="212" y="268" font-size="11" text-anchor="middle" fill="var(--muted)">arm A′</text>
+      <text x="22" y="304" font-size="11" text-anchor="end" fill="var(--muted)" class="mono">5′</text>
+      <text x="276" y="304" font-size="11" fill="var(--muted)" class="mono">3′</text>
+      <path d="M102,316 C122,342 192,342 212,316" fill="none" stroke="var(--muted)" stroke-dasharray="3 3"/>
+      <text x="157" y="356" font-size="11" text-anchor="middle" fill="var(--muted)">A′ is the reverse complement of A</text>
+      <text x="30" y="384" font-size="11" fill="var(--muted)">stem 8–12 bp, loop up to ~100 bp;</text>
+      <text x="30" y="400" font-size="11" fill="var(--muted)">here 6 bp to keep it readable</text>
+
+      <line x1="290" y1="300" x2="322" y2="300" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#aM)"/>
+
+      <!-- 2b detailed hairpin -->
+      <text x="340" y="246" font-size="12" font-weight="700" fill="var(--fg)">b  The tail folds back and is extended</text>
+      <text x="608" y="276" font-size="11" text-anchor="middle" fill="var(--muted)">arm A</text>
+      <text x="740" y="276" font-size="11" text-anchor="middle" fill="var(--muted)">loop (single-stranded)</text>
+      <line x1="350" y1="295" x2="558" y2="295" stroke="var(--fwd)" stroke-width="5" stroke-linecap="round"/>
+      <rect x="558" y="285" width="100" height="19" rx="3" fill="var(--panel)" stroke="var(--fg)" stroke-width="1.3"/>
+      <line x1="660" y1="295" x2="820" y2="295" stroke="var(--fwd)" stroke-width="5"/>
+      <path d="M820,295 C866,295 866,327 820,327" fill="none" stroke="var(--fwd)" stroke-width="5"/>
+      <line x1="820" y1="327" x2="660" y2="327" stroke="var(--fwd)" stroke-width="5"/>
+      <rect x="558" y="317" width="100" height="19" rx="3" fill="var(--panel)" stroke="var(--fg)" stroke-width="1.3"/>
+      <text x="568" y="299" font-size="13" text-anchor="middle" fill="var(--fg)" class="mono">A</text>
+      <text x="568" y="331" font-size="13" text-anchor="middle" fill="var(--fg)" class="mono">T</text>
+      <line x1="568" y1="306" x2="568" y2="316" stroke="var(--muted)" stroke-width="1.2"/>
+      <text x="584" y="299" font-size="13" text-anchor="middle" fill="var(--fg)" class="mono">C</text>
+      <text x="584" y="331" font-size="13" text-anchor="middle" fill="var(--fg)" class="mono">G</text>
+      <line x1="584" y1="306" x2="584" y2="316" stroke="var(--muted)" stroke-width="1.2"/>
+      <text x="600" y="299" font-size="13" text-anchor="middle" fill="var(--fg)" class="mono">G</text>
+      <text x="600" y="331" font-size="13" text-anchor="middle" fill="var(--fg)" class="mono">C</text>
+      <line x1="600" y1="306" x2="600" y2="316" stroke="var(--muted)" stroke-width="1.2"/>
+      <text x="616" y="299" font-size="13" text-anchor="middle" fill="var(--fg)" class="mono">G</text>
+      <text x="616" y="331" font-size="13" text-anchor="middle" fill="var(--fg)" class="mono">C</text>
+      <line x1="616" y1="306" x2="616" y2="316" stroke="var(--muted)" stroke-width="1.2"/>
+      <text x="632" y="299" font-size="13" text-anchor="middle" fill="var(--fg)" class="mono">T</text>
+      <text x="632" y="331" font-size="13" text-anchor="middle" fill="var(--fg)" class="mono">A</text>
+      <line x1="632" y1="306" x2="632" y2="316" stroke="var(--muted)" stroke-width="1.2"/>
+      <text x="648" y="299" font-size="13" text-anchor="middle" fill="var(--fg)" class="mono">C</text>
+      <text x="648" y="331" font-size="13" text-anchor="middle" fill="var(--fg)" class="mono">G</text>
+      <line x1="648" y1="306" x2="648" y2="316" stroke="var(--muted)" stroke-width="1.2"/>
+      <text x="342" y="299" font-size="11" text-anchor="end" fill="var(--muted)" class="mono">5′</text>
+      <!-- partner strand -->
+      <line x1="350" y1="327" x2="404" y2="327" stroke="var(--muted)" stroke-width="5" stroke-linecap="round"/>
+      <text x="342" y="331" font-size="11" text-anchor="end" fill="var(--muted)" class="mono">3′</text>
+      <text x="410" y="331" font-size="11" fill="var(--muted)" class="mono">5′</text>
+      <!-- new strand + polymerase -->
+      <line x1="555" y1="327" x2="466" y2="327" stroke="var(--rev)" stroke-width="5" marker-end="url(#aR)"/>
+      <ellipse cx="452" cy="327" rx="17" ry="11" fill="var(--rev)" fill-opacity=".18" stroke="var(--rev)" stroke-width="1.2"/>
+      <text x="510" y="316" font-size="11" text-anchor="middle" fill="var(--rev)">new copy</text>
+      <!-- labels below -->
+      <text x="377" y="352" font-size="11" text-anchor="middle" fill="var(--muted)">partner strand</text>
+      <text x="452" y="352" font-size="11" text-anchor="middle" fill="var(--rev)">polymerase</text>
+      <text x="566" y="352" font-size="11" fill="var(--muted)">↑ 3′ tip = primer</text>
+      <text x="608" y="368" font-size="11" text-anchor="middle" fill="var(--muted)">stem: A′ pairs with A, antiparallel</text>
+      <text x="765" y="352" font-size="11" text-anchor="middle" fill="var(--muted)">same strand, returning</text>
+      <text x="350" y="396" font-size="11.5" fill="var(--fg)">The polymerase reads the strand upstream of arm A as a template and copies it onto the tail,</text>
+      <text x="350" y="413" font-size="11.5" fill="var(--fg)">running right to left, until it reaches the partner strand or falls off. The copy is the</text>
+      <text x="350" y="430" font-size="11.5" fill="var(--fg)">reverse complement of sequence the molecule already carries.</text>
+
+      <!-- ROW 3 -->
+      <text x="20" y="470" font-size="12" font-weight="700" fill="var(--fg)">c  An adapter on the open end, then PCR straight through the loop</text>
+      <rect x="40" y="496" width="24" height="44" rx="3" fill="var(--grid)" stroke="var(--rule)"/>
+      <line x1="66" y1="505" x2="330" y2="505" stroke="var(--fwd)" stroke-width="5"/>
+      <path d="M330,505 C366,505 366,531 330,531" fill="none" stroke="var(--fwd)" stroke-width="5"/>
+      <line x1="330" y1="531" x2="230" y2="531" stroke="var(--fwd)" stroke-width="5"/>
+      <line x1="230" y1="531" x2="66" y2="531" stroke="var(--rev)" stroke-width="5"/>
+      <text x="40" y="562" font-size="11" fill="var(--muted)">Both open ends belong to one strand,</text>
+      <text x="40" y="577" font-size="11" fill="var(--muted)">so a single adapter makes it amplifiable.</text>
+
+      <line x1="390" y1="518" x2="440" y2="518" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#aM)"/>
+      <text x="415" y="506" font-size="11" text-anchor="middle" fill="var(--muted)">PCR</text>
+
+      <rect x="460" y="506" width="20" height="24" rx="3" fill="var(--grid)" stroke="var(--rule)"/>
+      <line x1="482" y1="518" x2="676" y2="518" stroke="var(--fwd)" stroke-width="8" marker-end="url(#aF)"/>
+      <line x1="680" y1="518" x2="872" y2="518" stroke="var(--rev)" stroke-width="8" marker-end="url(#aR)"/>
+      <rect x="876" y="506" width="20" height="24" rx="3" fill="var(--grid)" stroke="var(--rule)"/>
+      <line x1="678" y1="500" x2="678" y2="536" stroke="var(--fg)" stroke-width="1.5"/>
+      <text x="678" y="494" font-size="11" text-anchor="middle" fill="var(--fg)">junction (the stem)</text>
+      <text x="580" y="552" font-size="11" text-anchor="middle" fill="var(--fwd)">genome, + strand</text>
+      <text x="776" y="552" font-size="11" text-anchor="middle" fill="var(--rev)">same region, − strand</text>
+      <text x="460" y="577" font-size="11" fill="var(--muted)">A normal-looking linear molecule. Each half is real Mtb sequence.</text>
     </svg>
     </div>
-    <figcaption>Schematic. The DNA that is sequenced is real Mtb sequence on both sides of the junction; only the way the two halves are joined is artificial. That is why haploid SNP calling barely notices these reads, while SV calling, which reads joins, is fooled.</figcaption>
+    <figcaption>Schematic. Top: normally the single-stranded tail is trimmed or filled before adapters go on. Bottom: if the tail carries an inverted repeat, its 3′ tip can pair with the arm upstream and prime its own extension. The hairpin gets an adapter on its one open end, and PCR copies through the loop into a linear chimera. Only the join is artificial, which is why haploid SNP calling barely notices these reads while SV calling, which reads joins, is fooled. This is the self-priming route; pairing with a second copy of the region is shown further down.</figcaption>
   </figure>
+
+  <div class="col">
+    <h3 style="margin-top:32px">Where the template comes from sets the distance</h3>
+    <p>The paired arm can sit on the same molecule or on a different copy of the same region. The two cases leave different footprints in the alignment.</p>
+    <p><b>Self-priming.</b> The 3′ end folds back onto its own strand and pairs with an arm <i>upstream</i> of it. The polymerase then copies sequence the read has already covered, so the two pieces of the read align on top of each other. This is the tight hairpin that dominates most of these libraries.</p>
+    <p><b>Pairing with a second copy.</b> Chen et al. describe a model they call PDSM (pairing of partial single strands derived from a similar molecule). The 3′ end pairs with a single strand from another fragment of the same region, which can reach <i>beyond</i> where the first fragment ended. The copy then starts downstream, and the second piece lands past the first with a gap about as long as the distance between the arms. That would explain the spaced pieces in N1176, though we have not tested which route dominates there.</p>
+  </div>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 920 270" width="100%" style="min-width:640px" role="img" aria-label="Two routes to a fold-back: self-priming gives overlapping alignment pieces, pairing with a second copy gives spaced pieces">
+      <text x="20" y="22" font-size="13" font-weight="700" fill="var(--fg)">a  Self-priming on the same strand</text>
+      <text x="480" y="22" font-size="13" font-weight="700" fill="var(--fg)">b  Pairing with a second copy (PDSM)</text>
+      <!-- panel a: molecule -->
+      <text x="30" y="52" font-size="11" fill="var(--muted)">fragment, + strand</text>
+      <line x1="40" y1="64" x2="360" y2="64" stroke="var(--fwd)" stroke-width="5" stroke-linecap="round"/>
+      <rect x="150" y="56" width="30" height="16" rx="2" fill="none" stroke="var(--fg)" stroke-width="1.3"/>
+      <rect x="330" y="56" width="30" height="16" rx="2" fill="none" stroke="var(--fg)" stroke-width="1.3"/>
+      <text x="165" y="88" font-size="11" text-anchor="middle" fill="var(--fg)" class="mono">A</text>
+      <text x="345" y="88" font-size="11" text-anchor="middle" fill="var(--fg)" class="mono">A′</text>
+      <path d="M345,52 C320,24 190,24 165,52" fill="none" stroke="var(--muted)" stroke-dasharray="3 3" marker-end="url(#aM)"/>
+      <text x="255" y="104" font-size="11" text-anchor="middle" fill="var(--muted)">3′ end (A′) pairs with A upstream</text>
+      <!-- panel a: alignment -->
+      <line x1="30" y1="225" x2="440" y2="225" stroke="var(--muted)" stroke-width="1.2"/>
+      <text x="30" y="246" font-size="11" fill="var(--muted)">reference</text>
+      <rect x="150" y="219" width="30" height="12" rx="2" fill="var(--panel)" stroke="var(--fg)" stroke-width="1.1"/>
+      <rect x="330" y="219" width="30" height="12" rx="2" fill="var(--panel)" stroke="var(--fg)" stroke-width="1.1"/>
+      <line x1="60" y1="140" x2="360" y2="140" stroke="var(--fwd)" stroke-width="8" marker-end="url(#aF)"/>
+      <text x="60" y="128" font-size="11" fill="var(--fwd)">piece 1, + strand</text>
+      <line x1="180" y1="168" x2="72" y2="168" stroke="var(--rev)" stroke-width="8" marker-end="url(#aR)"/>
+      <text x="186" y="172" font-size="11" fill="var(--rev)">piece 2, − strand (copied leftward from A)</text>
+      <rect x="62" y="184" width="118" height="10" fill="var(--bad)" opacity=".18"/>
+      <text x="121" y="208" font-size="11" text-anchor="middle" fill="var(--bad)">overlap: gap &lt; 0</text>
+      <!-- panel b: molecules -->
+      <text x="490" y="52" font-size="11" fill="var(--muted)">fragment 1, + strand</text>
+      <line x1="500" y1="64" x2="700" y2="64" stroke="var(--fwd)" stroke-width="5" stroke-linecap="round"/>
+      <rect x="670" y="56" width="30" height="16" rx="2" fill="none" stroke="var(--fg)" stroke-width="1.3"/>
+      <text x="685" y="88" font-size="11" text-anchor="middle" fill="var(--fg)" class="mono">A</text>
+      <text x="560" y="100" font-size="11" fill="var(--muted)">second copy, + strand</text>
+      <line x1="580" y1="110" x2="890" y2="110" stroke="var(--muted)" stroke-width="4" stroke-linecap="round"/>
+      <rect x="820" y="102" width="30" height="16" rx="2" fill="none" stroke="var(--fg)" stroke-width="1.3"/>
+      <text x="856" y="98" font-size="11" fill="var(--fg)" class="mono">A′</text>
+      <path d="M702,62 C770,50 820,70 830,99" fill="none" stroke="var(--muted)" stroke-dasharray="3 3" marker-end="url(#aM)"/>
+      <text x="760" y="46" font-size="11" text-anchor="middle" fill="var(--muted)">3′ end pairs downstream</text>
+      <!-- panel b: alignment -->
+      <line x1="490" y1="225" x2="900" y2="225" stroke="var(--muted)" stroke-width="1.2"/>
+      <rect x="670" y="219" width="30" height="12" rx="2" fill="var(--panel)" stroke="var(--fg)" stroke-width="1.1"/>
+      <rect x="820" y="219" width="30" height="12" rx="2" fill="var(--panel)" stroke="var(--fg)" stroke-width="1.1"/>
+      <line x1="500" y1="140" x2="700" y2="140" stroke="var(--fwd)" stroke-width="8" marker-end="url(#aF)"/>
+      <text x="500" y="128" font-size="11" fill="var(--fwd)">piece 1, + strand</text>
+      <line x1="850" y1="168" x2="770" y2="168" stroke="var(--rev)" stroke-width="8" marker-end="url(#aR)"/>
+      <text x="850" y="158" font-size="11" text-anchor="end" fill="var(--rev)">piece 2, − strand</text>
+      <rect x="700" y="184" width="68" height="10" fill="var(--good)" opacity=".22"/>
+      <text x="734" y="208" font-size="11" text-anchor="middle" fill="var(--good)">gap &gt; 0</text>
+    </svg>
+    </div>
+    <figcaption>Schematic. Boxes A and A′ are the two arms of an inverted repeat on the reference. The arm at the junction is in both pieces of the read, so the aligner can place a few bases on either side. Those shared bases are the clearest local trace of how the molecule formed.</figcaption>
+  </figure>
+
+  <div class="col">
+    <h3 style="margin-top:32px">Which step of library prep is involved</h3>
+  </div>
+  <div class="scroll">
+  <table class="prep">
+    <thead><tr><th>Fragmentation</th><th>Where the single strands come from</th><th>Where a polymerase extends them</th><th>Evidence</th></tr></thead>
+    <tbody>
+      <tr><td>Sonication</td><td>Random breaks; heat and denaturation leave single-stranded stretches</td><td>End repair</td><td>Haile 2019 (FFPE); Chen 2024. Removing single strands with S1 nuclease reduced the artifacts.</td></tr>
+      <tr><td>Enzymatic</td><td>Cuts inside palindromes leave partial strands that pair with the other half</td><td>End repair and A-tailing</td><td>Chen 2024</td></tr>
+      <tr><td>Tn5 tagmentation</td><td>The short gaps Tn5 leaves at each insertion</td><td>Gap-filling extension before PCR</td><td>Not characterized in these papers. N1176 is a Tn5 library, so it does happen.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
 
   <!-- STEP 2 -->
   <div class="step"><span class="n">2</span><h2>The aligner splits the read across both strands</h2></div>
@@ -153,6 +324,35 @@ code{font-family:var(--mono);font-size:.88em}
   </figure>
 
   <div class="col">
+    <p>The same read laid out base by base shows what the aligner did at the junction. Read bases 75–79 are in both alignments. Assuming those bases match the reference without mismatches, positions 619–623 on the + strand are the reverse complement of positions 1,197–1,201, about 575 bp apart. That 5 bp match is a candidate for the inverted-repeat arm that held the molecule together.</p>
+  </div>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 920 220" width="100%" style="min-width:640px" role="img" aria-label="The N1176 read in read coordinates: bases 1 to 79 align to the minus strand, bases 75 to 151 to the plus strand, with bases 75 to 79 shared">
+      <rect x="452.1" y="34" width="26.4" height="128" fill="var(--fg)" opacity=".08"/>
+      <text x="465" y="26" font-size="12" text-anchor="middle" fill="var(--fg)">bases 75–79 in both pieces</text>
+      <text x="60" y="56" font-size="11" fill="var(--muted)">read as sequenced, 151 bp</text>
+      <rect x="60" y="62" width="800" height="12" rx="2" fill="var(--grid)" stroke="var(--rule)"/>
+      <line x1="60" y1="104" x2="478.5" y2="104" stroke="var(--rev)" stroke-width="12"/>
+      <text x="60" y="126" font-size="11" fill="var(--rev)" class="mono">72S79M on − strand → 1,197–1,275</text>
+      <line x1="452.1" y1="146" x2="860" y2="146" stroke="var(--fwd)" stroke-width="12"/>
+      <text x="860" y="170" font-size="11" text-anchor="end" fill="var(--fwd)" class="mono">74S77M on + strand → 619–695</text>
+      <g font-size="11" fill="var(--muted)" class="mono" text-anchor="middle">
+        <line x1="60" y1="186" x2="860" y2="186" stroke="var(--rule)"/>
+        <line x1="62.6" y1="182" x2="62.6" y2="190" stroke="var(--muted)"/><text x="62.6" y="206">1</text>
+        <line x1="322.3" y1="182" x2="322.3" y2="190" stroke="var(--muted)"/><text x="322.3" y="206">50</text>
+        <line x1="454.7" y1="182" x2="454.7" y2="190" stroke="var(--muted)"/><text x="447" y="206">75</text>
+        <line x1="475.9" y1="182" x2="475.9" y2="190" stroke="var(--muted)"/><text x="486" y="206">79</text>
+        <line x1="587.1" y1="182" x2="587.1" y2="190" stroke="var(--muted)"/><text x="587.1" y="206">100</text>
+        <line x1="857.4" y1="182" x2="857.4" y2="190" stroke="var(--muted)"/><text x="857.4" y="206">151</text>
+      </g>
+    </svg>
+    </div>
+    <figcaption>Read coordinates, not genome coordinates. The two CIGARs add up to more than 151 aligned bases (79 + 77 = 156) because 5 bases are counted in both. A real inversion junction can share a few bases of microhomology too, so this alone does not mark a fold-back; it is the starting point for the checks below.</figcaption>
+  </figure>
+
+
+  <div class="col">
     <p>The distance between the two pieces depends on the library. In most of these libraries the second piece lands back on top of the first (a tight hairpin, pieces overlapping). In N1176, the worst library, it usually lands 100–600 bp away (a wider loop).</p>
   </div>
   <figure>
@@ -160,6 +360,58 @@ code{font-family:var(--mono);font-size:.88em}
     <div class="scroll"><svg id="gapChart" viewBox="0 0 900 260" width="100%" style="min-width:560px" role="img" aria-label="Distribution of distance between the two pieces of fold-back reads in four isolates"></svg></div>
     <figcaption>Distance between the two aligned pieces of 15,000 split fold-back reads per isolate (negative = the pieces overlap). Share of reads in 25 bp bins; values beyond 600 bp are pooled in the last bin.</figcaption>
   </figure>
+
+    <div class="col">
+    <h3 style="margin-top:32px">Four forms a fold-back takes in a BAM</h3>
+    <p>Where the junction falls within the sequenced fragment decides how it shows up.</p>
+  </div>
+  <div class="forms">
+    <div class="form"><span class="tag">Split read</span><p>The junction falls inside a read and both pieces are long enough to place. Primary alignment plus an <code>SA</code> tag on the same contig, <b>opposite strand</b>, usually within 1 kb.</p></div>
+    <div class="form"><span class="tag">Soft clip only</span><p>One piece is too short for the aligner to place (roughly under 20–30 bp), so there is no <code>SA</code> tag. Reverse-complement the clipped bases and look for them within a few hundred bp of the clip, including inside the aligned part of the read.</p></div>
+    <div class="form"><span class="tag">Same-strand pair</span><p>The junction falls in the unsequenced middle of the fragment. Neither read is split, but both mates map to the <b>same strand</b> (FF or RR) close together. Callers count these as discordant pairs for an inversion.</p></div>
+    <div class="form"><span class="tag">Overlapping pieces</span><p>The second piece aligns on top of the first, in reverse. A real inversion junction joins sequence outside the inverted segment to sequence inside it, so its pieces cannot overlap by more than a few bases of microhomology. Large overlap is the most specific single sign of a fold-back.</p></div>
+  </div>
+  <div class="col">
+    <details>
+      <summary>Sketch: flag split fold-back reads with pysam</summary>
+      <p>A starting point for inspecting a BAM by hand. It is not the fold-back scan used for the numbers on this page, which also handles soft clips and pairs.</p>
+<pre><code>import re, pysam
+
+REF_LEN = re.compile(r"(\d+)([MDN=X])")
+
+def foldback_gap(read, max_dist=1000, min_mapq=20):
+    """Gap in bp between a read's primary and an opposite-strand SA piece
+    on the same contig (negative = the pieces overlap). None if no such piece."""
+    if read.is_unmapped or read.is_secondary or read.is_supplementary:
+        return None
+    if not read.has_tag("SA"):
+        return None
+    for sa in read.get_tag("SA").rstrip(";").split(";"):
+        chrom, pos, strand, cigar, mapq, _nm = sa.split(",")
+        if chrom != read.reference_name or int(mapq) &lt; min_mapq:
+            continue
+        if (strand == "-") == read.is_reverse:
+            continue                      # same strand: deletion/duplication signal
+        start = int(pos) - 1
+        end = start + sum(int(n) for n, _ in REF_LEN.findall(cigar))
+        gap = max(read.reference_start, start) - min(read.reference_end, end)
+        if gap &lt;= max_dist:
+            return gap
+    return None
+
+def same_strand_pair(read, max_dist=1000):
+    return (read.is_paired and not read.mate_is_unmapped
+            and read.reference_id == read.next_reference_id
+            and read.is_reverse == read.mate_is_reverse
+            and abs(read.next_reference_start - read.reference_start) &lt;= max_dist)
+
+with pysam.AlignmentFile("sample.bam") as bam:
+    for r in bam.fetch("NZ_CP069069.1", 500, 1500):
+        g = foldback_gap(r)
+        if g is not None:
+            print(r.query_name, r.reference_start, g)</code></pre>
+    </details>
+  </div>
 
   <!-- STEP 3 -->
   <div class="step"><span class="n">3</span><h2>Callers read the split as an inversion</h2></div>
@@ -191,6 +443,26 @@ code{font-family:var(--mono);font-size:.88em}
   </figure>
 
   <div class="col">
+    <h3 style="margin-top:32px">Checks at a called site</h3>
+    <p>When a small inversion is called, these site-level checks separate the two. Mtb is haploid and clonal, so a real inversion should be carried by nearly every read across it unless the sample is a mixed infection.</p>
+  </div>
+  <div class="scroll">
+  <table class="prep">
+    <thead><tr><th>Check</th><th>Real inversion</th><th>Fold-back junction</th></tr></thead>
+    <tbody>
+      <tr><td>Share of spanning reads carrying the join</td><td>Close to all</td><td>A few percent, sometimes 10–20% at hotspots</td></tr>
+      <tr><td>Reads crossing the site that match the reference</td><td>Almost none</td><td>Most reads</td></tr>
+      <tr><td>Partner breakpoint at the other end</td><td>Present, with the reciprocal join</td><td>Absent</td></tr>
+      <tr><td>Overlap between the two pieces</td><td>No more than a few bases of microhomology</td><td>Often tens of bases (tight hairpins)</td></tr>
+      <tr><td>Supporting reads with identical start and end</td><td>The library's background duplicate rate</td><td>The same background rate (tested: fold-back reads are not duplicated more often)</td></tr>
+      <tr><td>Inverted repeat in the reference at the junction</td><td>Not required</td><td>Enriched (step 4)</td></tr>
+      <tr><td>Same site in unrelated libraries</td><td>Shared by related isolates</td><td>Can recur in unrelated isolates, since hotspots follow sequence</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+
+  <div class="col">
     <p>The calls that disappeared when the fold-back reads were removed are almost all inversions (or our caller's unpaired breakends, which are the same signal without a partner). Nearly all are 50–500 bp.</p>
   </div>
   <figure>
@@ -202,9 +474,9 @@ code{font-family:var(--mono);font-size:.88em}
   <!-- STEP 4 -->
   <div class="step"><span class="n">4</span><h2>Recurrence turns noise into a call</h2></div>
   <div class="col">
-    <p>A single fold-back read is ignored: callers need several reads supporting the same junction. Two things stack reads at one junction.</p>
-    <p><b>PCR copies.</b> One chimeric molecule amplified during library PCR gives several identical reads. P2 does not mark duplicates, so each copy counts as support. In N0004 only 42% of reads at junctions with 5 or more reads were distinct molecules.</p>
-    <p><b>Sequence hotspots.</b> Even after collapsing copies, many junctions hold 5 or more independent molecules. Those sites are enriched for inverted repeats, the sequence that lets the end fold back in step 1.</p>
+    <p>A single fold-back read is ignored: callers need several reads supporting the same junction. What stacks reads at one junction is the sequence.</p>
+    <p><b>Sequence hotspots.</b> Many junctions hold 5 or more independent molecules. Those sites are enriched for inverted repeats, the sequence that lets the end fold back in step 1.</p>
+    <p><b>Not PCR copies (corrected 2026-10-11).</b> An earlier version of this page said PCR duplicates inflate the hotspots. A direct test refuted it: fold-back pairs are duplicated no more often than other pairs (N0004 32% vs 43%; N1176 6.7% vs 6.0%), and removing duplicates raised dysgu's false calls (3,999 to 4,862) instead of lowering them. Duplicate removal takes ordinary reads away at least as fast as chimeric ones, so the chimeric share at each site goes up.</p>
   </div>
   <div class="grid2">
     <figure>
@@ -251,7 +523,7 @@ code{font-family:var(--mono);font-size:.88em}
       <tbody id="isoTable"></tbody>
     </table>
     </div>
-    <p class="src">Data: <code>analysis/foldback_qc/removal/</code> (read-removal experiment, cohort fbremove; <code>RESULTS.md</code>), fold-back scan v2 on all reads, our breakpoint caller v6 with local assembly, dysgu 1.9 and delly 1.3.3 from P2. Mechanism after Haile et al., Nucleic Acids Research 2019. Isolates: 9 Phase B in-panel controls with fold-back rates of 6.5–66.5 per 1,000, reads QC'd as the cohort standard and mapped to their own Marin 2024 genomes.</p>
+    <p class="src">Data: <code>analysis/foldback_qc/removal/</code> (read-removal experiment, cohort fbremove; <code>RESULTS.md</code>), fold-back scan v2 on all reads, our breakpoint caller v6 with local assembly, dysgu 1.9 and delly 1.3.3 from P2. Mechanism after Haile et al., Nucleic Acids Research 2019, and Chen et al., BMC Genomics 2024 (PDSM model). Isolates: 9 Phase B in-panel controls with fold-back rates of 6.5–66.5 per 1,000, reads QC'd as the cohort standard and mapped to their own Marin 2024 genomes.</p>
   </div>
 </div>
 
@@ -397,3 +669,4 @@ function draw(){gapChart();pileups();typeChart();irChart();recChart();afChart();
 draw();
 try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",draw);new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]})}catch(e){}
 </script>
+
