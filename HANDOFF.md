@@ -1,8 +1,132 @@
 # Handoff: one rerun to bring production data up to date
 
-Updated 2026-10-07 (evening). Repository `mtbc-graph-variants`, branch `main`
+Updated 2026-10-12 (see "Start here (2026-10-12)"; older sections kept below). Repository `mtbc-graph-variants`, branch `main`
 (protected: no force-push, no deletion). `analysis/` and the paper PDF are
 untracked; `analysis/` lives on durable storage with the repository.
+
+## Start here (2026-10-12): SV pipeline wrap-up, fold-back work
+
+**Focus (user, 2026-10-09 and 2026-10-11):**
+- Stay on the SV pipeline and wrap up the major issues needed to complete
+  it. Fold-back chimeras are part of that.
+- Graph work stays on hold.
+- Full log: `analysis/CHAT_LOG.md`. Fold-back work: `analysis/foldback_qc/`.
+
+### Running now: part D, does fold-back hide real SVs?
+Plan: `analysis/foldback_qc/FOLDBACK_SV_EFFECT_PLAN.md` part D. Code:
+`analysis/foldback_qc/recall/`. Approved; about 32 billing-hours.
+
+- **Cohort `fbrecall`** (`make_cohort.py`):
+  - samples: 39 selfcal54 isolates that passed QC, plus the 9 chimeric
+    controls (all reads);
+  - each is mapped to the nearest OTHER panel genome by panel SNP-profile
+    distance, excluding the own genome and genomes within 50 SNPs;
+  - distances 51-2,152 SNPs; GCF_035581225 (L6) is 11,696;
+  - truth = own genome vs that reference (`novel_events/truth.py`).
+  - Jobs:
+    - masks for 14 new references: 52346243 (done);
+    - P2: 52346255;
+    - P2 summary: 52346256;
+    - post (caller v6 + assembly, truth): 52346278.
+- **Cohort `fbrecall100`** (`make_fb100.py`), the causal arm:
+  - the 9 chimeric controls' fb100 reads (every fold-back pair removed);
+  - same reference and truth as their all-reads sample.
+  - Jobs: P2 52348853, summary 52348862, post 52348867
+    (`03_post_fb100.sbatch`).
+- **When all finish:**
+  1. From runroot, run `$MTB_PY ../analysis/foldback_qc/recall/analyse.py`.
+     It scores recall and strict precision in callable sequence for our
+     caller, dysgu AF >= 0.2 and the two combined, by group (kept
+     v2 <= 4.9, excluded, chimeric, chimeric_fb100), per isolate, and as
+     all vs fb100 per chimeric isolate.
+  2. Write `recall/RESULTS.md`, log in CHAT_LOG, and report to the user.
+
+### Decided this session (2026-10-11 to 12)
+- **delly dropped from production** (commit 03835c4, user):
+  - P2 runs dysgu only (required); P4b reads dysgu only;
+  - tests pass;
+  - existing cohorts' SV records still include delly until they are rerun.
+- **Fold-back cut-off: the per-sample rule** (user, 2026-10-12;
+  `analysis/foldback_qc/selfcal/RESULTS.md`). This supersedes "cutoff 2"
+  in the SV section below.
+  - The rule: the highest rate at which no kept isolate has >= 10
+    fold-back-driven false calls (our typed calls + dysgu AF >= 0.2, own
+    genome).
+  - The cut-off: **keep v2 <= 4.9 per 1,000, which is old scale (the
+    production count, `split_reads.awk`) <= 2.5.**
+    - Last clean isolate: GCF_040209325 (v2 4.88, old 2.52, 4 false calls).
+    - First bad isolate: GCF_028768425 (v2 5.55, old 3.85, 20 false calls).
+  - **Scale check passed** (`selfcal/04_scale.sbatch`): on the 2 isolates
+    that also have production CRAMs, the production rates match the
+    calibration (old 0.141 vs 0.151; 8.22 vs 8.30).
+  - In production at old > 2.5 this excludes:
+    - scale100: 27 of 100;
+    - scale200: 44 of 200;
+    - gwas1000: 279 of 997 (28%).
+
+    The losses are lineage-uneven (L5 the highest). **Not yet applied:
+    applying it and rebalancing cohorts wait for the user's go-ahead.**
+- **Insert size rejected** as part of the rule. It was pre-specified and
+  tested on selfcal54 (59 points): it added nothing, and in
+  leave-one-study-out it let N0145 (292 false calls) and N0155 (39)
+  through.
+- **Duplicate marking is not a fold-back fix** (`removal/RESULTS.md`).
+  - It raised dysgu false calls by 22%; random removal of the same number
+    of pairs raised them by 11%.
+  - Fold-back pairs are not duplicated more than other pairs.
+  - dysgu already ignores flagged duplicates.
+
+### Findings this session (details in CHAT_LOG and each RESULTS.md)
+- **Read removal (part C, `removal/`).** Deleting only fold-back pairs
+  removes 95% of our false calls and 90% of dysgu's (98-100% at AF >= 0.2).
+  Random removal removes none. An AF floor does not rescue chimeric
+  libraries.
+- **Mechanism** (explainer page https://claude.ai/artifact/6mTMff14Ts66rLgU8maQdu,
+  private, version 4; source `foldback_qc/explainer/`):
+  - fold-backs align as split reads on opposite strands, which callers read
+    as small inversions (50-500 bp) or unpaired breakends;
+  - calls appear where junctions recur at inverted-repeat hotspots, not
+    from PCR copies (corrected after the dedup test).
+- **selfcal54** (`selfcal/`): 39 of 54 passed QC.
+  - Failures: 14 below 60x (5 PRJEB49093 runs at exactly 59.5x), 1 at 80%
+    MTBC.
+  - Mid-range false calls come mostly from MiSeq Nextera (Tn5)
+    short-insert libraries (median insert 130-165 bp), mostly from our
+    caller.
+  - Junction recurrence (junctions with >= 5 reads) correlates with false
+    calls about as well as the rate (0.73 vs 0.75), and explains the
+    2x300 PRJDB10923 exceptions. It is not yet a better single rule.
+- **GCF_035581225:** the same isolate (3 SNPs), but its 14 false calls are
+  not fold-back.
+  - Four come from an 877 bp assembly-vs-reads mismatch.
+  - Nine are dysgu insertions supported only by clipped reads (adapter
+    read-through, junk). **These are a separate, filterable false-call
+    source; consider it for the robust tier.**
+
+### Wrap-up list (the user's order not yet given)
+1. **CRAM purge, around 2026-10-26.** The user is asking the CRAMs' owner;
+   do not copy them before then. The rerun needs them.
+2. **Fold-back exclusion:** apply old <= 2.5 and rebalance cohorts (user
+   go-ahead needed).
+3. **Production SV caller set.** dysgu AF >= 0.2, our caller v6 + assembly
+   and the Phase B rules (short-anchor, HC hand-off, tatC-helY genotype)
+   are still evaluation-only.
+4. **Robust call tier** (agreed: DEL/INS in callable sequence, both
+   breakpoints). Not built. Add the clip-only dysgu INS filter.
+5. **Regenerate production data once**, after the above
+   ([[finish-fixes-before-rerun]] in memory).
+6. **Smaller open items:**
+   - random removal raised false calls by 13-21% (probably fraction
+     thresholds such as `--bnd-min-frac`), unchecked;
+   - parts A and B (`fb_effect.py` attribution, AF bins) not yet run on
+     selfcal54;
+   - fold-back v2 not run on the 1,200 production isolates (old-scale
+     rates exist and the cut-off is set on that scale).
+
+**Parked (user, later):** Mutect2 for within-host / non-haploid calling, and
+the effect of fragmentation method (sonication, enzymatic, Tn5) on
+low-frequency calls. The user's within-host Tn5 short-insert samples could not
+go below 10% AF.
 
 ## Start here (2026-10-07, evening): the one priority
 
@@ -317,6 +441,8 @@ Full log: `analysis/CHAT_LOG.md`; review: `analysis/novel_events/REVIEW_2026-10-
   gwas1000 by lineage: L1 41%, L2 39%, L3 32%, L4 34%, L5 54%, L6 19%,
   L7 0%, L9 0%; RRDR 0 and 1 both 35%. Reads of 160 bp or more: 72%.
   Strongly study-specific (ENA metadata, `analysis/foldback_sim/ena_library.tsv`).
+- **Superseded 2026-10-12:** per-sample rule, old <= 2.5 (see "Start here
+  (2026-10-12)").
 - **Cutoff set at 2 per 1,000 (user, 2026-10-09)** for Phase B (Phase B setE sits at 0.25-1.21 and behaves cleanly). For production cohorts it would mean rebuilding
   the cohorts (gwas1000 would lose lineage balance, mostly L5 and L1).
 
