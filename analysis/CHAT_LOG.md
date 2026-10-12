@@ -2416,3 +2416,8 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - User: "yes, find the genomes with homopolymer tracts".
 - `analysis/homopolymer_scan/scan.py` on the 333 build references (3 min): pure runs >= 15 bp placed on H37Rv, plus near-pure tracts (>= 90% one base per 50 bp window).
 - Three genomes with kilobase tracts, the same as the 2026-10-04 QC: GCF_050259585 (1,137 bp G), GCF_045348265 (970 bp A + 225 bp T), GCF_039770655 (520 bp T, only L9). Others <= 48 bp, at recurrent natural G/C loci (2,338,189: 23 genomes). Decision needed: mask, replace or exclude.
+
+## 2026-10-12 Graph scope and the outgroup's role
+- User: "there should have been a discussion about simplifying the graph too. Dropping canettii and only focused on human adapted lineages." Then: "I remember that canettii is still to somehow be used to generate the tree, but I don't remember how SVs were to be folded into the analysis. Can you refresh the details? L1-4 and L7 plus one or two L5/6, as proposed."
+- Scope decided: L1-4 + L7 + 1-2 L5/6 in the graph; canettii and L8 outside (kit). La2 and L9 homopolymer genomes leave with their lineages; GCF_045348265 still needs mask/replace.
+- Refresher written: `analysis/strategy/OUTGROUP_AND_SV_POLARITY.md` (tree from SNPs with canettii's row from direct alignment; SVs scored on the tree; their polarity from the outgroup's graph genotype, which needs L5/6-first polarity and OUT-1 once canettii leaves).

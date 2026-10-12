@@ -147,6 +147,14 @@ graph and cohort, so item 2's rebalancing applies to the new selection.
   variable G/C loci. Users as matched reference: GCF_039770655 by 14
   gwas1000 and 2 in each scale cohort; GCF_045348265 by 1 gwas1000.
   Decision needed per genome: mask with N, replace or exclude.
+- **Scope decided (user, 2026-10-12): "L1-4 and L7 plus one or two L5/6,
+  as proposed"** (sections 0g, 0i, 0k). Canettii and lineage 8 stay outside
+  the graph (the outgroup kit); animal lineages and L9 leave. So of the
+  homopolymer genomes GCF_050259585 (La2) and GCF_039770655 (L9) leave with
+  their lineages; only GCF_045348265 (L4.6.1.1) still needs mask or replace.
+  The 14 gwas1000 isolates matched to the L9 genome become non-target
+  isolates. How the tree and SVs use the outgroup without canettii in the
+  graph: `analysis/strategy/OUTGROUP_AND_SV_POLARITY.md`.
 
 ### Wrap-up list (the user's order not yet given)
 1. **CRAM purge, around 2026-10-26.** The user is asking the CRAMs' owner;
