@@ -12,34 +12,29 @@ untracked; `analysis/` lives on durable storage with the repository.
 - Graph work stays on hold.
 - Full log: `analysis/CHAT_LOG.md`. Fold-back work: `analysis/foldback_qc/`.
 
-### Running now: part D, does fold-back hide real SVs?
-Plan: `analysis/foldback_qc/FOLDBACK_SV_EFFECT_PLAN.md` part D. Code:
-`analysis/foldback_qc/recall/`. Approved; about 32 billing-hours.
-
-- **Cohort `fbrecall`** (`make_cohort.py`):
-  - samples: 39 selfcal54 isolates that passed QC, plus the 9 chimeric
-    controls (all reads);
-  - each is mapped to the nearest OTHER panel genome by panel SNP-profile
-    distance, excluding the own genome and genomes within 50 SNPs;
-  - distances 51-2,152 SNPs; GCF_035581225 (L6) is 11,696;
-  - truth = own genome vs that reference (`novel_events/truth.py`).
-  - Jobs:
-    - masks for 14 new references: 52346243 (done);
-    - P2: 52346255;
-    - P2 summary: 52346256;
-    - post (caller v6 + assembly, truth): 52346278.
-- **Cohort `fbrecall100`** (`make_fb100.py`), the causal arm:
-  - the 9 chimeric controls' fb100 reads (every fold-back pair removed);
-  - same reference and truth as their all-reads sample.
-  - Jobs: P2 52348853, summary 52348862, post 52348867
-    (`03_post_fb100.sbatch`).
-- **When all finish:**
-  1. From runroot, run `$MTB_PY ../analysis/foldback_qc/recall/analyse.py`.
-     It scores recall and strict precision in callable sequence for our
-     caller, dysgu AF >= 0.2 and the two combined, by group (kept
-     v2 <= 4.9, excluded, chimeric, chimeric_fb100), per isolate, and as
-     all vs fb100 per chimeric isolate.
-  2. Write `recall/RESULTS.md`, log in CHAT_LOG, and report to the user.
+### Part D done (2026-10-12): fold-back and recall
+Details: `analysis/foldback_qc/recall/RESULTS.md`.
+- **Cohorts:**
+  - `fbrecall`: 39 selfcal54 isolates plus 9 chimeric controls, each on the
+    nearest other panel genome;
+  - `fbrecall100`: the 9 chimeric controls with every fold-back pair
+    removed;
+  - truth = own genome vs that reference.
+- **Fold-backs cost precision, not much recall.** Combined typed recall /
+  strict precision:
+  - kept 0.841 / 0.567;
+  - excluded 0.863 / 0.348;
+  - chimeric 0.872 / 0.045.
+- **Causal arm:** removing fold-backs raises recall 0.872 -> 0.923 (68 -> 72
+  of 78 events) and dysgu AF >= 0.2 recall 0.577 -> 0.705. Our caller
+  mistypes events near fold-backs; it does not miss the breakpoints.
+- **Open:** kept-group precision 0.56 vs Phase B about 0.8.
+  - 92 of about 120 false calls are more than 500 bp from any truth event.
+  - 15 of those recur on shared references.
+  - Check this before fixing the production caller set.
+- Also from parts A-B (`selfcal/RESULTS.md`): an AF floor of 0.2 on our
+  caller would clean moderate-rate libraries. Its recall cost is not yet
+  tested.
 
 ### Decided this session (2026-10-11 to 12)
 - **delly dropped from production** (commit 03835c4, user):
