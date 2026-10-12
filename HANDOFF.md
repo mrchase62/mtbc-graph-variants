@@ -28,13 +28,20 @@ Details: `analysis/foldback_qc/recall/RESULTS.md`.
 - **Causal arm:** removing fold-backs raises recall 0.872 -> 0.923 (68 -> 72
   of 78 events) and dysgu AF >= 0.2 recall 0.577 -> 0.705. Our caller
   mistypes events near fold-backs; it does not miss the breakpoints.
-- **Open:** kept-group precision 0.56 vs Phase B about 0.8.
-  - 92 of about 120 false calls are more than 500 bp from any truth event.
-  - 15 of those recur on shared references.
-  - Check this before fixing the production caller set.
-- Also from parts A-B (`selfcal/RESULTS.md`): an AF floor of 0.2 on our
-  caller would clean moderate-rate libraries. Its recall cost is not yet
-  tested.
+- **Kept-group precision explained** (`precheck.py`).
+  - GCF_035581225's reference is 11,696 SNPs away; that one isolate gives
+    most of the false calls.
+  - Part D's scoring lacked the HC hand-off.
+  - With both accounted for, kept is 0.885 / 0.743, close to Phase B.
+  - Candidate: a reference-distance flag. No threshold can be set; only 1
+    isolate is above 2,152 SNPs.
+- **AF floor 0.1 on our caller** (`affloor.py`), keeping assembly-typed
+  events that have no read count:
+  - no combined recall loss;
+  - kept precision 0.567 -> 0.585; excluded 0.348 -> 0.617;
+  - chimeric unchanged (their false calls are dysgu's).
+  - Dropping events without an AF halves recall.
+  - A candidate for the production caller set (wrap-up item 3).
 
 ### Decided this session (2026-10-11 to 12)
 - **delly dropped from production** (commit 03835c4, user):
