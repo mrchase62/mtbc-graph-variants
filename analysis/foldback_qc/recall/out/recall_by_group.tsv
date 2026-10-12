@@ -1,0 +1,13 @@
+group	isolates	with_truth	caller	n_true	typed_recall	breakpoint_recall	typed_calls	precision	precision_lenient
+kept	27	27	proto_asm	182	0.797	0.934	271	0.557	0.598
+kept	27	27	dysgu_af20	182	0.687	0.736	225	0.578	0.662
+kept	27	27	proto_asm+dysgu_af20	182	0.841	0.934	496	0.567	0.627
+excluded	12	12	proto_asm	51	0.784	0.98	150	0.28	0.293
+excluded	12	12	dysgu_af20	51	0.569	0.569	57	0.526	0.526
+excluded	12	12	proto_asm+dysgu_af20	51	0.863	0.98	207	0.348	0.357
+chimeric	9	9	proto_asm	78	0.859	0.962	774	0.087	0.097
+chimeric	9	9	dysgu_af20	78	0.577	0.59	1768	0.027	0.029
+chimeric	9	9	proto_asm+dysgu_af20	78	0.872	0.962	2542	0.045	0.05
+chimeric_fb100	9	9	proto_asm	78	0.91	0.962	105	0.676	0.724
+chimeric_fb100	9	9	dysgu_af20	78	0.705	0.705	92	0.62	0.674
+chimeric_fb100	9	9	proto_asm+dysgu_af20	78	0.923	0.962	197	0.65	0.701

@@ -2323,3 +2323,21 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   10-fold. With insert (RR 0.37 per 100 bp) and read length (RR 4.4 per
   100 bp), the rate drops to 1.35 (ns). Read geometry is a separate
   predictor; a hypothesis only (38 isolates, study-clustered).
+
+## 2026-10-12 — part D results (`foldback_qc/recall/RESULTS.md`)
+- Combined (ours + dysgu AF >= 0.2) typed recall / strict precision:
+  - kept: 0.841 / 0.567;
+  - excluded: 0.863 / 0.348;
+  - chimeric: 0.872 / 0.045.
+  - Fold-backs cost precision, not much recall. dysgu AF >= 0.2 recall
+    0.69 -> 0.57.
+- Causal arm (fb100, same libraries, references, truth): combined recall
+  0.872 -> 0.923 (68 -> 72 of 78), dysgu 0.577 -> 0.705, precision
+  0.045 -> 0.65.
+  - Our caller loses events before assembly by mistyping them (breakpoint
+    recall 0.987 both ways), not through the assembly cap.
+- Per-isolate recall vs rate: Spearman -0.15 (ns).
+- Open: kept-group precision 0.56 vs Phase B about 0.8.
+  - 92 of about 120 false typed calls are more than 500 bp from any truth
+    event; 15 recur on shared references (GCF_900520315).
+  - Cause not yet known; check before fixing the production caller set.

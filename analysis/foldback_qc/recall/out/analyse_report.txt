@@ -1,0 +1,46 @@
+group	isolates	with_truth	caller	n_true	typed_recall	breakpoint_recall	typed_calls	precision	precision_lenient
+kept	27	27	proto_asm	182	0.797	0.934	271	0.557	0.598
+kept	27	27	dysgu_af20	182	0.687	0.736	225	0.578	0.662
+kept	27	27	proto_asm+dysgu_af20	182	0.841	0.934	496	0.567	0.627
+excluded	12	12	proto_asm	51	0.784	0.98	150	0.28	0.293
+excluded	12	12	dysgu_af20	51	0.569	0.569	57	0.526	0.526
+excluded	12	12	proto_asm+dysgu_af20	51	0.863	0.98	207	0.348	0.357
+chimeric	9	9	proto_asm	78	0.859	0.962	774	0.087	0.097
+chimeric	9	9	dysgu_af20	78	0.577	0.59	1768	0.027	0.029
+chimeric	9	9	proto_asm+dysgu_af20	78	0.872	0.962	2542	0.045	0.05
+chimeric_fb100	9	9	proto_asm	78	0.91	0.962	105	0.676	0.724
+chimeric_fb100	9	9	dysgu_af20	78	0.705	0.705	92	0.62	0.674
+chimeric_fb100	9	9	proto_asm+dysgu_af20	78	0.923	0.962	197	0.65	0.701
+
+Causal arm, isolate by isolate (all reads -> fold-back pairs removed):
+isolate	callable_true	caller	recall_all	recall_fb100	calls_all	calls_fb100	prec_all	prec_fb100
+mar_N0004	11	proto_asm	0.818	0.909	42	14	0.214	0.714
+mar_N0004	11	dysgu_af20	0.364	0.364	28	6	0.143	0.667
+mar_N0004	11	proto_asm+dysgu_af20	0.818	0.909	70	20	0.186	0.7
+mar_N0054	6	proto_asm	1.0	1.0	56	9	0.107	0.667
+mar_N0054	6	dysgu_af20	0.5	1.0	273	8	0.011	0.75
+mar_N0054	6	proto_asm+dysgu_af20	1.0	1.0	329	17	0.027	0.706
+mar_N0145	1	proto_asm	1.0	1.0	94	1	0.011	1.0
+mar_N0145	1	dysgu_af20	0.0	0.0	200	4	0.0	0.0
+mar_N0145	1	proto_asm+dysgu_af20	1.0	1.0	294	5	0.003	0.2
+mar_N0155	4	proto_asm	1.0	1.0	15	7	0.267	0.571
+mar_N0155	4	dysgu_af20	0.5	0.5	33	2	0.061	1.0
+mar_N0155	4	proto_asm+dysgu_af20	1.0	1.0	48	9	0.125	0.667
+mar_N1176	2	proto_asm	0.0	0.5	371	11	0.0	0.091
+mar_N1176	2	dysgu_af20	0.0	1.0	489	16	0.0	0.125
+mar_N1176	2	proto_asm+dysgu_af20	0.0	1.0	860	27	0.0	0.111
+mar_N1202	8	proto_asm	0.625	0.625	27	8	0.185	0.625
+mar_N1202	8	dysgu_af20	0.25	0.5	209	5	0.01	0.8
+mar_N1202	8	proto_asm+dysgu_af20	0.625	0.625	236	13	0.03	0.692
+mar_N1272	5	proto_asm	1.0	1.0	41	8	0.122	0.625
+mar_N1272	5	dysgu_af20	0.6	0.6	79	4	0.038	0.75
+mar_N1272	5	proto_asm+dysgu_af20	1.0	1.0	120	12	0.067	0.667
+mar_N1274	6	proto_asm	1.0	1.0	87	8	0.069	0.75
+mar_N1274	6	dysgu_af20	0.333	0.667	419	10	0.005	0.4
+mar_N1274	6	proto_asm+dysgu_af20	1.0	1.0	506	18	0.016	0.556
+mar_RW_TB008	35	proto_asm	0.886	0.943	41	39	0.756	0.846
+mar_RW_TB008	35	dysgu_af20	0.829	0.857	38	37	0.816	0.865
+mar_RW_TB008	35	proto_asm+dysgu_af20	0.914	0.943	79	76	0.785	0.855
+
+per isolate (n 48 with truth): Spearman recall vs rate -0.15 (p 0.32)
+isolates without truth events (no recall possible): 0

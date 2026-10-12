@@ -102,7 +102,7 @@ def main():
         w.writeheader()
         w.writerows(per)
     print("\nCausal arm, isolate by isolate (all reads -> fold-back pairs removed):")
-    print("isolate\tn_true\tcaller\trecall_all\trecall_fb100\tcalls_all\tcalls_fb100\tprec_all\tprec_fb100")
+    print("isolate\tcallable_true\tcaller\trecall_all\trecall_fb100\tcalls_all\tcalls_fb100\tprec_all\tprec_fb100")
     for s in chim:
         if not ntrue[s]:
             continue
@@ -110,7 +110,7 @@ def main():
         b = score({s + "_fb100"}, t100, s + "_fb100", **f100)
         for c in CALLERS:
             x, y = a.get(c, {}), b.get(c, {})
-            print(f"{s}\t{ntrue[s]}\t{c}\t{x.get('typed_recall')}\t{y.get('typed_recall')}\t"
+            print(f"{s}\t{x.get('n_true')}\t{c}\t{x.get('typed_recall')}\t{y.get('typed_recall')}\t"
                   f"{x.get('typed_calls')}\t{y.get('typed_calls')}\t{x.get('precision')}\t{y.get('precision')}")
     rho, p = spearmanr([x["rate"] for x in per], [x["typed_recall"] for x in per])
     print(f"\nper isolate (n {len(per)} with truth): Spearman recall vs rate {rho:+.2f} (p {p:.2g})")
