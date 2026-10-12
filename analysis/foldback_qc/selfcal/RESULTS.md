@@ -104,6 +104,74 @@ better than the rate as a single rule.
 
 ## Not done here
 - Part A attribution and part B AF bins on selfcal54 (`../fb_effect.py`).
-- An identity check for GCF_035581225.
 - Duplicate rate. P2 marks no duplicates; see `../removal/RESULTS.md`, where
   the duplicate rate turned out to be a depth signal, not a fold-back one.
+
+## GCF_035581225 identity check (2026-10-12)
+**Same isolate, but its 14 false calls are not fold-back driven.**
+
+Reads mapped to the isolate's own genome show:
+- **SNPs:** 3 HaplotypeCaller SNPs in callable sequence. Different DNA
+  shows hundreds, as QC_7 did with 276 discordant SNPs.
+- **One local mismatch, which accounts for 4 of the 14 calls.**
+  - Across 1,905,037-1,905,913, depth is 0; the flanks are at 62x.
+  - Those 877 bp exist in the assembly but in no read, and do not map to
+    H37Rv.
+  - Clipped reads at both ends carry sequence that matches H37Rv near
+    1,873.6 kb exactly.
+  - Calls here: dysgu INS at 1,905,037, 1,905,914 and 1,922,569, and our
+    DEL at 1,905,037.
+  - Cause: either an assembly error or a real difference between the
+    culture that was assembled and the one that was sequenced.
+- **The other 9 dysgu calls at AF >= 0.2** are 160-400 bp insertions
+  supported only by soft-clipped reads (no discordant pairs, no split
+  reads).
+  - One site's clipped sequence is P7 adapter read-through
+    (`...ATCTCGTATGCCGTCTTCTGCTTG`).
+  - The other sites' clipped ends map to neither the own genome nor H37Rv,
+    and many are low-complexity.
+- **Our second call** is a 52 bp deletion with 2 supporting reads.
+- **Fold-back junctions:** 1 of the 11 call sites lies within 20 bp of
+  one, about chance level here.
+
+**Conclusion:** the isolate is excluded from setting the fold-back
+cut-off.
+
+Side finding: dysgu insertions supported only by clipped reads are a
+separate, non-fold-back source of false calls. This is relevant to the
+robust tier.
+
+## Decision (user, 2026-10-12): per-sample rule
+The cut-off is the highest rate at which no kept isolate has 10 or more
+fold-back-driven false calls (y; GCF_035581225 excluded as above).
+
+Isolates around the boundary, from the same BAM, with the old-scale rate
+(the scale of production CRAM rates) alongside v2:
+
+| isolate | v2 | old | y |
+|---|---|---|---|
+| GCF_022871125 | 2.50 | 1.69 | 3 |
+| GCF_026727575 | 2.97 | 1.88 | 4 |
+| GCF_040209325 | 4.88 | 2.52 | 4 |
+| GCF_028768425 | 5.55 | 3.85 | 20 |
+| GCF_026727615 | 5.80 | 4.29 | 21 |
+| GCF_019670745 | 7.42 | 4.74 | 11 |
+| N0155 | 6.54 | 4.80 | 39 |
+
+- **Cut-off:** keep v2 <= 4.9, which is old-scale <= 2.5. This is the last
+  clean isolate, not the middle of the gap, because only 2 isolates lie
+  between 3 and 5.5 (v2). selfcal kept: 27 of 39.
+- **Scale conversion:** old is about 0.71 x v2 (IQR 0.67-0.73, 29
+  isolates with v2 > 0.5). The ratio varies by library (0.52 for
+  GCF_040209325), so the cut-off is set on each scale from the isolates
+  directly.
+- **Production rates** (old scale, H37Rv CRAMs; plan limit 6, scale not
+  yet checked on the 2 overlapping isolates). Isolates excluded at
+  old > 2.5:
+  - scale100: 27 of 100 (27%);
+  - scale200: 44 of 200 (22%);
+  - gwas1000: 279 of 997 (28%).
+  - For comparison, at old > 3.8 the counts are 20%, 16% and 21%.
+- **Lineage balance:** exclusion is uneven by lineage. In gwas1000 at
+  old > 1, 54% of L5 vs 0-19% of L6, L7 and L9. Rebalancing is a separate
+  step.

@@ -2260,3 +2260,20 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - Mid-range false calls: MiSeq Tn5 short-insert libraries (median insert
     130-165 bp), mostly from our caller.
   - Negative binomial fit did not converge.
+
+## 2026-10-12 — per-sample fold-back cut-off (user decision)
+- User: "use the per-sample rule, check GCF_035581225 identity first".
+- GCF_035581225: same isolate (3 callable SNPs vs own genome).
+  - Its 14 false calls are not fold-back driven:
+    - one 877 bp assembly-vs-reads mismatch (0 depth; the reads carry
+      H37Rv-like sequence), 4 calls;
+    - 9 dysgu INS supported only by clipped reads (adapter read-through,
+      junk or low complexity), 1 of 11 sites near a fold-back junction;
+    - one 2-read DEL of ours.
+  - Excluded from setting the cut-off.
+- Cut-off: keep v2 <= 4.9 (old <= 2.5). Last clean isolate GCF_040209325
+  (v2 4.88, old 2.52, y 4); first bad GCF_028768425 (v2 5.55, old 3.85,
+  y 20). Old is about 0.71 x v2.
+- Production at old > 2.5 excludes scale100 27%, scale200 22%, gwas1000 28%.
+  Lineage-uneven (L5 highest).
+- `foldback_qc/selfcal/RESULTS.md`.
