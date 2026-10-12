@@ -108,6 +108,21 @@ Details: `analysis/foldback_qc/recall/RESULTS.md`.
     read-through, junk). **These are a separate, filterable false-call
     source; consider it for the robust tier.**
 
+### Open question: filter fold-back reads instead of excluding samples?
+Raised by the user 2026-10-12 ("I don't know if this is worth it").
+- **Check 1, element: passed.** Removing every fold-back pair leaves the
+  tatC-helY element's evidence and genotype unchanged; fold-back junctions
+  at the element are at chance level (`removal/element_check.py`,
+  `removal/RESULTS.md`).
+- **Check 2, not run:** part D on the 12 excluded selfcal isolates with
+  fold-backs removed (~10 billing-hours; needs cost approval). If they reach
+  kept-group precision, the filter could replace most of the exclusion
+  (old <= 2.5), which drops 22-28% of production isolates, unevenly by
+  lineage. It runs against the standing "exclude over rescue" preference;
+  the user decides.
+- Wiring our caller into P2/P4b (user asked 2026-10-12) is paused at the
+  reading stage. A filter, if adopted, would sit in P2 before the SV callers.
+
 ### Wrap-up list (the user's order not yet given)
 1. **CRAM purge, around 2026-10-26.** The user is asking the CRAMs' owner;
    do not copy them before then. The rerun needs them.
