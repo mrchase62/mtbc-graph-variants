@@ -2277,3 +2277,6 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - Production at old > 2.5 excludes scale100 27%, scale200 22%, gwas1000 28%.
   Lineage-uneven (L5 highest).
 - `foldback_qc/selfcal/RESULTS.md`.
+- Scale check (job 52345870): production CRAM rates match the calibration
+  BAMs for the 2 overlapping isolates (old 0.141 vs 0.151; 8.22 vs 8.30), so
+  old <= 2.5 applies to production directly.

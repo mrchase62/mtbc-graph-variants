@@ -175,3 +175,22 @@ Isolates around the boundary, from the same BAM, with the old-scale rate
 - **Lineage balance:** exclusion is uneven by lineage. In gwas1000 at
   old > 1, 54% of L5 vs 0-19% of L6, L7 and L9. Rebalancing is a separate
   step.
+
+## Scale check (plan limit 6; job 52345870, `04_scale.sbatch`)
+Two selfcal isolates also have a production CRAM (H37Rv, read in place).
+Measured with the production count (`split_reads.awk`, as `01_measure.sbatch`)
+and with v2:
+
+| isolate | production CRAM runs | production old / v2 | calibration BAM old / v2 |
+|---|---|---|---|
+| GCF_037076265 | DRR099693 (the same run) | 0.141 / 0.30 | 0.151 / 0.31 |
+| GCF_900520315 | ERR1949967 + ERR2724042 (selfcal: ERR2724042) | 8.22 / 11.84 | 8.30 / 12.51 |
+
+The rates agree to within 1-7% despite the differences between the two
+measurements:
+- reference: H37Rv vs the isolate's own genome;
+- reads: raw vs QC'd and downsampled;
+- runs: one vs two.
+
+So the cut-off of old <= 2.5 applies directly to production rates.
+Only 2 isolates were available, one low and one high.

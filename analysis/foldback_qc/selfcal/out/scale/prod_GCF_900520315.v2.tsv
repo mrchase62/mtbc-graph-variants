@@ -1,0 +1,2 @@
+sample	reads	foldback_per_1k	split_per_1k	clip_per_1k	clip_forward_per_1k	clip_other_per_1k	old_per_1k	dup_frac	read_len_median	insert_median	frac
+prod_GCF_900520315	3026788	11.8406	8.2559	3.5847	0.4041	4.85	8.148	0.0	150.0	243.0	1.0
