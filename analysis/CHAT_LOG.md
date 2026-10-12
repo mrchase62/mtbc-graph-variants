@@ -2366,3 +2366,15 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   tests pass.
 - HANDOFF wrap-up item 3 now lists `--min-af 0.1`. Production P2 still runs
   dysgu only; wiring our caller in is part of item 3.
+
+## 2026-10-12 — fold-back read filtering: element check (user: "do the element check first")
+- Context: the user asked whether filtering fold-back reads (instead of
+  excluding samples) is worth it. Recommended two checks before deciding:
+  the tatC-helY element, then part D on the 12 excluded selfcal isolates
+  with fold-backs removed (~10 billing-hours, not yet approved).
+- `removal/element_check.py`: 32 fold-back reads at the element vs 32.1 by
+  chance (47 samples); removing every fold-back pair in the 9 chimeric
+  controls leaves the inside/flank ratio within 0.03 and every genotype
+  present. The element is safe.
+- Wiring our caller into production (asked earlier) is paused at the
+  reading stage; no wiring code changed yet.

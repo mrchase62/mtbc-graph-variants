@@ -1,0 +1,63 @@
+check	sample	cohort	reference	element_in_ref	foldback_reads	at_element	expected	inside_all	inside_fb100	flank_all	flank_fb100	ratio_all	ratio_fb100	gt_all	gt_fb100
+junctions	ps_GCF_001544705	selfcal54	GCF_001544705	no	34	0	0.0								
+junctions	ps_GCF_002975475	selfcal54	GCF_002975475	no	1225	0	0.03								
+junctions	ps_GCF_009664875	selfcal54	GCF_009664875	yes	5202	1	0.2								
+junctions	ps_GCF_009730215	selfcal54	GCF_009730215	yes	217	0	0.01								
+junctions	ps_GCF_009730235	selfcal54	GCF_009730235	yes	231	0	0.01								
+junctions	ps_GCF_009762675	selfcal54	GCF_009762675	yes	398	0	0.02								
+junctions	ps_GCF_013267635	selfcal54	GCF_013267635	no	77	0	0.0								
+junctions	ps_GCF_019670745	selfcal54	GCF_019670745	yes	12535	0	0.49								
+junctions	ps_GCF_022871085	selfcal54	GCF_022871085	yes	5446	0	0.21								
+junctions	ps_GCF_022871105	selfcal54	GCF_022871105	yes	5126	0	0.2								
+junctions	ps_GCF_022871125	selfcal54	GCF_022871125	yes	7173	0	0.28								
+junctions	ps_GCF_022871145	selfcal54	GCF_022871145	yes	1460	0	0.06								
+junctions	ps_GCF_026185275	selfcal54	GCF_026185275	no	933	0	0.02								
+junctions	ps_GCF_026727575	selfcal54	GCF_026727575	no	7913	0	0.19								
+junctions	ps_GCF_026727615	selfcal54	GCF_026727615	no	13442	0	0.32								
+junctions	ps_GCF_028768425	selfcal54	GCF_028768425	no	12038	0	0.29								
+junctions	ps_GCF_035581225	selfcal54	GCF_035581225	yes	4522	1	0.17								
+junctions	ps_GCF_037076265	selfcal54	GCF_037076265	yes	534	0	0.02								
+junctions	ps_GCF_037076275	selfcal54	GCF_037076275	yes	405	0	0.02								
+junctions	ps_GCF_037076285	selfcal54	GCF_037076285	yes	29525	3	1.16								
+junctions	ps_GCF_037076295	selfcal54	GCF_037076295	yes	37475	1	1.47								
+junctions	ps_GCF_037076305	selfcal54	GCF_037076305	yes	42186	1	1.66								
+junctions	ps_GCF_037076315	selfcal54	GCF_037076315	no	35788	0	0.85								
+junctions	ps_GCF_037076325	selfcal54	GCF_037076325	yes	41537	1	1.63								
+junctions	ps_GCF_037076335	selfcal54	GCF_037076335	yes	16394	0	0.64								
+junctions	ps_GCF_040209325	selfcal54	GCF_040209325	yes	9451	0	0.37								
+junctions	ps_GCF_042982005	selfcal54	GCF_042982005	no	14522	4	0.35								
+junctions	ps_GCF_059622605	selfcal54	GCF_059622605	yes	1235	0	0.05								
+junctions	ps_GCF_059622665	selfcal54	GCF_059622665	yes	519	0	0.02								
+junctions	ps_GCF_059622685	selfcal54	GCF_059622685	yes	1477	0	0.06								
+junctions	ps_GCF_059622705	selfcal54	GCF_059622705	yes	1172	0	0.05								
+junctions	ps_GCF_059622725	selfcal54	GCF_059622725	yes	966	0	0.04								
+junctions	ps_GCF_059622745	selfcal54	GCF_059622745	yes	799	0	0.03								
+junctions	ps_GCF_059622765	selfcal54	GCF_059622765	yes	974	0	0.04								
+junctions	ps_GCF_059622825	selfcal54	GCF_059622825	yes	449	0	0.02								
+junctions	ps_GCF_059717755	selfcal54	GCF_059717755	no	322	0	0.01								
+junctions	ps_GCF_900520315	selfcal54	GCF_900520315	no	37815	1	0.9								
+junctions	ps_GCF_902459825	selfcal54	GCF_902459825	no	19735	0	0.47								
+junctions	mar_N0004_all	fbremove	GCF_022870385	yes	33264	3	1.3								
+junctions	mar_N0054_all	fbremove	GCF_022870345	yes	89048	2	3.48								
+junctions	mar_N0145_all	fbremove	GCF_030323745	yes	56291	2	2.21								
+junctions	mar_N0155_all	fbremove	GCF_030323785	yes	25245	1	0.99								
+junctions	mar_N1176_all	fbremove	GCF_022870265	yes	201304	5	7.87								
+junctions	mar_N1202_all	fbremove	GCF_022870165	no	71447	2	1.71								
+junctions	mar_N1272_all	fbremove	GCF_022870245	yes	58438	3	2.29								
+junctions	mar_N1274_all	fbremove	GCF_022870365	yes	95157	2	3.71								
+junctions	mar_RW_TB008_all	fbremove	GCF_012923765	yes	33035	6	1.3								
+genotype_fbremove	mar_N0004		GCF_022870385	yes				85.8	83.8	90.6	88.7	0.947	0.945	present	present
+genotype_fbremove	mar_N0054		GCF_022870345	yes				85.3	83.0	102.3	98.0	0.834	0.847	present	present
+genotype_fbremove	mar_N0145		GCF_030323745	yes				70.3	70.3	96.6	94.8	0.728	0.741	present	present
+genotype_fbremove	mar_N0155		GCF_030323785	yes				103.6	103.6	110.5	109.4	0.937	0.947	present	present
+genotype_fbremove	mar_N1176		GCF_022870265	yes				66.3	61.3	91.5	83.7	0.725	0.732	present	present
+genotype_fbremove	mar_N1272		GCF_022870245	yes				69.5	68.8	84.9	81.4	0.819	0.845	present	present
+genotype_fbremove	mar_N1274		GCF_022870365	yes				70.2	69.2	86.7	85.5	0.81	0.809	present	present
+genotype_fbremove	mar_RW_TB008		GCF_012923765	yes				66.3	65.0	96.0	92.7	0.691	0.701	present	present
+genotype_fbrecall	mar_N0004		GCF_977011305	yes				85.8	83.8	90.6	88.7	0.947	0.945	present	present
+genotype_fbrecall	mar_N0054		GCF_009730235	yes				85.3	83.0	102.3	98.0	0.834	0.847	present	present
+genotype_fbrecall	mar_N0145		GCF_059622725	yes				70.3	70.3	96.6	94.8	0.728	0.741	present	present
+genotype_fbrecall	mar_N0155		GCF_059622725	yes				103.6	103.6	110.5	109.4	0.937	0.947	present	present
+genotype_fbrecall	mar_N1176		GCF_045348065	yes				66.3	61.3	91.5	83.7	0.725	0.732	present	present
+genotype_fbrecall	mar_N1272		GCF_965122045	yes				69.5	68.8	84.9	81.4	0.819	0.845	present	present
+genotype_fbrecall	mar_N1274		GCF_977011385	yes				70.2	69.2	86.7	85.5	0.81	0.809	present	present

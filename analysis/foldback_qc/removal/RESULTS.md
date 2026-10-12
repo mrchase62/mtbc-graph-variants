@@ -161,3 +161,26 @@ already skips flagged reads.
      depth, which is a sample-quality signal in itself (N0004: 100x
      nominal, about 57x distinct). It is worth adding to the selfcal54 QC
      table.
+
+## Element check: does fold-back removal touch the tatC-helY element? (2026-10-12)
+`element_check.py` (report only, existing outputs). Output: `out/element_check.tsv`.
+
+1. **Fold-back junctions at the element (+-50 bp), full-read scans.** 47
+   samples (38 selfcal54 on their own genome, 9 chimeric controls); 34 have
+   the element in the reference. 32 fold-back reads have a junction at the
+   element against 32.1 expected by chance from each sample's genome-wide
+   fold-back count; 14 samples have any (1-6 reads). The palindrome is not a
+   fold-back hotspot, and the scan does not single out reads through it.
+2. **Genotype before and after removing every fold-back pair** (9 chimeric
+   controls; 8 with the element in the own genome, 7 in the part D
+   reference). Depth inside the element changes by 0-5 reads of 66-104, in
+   proportion to the flanks (N1176: inside 66.3 -> 61.3, flanks 91.5 ->
+   83.7). The inside/flank ratio moves by at most 0.03 (0.69-0.95 before,
+   0.70-0.95 after); every genotype stays present. The two references give
+   identical depths because the sequence around the element is the same in
+   both.
+
+**Conclusion:** fold-back removal does not remove the element's evidence and
+does not change its genotype. Not tested: the 68 bp DEL artifact calls at
+the site before and after removal, and real inversions (none in the truth
+sets).
