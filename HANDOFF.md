@@ -114,12 +114,14 @@ Raised by the user 2026-10-12 ("I don't know if this is worth it").
   tatC-helY element's evidence and genotype unchanged; fold-back junctions
   at the element are at chance level (`removal/element_check.py`,
   `removal/RESULTS.md`).
-- **Check 2, not run:** part D on the 12 excluded selfcal isolates with
-  fold-backs removed (~10 billing-hours; needs cost approval). If they reach
-  kept-group precision, the filter could replace most of the exclusion
-  (old <= 2.5), which drops 22-28% of production isolates, unevenly by
-  lineage. It runs against the standing "exclude over rescue" preference;
-  the user decides.
+- **Check 2, done (cohort fbrecallx100, `recall/RESULTS.md`):** with our
+  caller's 0.1 floor and the HC hand-off, the 12 excluded isolates go from
+  0.863 / 0.664 to 0.843 / 0.742 (recall / precision) with fold-backs
+  removed, against kept 0.885 / 0.785. 1 of 51 events lost (an IS6110
+  insertion retyped as INV; IS6110 ends are inverted repeats, untested).
+  The user decides: keep the exclusion (old <= 2.5, drops 22-28% of
+  production isolates) or replace most of it with read removal. It runs
+  against the standing "exclude over rescue" preference.
 - Wiring our caller into P2/P4b (user asked 2026-10-12) is paused at the
   reading stage. A filter, if adopted, would sit in P2 before the SV callers.
 

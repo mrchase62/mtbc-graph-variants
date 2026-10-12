@@ -143,3 +143,40 @@ Our caller alone at 0.2: kept 0.797 / 0.557 -> 0.742 / 0.595; excluded
 **Adopted (user, 2026-10-12).** The 0.1 floor, keeping events without an AF,
 is now `assemble_candidates.py --min-af 0.1` (function `af_floor`; default 0
 = off). It reproduces `out/asm_af/keep_na_0.1/` exactly on all 57 read sets.
+
+## Excluded-isolates check: remove fold-back reads instead of excluding? (2026-10-12)
+`make_excl100.py`, `04_excl_sets.sbatch`, `05_post_excl.sbatch`,
+`excl_analyse.py`. Report: `out/excl_report.txt`; table `out/excl_by_group.tsv`.
+
+Cohort fbrecallx100: the 12 excluded selfcal54 isolates (v2 > 4.9) with
+every fold-back pair removed (7,229-34,166 pairs), each on its part D
+reference, scored against the same truth. No random-removal depth control.
+
+Fair comparison (HC hand-off on, kept without GCF_035581225), combined
+caller, typed recall / strict precision:
+
+| group | no floor | our caller AF >= 0.1 |
+|---|---|---|
+| kept (26) | 0.885 / 0.743 | 0.885 / 0.785 |
+| excluded, all reads (12) | 0.863 / 0.362 | 0.863 / 0.664 |
+| excluded, fold-backs removed (12) | 0.843 / 0.427 | 0.843 / 0.742 |
+
+False calls per isolate at floor 0.1: kept 1.6, excluded 3.0, excluded with
+fold-backs removed 2.1. Part D scoring (no hand-off, kept with
+GCF_035581225) gives the same picture: 0.617 -> 0.692 against kept 0.585.
+
+- **With the 0.1 floor, removal closes most of the gap**: precision 0.66 ->
+  0.74 against 0.79 in the kept group.
+- **Without the floor, removal alone helps little** (0.36 -> 0.43). In
+  these moderate libraries most fold-back false calls are low-AF calls of
+  our caller, which the floor already removes.
+- **Recall: 1 of 51 events lost** (0.863 -> 0.843). In GCF_902459825 an
+  IS6110-sized insertion (1,358 bp at 2,248,575) was matched with all reads
+  only by a 61 bp INS call; with fold-backs removed the breakpoint is still
+  called (BND) but typed as an INV. IS6110 ends are inverted repeats, so
+  reads at insertion junctions may be labelled fold-back; not tested.
+- dysgu's recall in these isolates is low with or without removal
+  (0.55-0.57 against 0.82 kept).
+- Per isolate the gain is uneven: GCF_019670745 0.67 -> 1.0, GCF_900520315
+  0.63 -> 0.71, most others within 0.05.
+- Small: 51 events in 12 isolates, 6 of them from one 2x300 study.

@@ -1,0 +1,42 @@
+floor	group	isolates	caller	n_true	typed_recall	typed_calls	precision	precision_lenient
+0	kept	27	proto_asm	182	0.797	271	0.557	0.598
+0	kept	27	dysgu_af20	182	0.687	225	0.578	0.662
+0	kept	27	proto_asm+dysgu_af20	182	0.841	496	0.567	0.627
+0	excluded	12	proto_asm	51	0.784	150	0.28	0.293
+0	excluded	12	dysgu_af20	51	0.569	57	0.526	0.526
+0	excluded	12	proto_asm+dysgu_af20	51	0.863	207	0.348	0.357
+0	excluded_fb100	12	proto_asm	51	0.804	129	0.341	0.357
+0	excluded_fb100	12	dysgu_af20	51	0.549	49	0.592	0.592
+0	excluded_fb100	12	proto_asm+dysgu_af20	51	0.843	178	0.41	0.421
+0.1	kept	27	proto_asm	182	0.78	250	0.592	0.632
+0.1	kept	27	dysgu_af20	182	0.687	225	0.578	0.662
+0.1	kept	27	proto_asm+dysgu_af20	182	0.841	475	0.585	0.646
+0.1	excluded	12	proto_asm	51	0.784	58	0.707	0.724
+0.1	excluded	12	dysgu_af20	51	0.569	57	0.526	0.526
+0.1	excluded	12	proto_asm+dysgu_af20	51	0.863	115	0.617	0.626
+0.1	excluded_fb100	12	proto_asm	51	0.804	55	0.782	0.8
+0.1	excluded_fb100	12	dysgu_af20	51	0.549	49	0.592	0.592
+0.1	excluded_fb100	12	proto_asm+dysgu_af20	51	0.843	104	0.692	0.702
+
+Isolate by isolate, combined caller, floor 0.1 (all reads -> fold-back pairs removed)
+isolate	v2_rate	callable_true	recall_all	recall_fb100	calls_all	calls_fb100	prec_all	prec_fb100
+ps_GCF_019670745	7.4	9	1.0	1.0	18	11	0.667	1.0
+ps_GCF_026727615	5.8	None	None	None	None	None	None	None
+ps_GCF_028768425	5.6	2	0.5	0.5	3	3	0.667	0.667
+ps_GCF_037076285	20.1	1	1.0	1.0	4	5	0.5	0.4
+ps_GCF_037076295	25.4	None	None	None	None	None	None	None
+ps_GCF_037076305	28.5	1	1.0	1.0	4	3	0.5	0.667
+ps_GCF_037076315	24.8	3	1.0	1.0	8	9	0.875	0.889
+ps_GCF_037076325	28.1	4	1.0	1.0	9	10	0.778	0.8
+ps_GCF_037076335	11.1	10	0.9	0.9	20	21	0.75	0.762
+ps_GCF_042982005	8.2	None	None	None	None	None	None	None
+ps_GCF_900520315	12.5	9	0.667	0.667	16	14	0.625	0.714
+ps_GCF_902459825	10.7	12	0.833	0.75	15	14	0.933	0.929
+
+With HC hand-off, kept without GCF_035581225 (combined / ours / dysgu AF>=0.2: recall/calls/precision)
+floor 0	kept_noGCF035581225	26	0.885/202/0.743	0.885/109/0.716	0.816/93/0.774
+floor 0	excluded	12	0.863/199/0.362	0.784/145/0.29	0.569/54/0.556
+floor 0	excluded_fb100	12	0.843/171/0.427	0.804/125/0.352	0.549/46/0.63
+floor 0.1	kept_noGCF035581225	26	0.885/191/0.785	0.885/98/0.796	0.816/93/0.774
+floor 0.1	excluded	12	0.863/107/0.664	0.784/53/0.774	0.569/54/0.556
+floor 0.1	excluded_fb100	12	0.843/97/0.742	0.804/51/0.843	0.549/46/0.63

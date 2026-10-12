@@ -2391,3 +2391,8 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - Explainer (artifact 6mTMff14Ts66rLgU8maQdu, version 6): new step 7 "How
   samples are screened": flow diagram, pseudocode of the per-read labels,
   rate and decision, cut-off derivation, status table.
+- Result (jobs all COMPLETED): fair comparison, floor 0.1 + HC hand-off:
+  kept 0.885 / 0.785; excluded 0.863 / 0.664; excluded with fold-backs
+  removed 0.843 / 0.742. Without the floor removal helps little (0.36 ->
+  0.43). One event lost: an IS6110 insertion in GCF_902459825 retyped as
+  INV (breakpoint still found). Details in `recall/RESULTS.md`.
