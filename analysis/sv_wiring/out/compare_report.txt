@@ -1,0 +1,14 @@
+1. Reproduction of the evaluation outputs
+  caller tables identical: 48 of 48; events after assembly and AF floor: 48 of 48
+  mask GCF_002357935 built in P2: identical
+  mask GCF_002357955 built in P2: identical
+  tatC-helY genotypes: {'ref_lacks': 17, 'present': 28, 'unresolved': 2, 'absent': 1}
+
+2. P4b rows (called, PASS) scored, against the evaluation's combined caller with the same rules
+group	set	typed_recall	typed_calls	precision_strict	precision_lenient
+kept, without GCF_035581225 (26)	evaluation	0.885	179	0.838	0.872
+kept, without GCF_035581225 (26)	P4b	0.885	117	0.761	0.812
+excluded (12)	evaluation	0.863	98	0.724	0.735
+excluded (12)	P4b	0.863	72	0.625	0.639
+chimeric controls (9)	evaluation	0.859	2112	0.053	0.057
+chimeric controls (9)	P4b	0.859	2015	0.036	0.04

@@ -2410,3 +2410,4 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - P2 `_ours` step (mask per reference, caller v6, assembly with --min-af 0.1, element genotype; done samples run only this on the kept BAM). P4b reads ours + dysgu AF >= 0.2 + rules + `callable` column. P5 handles unsized INS, uncalibrated band, drops REARR.
 - Tests: new tests/test_ours_wiring.py; older P2/P4b tests updated; full suite passes.
 - Graph redo (homopolymer tracts) and cohort reselection from ~50K recorded as next in HANDOFF.
+- User: "yes, run the real-data check". Job 52446924 (23 min, 8 cores) on fbrecall: P2's new step reproduced caller and event tables 48/48 and both rebuilt masks; P4b recall unchanged (kept 0.885), false calls unchanged (28 vs 29); per-event precision 0.76 (merging removes double-counted true events). `analysis/sv_wiring/RESULTS.md`.

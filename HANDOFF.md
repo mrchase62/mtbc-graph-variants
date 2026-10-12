@@ -164,8 +164,12 @@ graph and cohort, so item 2's rebalancing applies to the new selection.
    - The caller code stays in `analysis/novel_events` (P2 finds it through
      the bin link); moving it to bin/ would touch ~20 analysis scripts.
    - Tests: `tests/test_ours_wiring.py`; old P4b/P2 tests updated; all pass.
-   - Next: P2 (our caller only) + P4b on cohort fbrecall, compare with
-     `recall/out/asm_af/keep_na_0.1` and score the P4b rows.
+   - **Real-data check passed** (`analysis/sv_wiring/RESULTS.md`): on
+     fbrecall (48), P2 reproduces the evaluation's caller and event tables
+     exactly (48/48) and builds identical masks; P4b rows keep recall
+     (kept 0.885) and the same false calls (28 vs 29). Per-event strict
+     precision is 0.76 (kept): earlier combined figures counted events
+     found by both callers twice. P5 on real rows not yet run.
 4. **Robust call tier** (agreed: DEL/INS in callable sequence, both
    breakpoints). Not built. Add the clip-only dysgu INS filter.
 5. **Regenerate production data once**, after the above
