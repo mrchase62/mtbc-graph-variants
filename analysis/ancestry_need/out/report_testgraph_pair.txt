@@ -1,0 +1,28 @@
+tree: 333 leaves; ingroup I = MRCA of 289 lineage 1-4,7 genomes; 289 leaves under I
+outside I: 44 genomes: La1 19, La2 2, M.canetti 1, lineage5 8, lineage6 5, lineage8 1, lineage9 1, no_call 7
+records varying inside I: 47,280 (MNP 723, SNP 37,031, SV 3,256, indel 6,270)
+
+records by category and kind
+category	SNP	indel	SV	MNP	all
+ingroup_decides	36,349	6,191	3,214	710	46,464
+outgroup_needed_proposed_agrees	667	78	39	12	796
+outgroup_needed_proposed_differs	5	1	3	1	10
+outgroup_needed_proposed_unresolved	8	0	0	0	8
+tied_even_with_full_panel	2	0	0	0	2
+
+without the two L5/6 genomes (kit only), records where the outgroup is needed and the answer differs from the full panel or is unresolved: 44
+
+loci (genes or intergenic stretches) where the proposed panel differs from or cannot resolve the full panel's ancestral state: 9
+gene	locus_tag	records	kinds	differs	unresolved	dr_gene
+PE_PGRS28	Rv1452c	7	SNP	1	6	
+Rv0094c	Rv0094c	3	SNP	3	0	
+dnaQ-Rv3712	intergenic	2	SV	2	0	
+Rv0095c	Rv0095c	1	SNP	1	0	
+helY-tatC	intergenic	1	SV	1	0	
+Rv2258c-mscR	intergenic	1	SNP	0	1	
+PPE54	Rv3343c	1	SNP	0	1	
+PE_PGRS53	Rv3507	1	indel	1	0	
+PE_PGRS57	Rv3514	1	MNP	1	0	
+
+drug-resistance genes among them: none
+all records in drug-resistance genes varying inside I, by category: ingroup_decides 1107, outgroup_needed_proposed_agrees 7

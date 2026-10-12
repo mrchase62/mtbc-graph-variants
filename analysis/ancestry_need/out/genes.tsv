@@ -1,0 +1,8 @@
+gene	locus_tag	records	kinds	differs	unresolved	dr_gene	first_pos
+PE_PGRS28	Rv1452c	7	SNP	1	6		1636991
+Rv0094c	Rv0094c	3	SNP	3	0		103968
+Rv0095c	Rv0095c	1	SNP	1	0		105045
+PE_PGRS10	Rv0747	1	SV	1	0		839291
+Rv2258c-mscR	intergenic	1	SNP	0	1		2532070
+PE_PGRS53	Rv3507	1	indel	1	0		3928281
+PE_PGRS57	Rv3514	1	MNP	1	0		3948928

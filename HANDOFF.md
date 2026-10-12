@@ -147,8 +147,22 @@ graph and cohort, so item 2's rebalancing applies to the new selection.
   variable G/C loci. Users as matched reference: GCF_039770655 by 14
   gwas1000 and 2 in each scale cohort; GCF_045348265 by 1 gwas1000.
   Decision needed per genome: mask with N, replace or exclude.
-- **Scope decided (user, 2026-10-12): "L1-4 and L7 plus one or two L5/6,
-  as proposed"** (sections 0g, 0i, 0k). Canettii and lineage 8 stay outside
+- **Scope, leading option, not final (user, 2026-10-12): "L1-4 and L7 plus
+  one or two L5/6, as proposed"** (sections 0g, 0i, 0k). Later the same day:
+  "I am still on the fence about removing lineages from the graph that may
+  provide key ancestry for specific loci." Runtime gain being measured
+  (`analysis/graph_tests/odgi_timing.sbatch`).
+- **Ancestry check done** (`analysis/ancestry_need/RESULTS.md`): of 47,280
+  records varying inside L1-4,7, the ingroup decides 98.3% alone; of the
+  816 needing an outside genome, the proposed panel (best L5/6 pair + L8 +
+  canettii kit) matches full CX333 at 799; all 15 others are in masked
+  repeats (PE_PGRS, Rv0094c paralog, Rv2258c tandem); no DR gene affected.
+  **The L5/6 choice matters:** test graph B's pair (GCF_022870225 L5.1,
+  GCF_022870205 L6.3.1) both lack the tatC-helY element and flip its
+  ancestral state to absent; best pairs are an element-carrying L5.1
+  (e.g. GCF_022870265) + L6.1.1 GCF_000253355. A reduced panel needs
+  parsimony over all outgroups (not production's nearest-first tie-break)
+  and OUT-1 for the kit's SV states. Canettii and lineage 8 stay outside
   the graph (the outgroup kit); animal lineages and L9 leave. So of the
   homopolymer genomes GCF_050259585 (La2) and GCF_039770655 (L9) leave with
   their lineages; only GCF_045348265 (L4.6.1.1) still needs mask or replace.
