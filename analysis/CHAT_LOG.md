@@ -2356,3 +2356,13 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
   - keeping them, floor 0.1: kept 0.841 / 0.567 -> 0.841 / 0.585,
     excluded 0.863 / 0.348 -> 0.863 / 0.617, chimeric unchanged (dysgu).
   - Higher floors trade recall for little gain.
+
+## 2026-10-12 — AF floor into the production caller set (user: "add the 0.1 floor to the production caller set")
+- `novel_events/assemble_candidates.py`: new `--min-af` (default 0, off) and
+  `af_floor()`. Drops caller events with support / depth at start < floor;
+  keeps assembly-typed events without a read count.
+- Check: identical to `recall/out/asm_af/keep_na_0.1` on all 57 part D read
+  sets (1,372 events dropped); floor 0 returns input unchanged. Regression
+  tests pass.
+- HANDOFF wrap-up item 3 now lists `--min-af 0.1`. Production P2 still runs
+  dysgu only; wiring our caller in is part of item 3.

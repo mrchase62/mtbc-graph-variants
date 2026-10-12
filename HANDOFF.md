@@ -41,7 +41,10 @@ Details: `analysis/foldback_qc/recall/RESULTS.md`.
   - kept precision 0.567 -> 0.585; excluded 0.348 -> 0.617;
   - chimeric unchanged (their false calls are dysgu's).
   - Dropping events without an AF halves recall.
-  - A candidate for the production caller set (wrap-up item 3).
+  - **Adopted for the production caller set (user, 2026-10-12):**
+    `assemble_candidates.py --min-af 0.1` (default 0 = off, so earlier runs
+    reproduce). Checked: it gives exactly `affloor.py`'s keep_na 0.1 events
+    on all 57 part D read sets (1,372 events dropped).
 
 ### Decided this session (2026-10-11 to 12)
 - **delly dropped from production** (commit 03835c4, user):
@@ -111,8 +114,10 @@ Details: `analysis/foldback_qc/recall/RESULTS.md`.
 2. **Fold-back exclusion:** apply old <= 2.5 and rebalance cohorts (user
    go-ahead needed).
 3. **Production SV caller set.** dysgu AF >= 0.2, our caller v6 + assembly
-   and the Phase B rules (short-anchor, HC hand-off, tatC-helY genotype)
-   are still evaluation-only.
+   (`--bnd-min-frac 0.2 --max-windows 40 --min-af 0.1`) and the Phase B
+   rules (short-anchor, HC hand-off, tatC-helY genotype) are decided but
+   still evaluation-only: production P2 runs dysgu alone, and our caller is
+   not yet wired into P2/P4b.
 4. **Robust call tier** (agreed: DEL/INS in callable sequence, both
    breakpoints). Not built. Add the clip-only dysgu INS filter.
 5. **Regenerate production data once**, after the above

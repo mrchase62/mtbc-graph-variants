@@ -139,3 +139,7 @@ Our caller alone at 0.2: kept 0.797 / 0.557 -> 0.742 / 0.595; excluded
   still protects against hotspot libraries. Whether a floor would justify a
   looser cut-off rests on only 12 excluded isolates (6 from one 2x300
   study), so it is not tested here.
+
+**Adopted (user, 2026-10-12).** The 0.1 floor, keeping events without an AF,
+is now `assemble_candidates.py --min-af 0.1` (function `af_floor`; default 0
+= off). It reproduces `out/asm_af/keep_na_0.1/` exactly on all 57 read sets.

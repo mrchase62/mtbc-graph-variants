@@ -36,6 +36,12 @@ a typed candidate (DEL, INS, INV, REARR) or a one-sided cluster (BND) with
 support of at least --bnd-min-frac of the sample's median depth; at most
 --max-windows are assembled, those with the most support first. The rest keep
 the prototype's calls, noted "not assembled (weak BND)" or "(cap)".
+AF floor (2026-10-12, user; foldback_qc/recall/affloor.py): with --min-af, a
+caller event with read support is kept only if support / reads overlapping
+its start in the P2 BAM is at least --min-af. Assembly-typed events (no read
+count) are always kept; dropping them halved recall. 0.1 is the production
+setting: no combined recall cost in part D, precision in moderate fold-back
+libraries 0.35 -> 0.62. Default 0 (off), as in all runs before 2026-10-12.
 Output: an events table in breakpoint_caller.py's format, for score.py.
 """
 import argparse
@@ -106,6 +112,23 @@ def contig_events(paf, lo, hi):
     return sorted(set(ev), key=lambda e: e[1]), n_guard
 
 
+def af_floor(rows, bam, ctg, min_af):
+    """Drop caller events with support / depth at start < min_af; keep events
+    without a read count (assembly-typed, support empty or 0)."""
+    if not min_af:
+        return rows
+    out = []
+    for r in rows:
+        sup = int(r["support"]) if str(r.get("support", "")).isdigit() else 0
+        if sup:
+            st = int(r["start"])
+            dp = bam.count(ctg, max(0, st - 1), st)
+            if dp and min(1.0, sup / dp) < min_af:
+                continue
+        out.append(r)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--events", required=True, help="prototype events table")
@@ -118,6 +141,8 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--bnd-min-frac", type=float, default=0.0)
     ap.add_argument("--max-windows", type=int, default=0, help="0 = no cap")
+    ap.add_argument("--min-af", type=float, default=0.0,
+                    help="AF floor on caller events with read support; 0 = off (production: 0.1)")
     a = ap.parse_args()
     ev = list(csv.DictReader(open(a.events), delimiter="\t"))
     bam = pysam.AlignmentFile(a.bam)
@@ -209,6 +234,8 @@ def main():
         else:
             note = ";long contig event dropped" if dropped_long else ";not assembled"
             rows += [dict(r, source=r["source"] + note) for r in w["ev"]]
+    n_pre = len(rows)
+    rows = af_floor(rows, bam, ctg, a.min_af)
     cols = ["sample", "type", "start", "end", "size", "support", "left", "right",
             "depth_ratio", "source"]
     with open(a.out, "w") as fo:
@@ -217,7 +244,8 @@ def main():
         w.writerows(rows)
     sk = collections.Counter(w["skip"] for w in wins)
     print(f"{a.sample}: {len(wins)} windows, {sk[None]} assembled, {sk['weak BND']} weak BND, "
-          f"{sk['cap']} over the cap; {n_asm} gave events by assembly", file=sys.stderr)
+          f"{sk['cap']} over the cap; {n_asm} gave events by assembly; "
+          f"AF floor {a.min_af} dropped {n_pre - len(rows)}", file=sys.stderr)
 
 
 if __name__ == "__main__":
