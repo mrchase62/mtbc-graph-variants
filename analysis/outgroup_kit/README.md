@@ -29,3 +29,21 @@ fix1 catalogue:**
 
 **Open:** the accessory catalogue is rebuilt with the new graph, so rerun the
 accessory step then. No unit tests yet.
+
+## PPE38 locus check (2026-10-13, user request)
+
+CDC1551 (GCF_000008585) carries PPE38, two esx genes and PPE71 at
+2,628,768-2,632,079. By tblastn the esx genes are esxN-like (2,630,145-429)
+and esxJ-like (2,630,444-758), presumably esxX/esxY; H37Rv has only PPE38
+there. Each genome's genes were found by blastn of the CDC1551 copies, and
+their flanks were placed on H37Rv with minimap2 (MAPQ 60):
+
+- **ET1291:** carries all four (esx 100%, PPE copies 99.7%). The ~3.3 kb block
+  sits exactly in place of H37Rv PPE38: flanks end at 2,632,922 and resume at
+  2,634,193. Its esxN placed at H37Rv's esxN (2,030,347-2,030,977).
+- **L8:** has none of the four. H37Rv 2,627,050-2,637,333 (plcC, plcB, plcA,
+  PPE38, PPE39) is replaced by one IS6110 copy; this is the kit's REPL row.
+  Its esxN placed at H37Rv's esxN (2,030,347-2,030,977).
+- The kit's alignment is right at all of these. A quick nearest-alignment
+  projection put L8's esxN 13 kb off, because of L8's 3.1 kb deletion at
+  2,025,302. Use flank placement, not `project()`, for exact gene positions.
