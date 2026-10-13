@@ -66,7 +66,21 @@ were not flagged.
 
 GCF_050259585 is no cohort sample's reference.
 
-## Decision needed for the rebuild (user)
+## Decision (user, 2026-10-13): exclude, do not mask
+"Why are we masking? I thought the rebuild was partly to remove assemblies
+with errors." then "yes, record the exclusion".
+- **GCF_045348265 is excluded from the rebuilt panel.** The panel QC
+  (`analysis/strategy/L1_4_PANEL_PROPOSAL.md`, step 2: no single-base run
+  over about 100 bp) drops it. Its gwas1000 isolate (SAMEA112806781) is
+  matched to the nearest remaining genome on rerun.
+- **GCF_050259585 (La2) and GCF_039770655 (L9)** leave with their lineages
+  under the L1-4,7 scope.
+- **GCF_045348245** (L4.6.1.1, same ITM ONT submission) has no run over
+  15 bp; it remains a candidate but passes the same QC first.
+- Masking (the 2026-10-04 proposal) was a patch for the current panel; it is
+  not used.
+
+## Options as first written (superseded by the decision above)
 Per genome:
 - **mask the tract with N,**
 - **replace the assembly** (e.g. reassemble from its reads), or

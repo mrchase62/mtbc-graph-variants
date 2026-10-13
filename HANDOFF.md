@@ -154,7 +154,9 @@ graph and cohort, so item 2's rebalancing applies to the new selection.
   L9 genome). Every other genome's longest pure run is <= 48 bp, at natural
   variable G/C loci. Users as matched reference: GCF_039770655 by 14
   gwas1000 and 2 in each scale cohort; GCF_045348265 by 1 gwas1000.
-  Decision needed per genome: mask with N, replace or exclude.
+  **Decided (user, 2026-10-13): exclude, not mask.** The rebuild's QC
+  (no single-base run over ~100 bp) drops GCF_045348265; the other two leave
+  with their lineages (La2, L9).
 - **Scope, leading option, not final (user, 2026-10-12): "L1-4 and L7 plus
   one or two L5/6, as proposed"** (sections 0g, 0i, 0k). Later the same day:
   "I am still on the fence about removing lineages from the graph that may
@@ -182,7 +184,9 @@ graph and cohort, so item 2's rebalancing applies to the new selection.
   and OUT-1 for the kit's SV states. Canettii and lineage 8 stay outside
   the graph (the outgroup kit); animal lineages and L9 leave. So of the
   homopolymer genomes GCF_050259585 (La2) and GCF_039770655 (L9) leave with
-  their lineages; only GCF_045348265 (L4.6.1.1) still needs mask or replace.
+  their lineages; GCF_045348265 (L4.6.1.1) is excluded (user, 2026-10-13).
+  Its neighbour GCF_045348245 (L4.6.1.1, same ITM ONT submission, no run
+  over 15 bp) stays a candidate but must pass the same QC.
   The 14 gwas1000 isolates matched to the L9 genome become non-target
   isolates. How the tree and SVs use the outgroup without canettii in the
   graph: `analysis/strategy/OUTGROUP_AND_SV_POLARITY.md`.
