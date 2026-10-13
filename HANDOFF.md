@@ -154,7 +154,8 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
   H37Rv frame at 659/663 cells, resolves 48/56 NOCALLs); for insertions it
   helps only outside the mask and outside tandem repeats; VNTR copy number
   is beyond it. Inside the mask the two frames conflict (~1,900 cells),
-  unadjudicated. No production change yet.
+  unadjudicated. No production change yet. **Fix plan: ABS-2 in the fix
+  list below.**
 
 ### Coming next (user, 2026-10-12)
 "We need to redo the graph because of homopolymeric tracts in some of the
@@ -416,6 +417,122 @@ What to change:
      lineage call.
 5. **Tests:** the ctpV cases and the 120 calibration regions as regression
    tests. Then rerun P5 onward for scale200_fix; P1 to P4 stay valid.
+
+**ABS-2: absorbed (inherited) SVs are reported without, or with only one,
+read check** (added 2026-10-13, user: "Make sure the details on the absorbed
+SV are detailed so once we start working of the pipeline we address and
+fix."). Companion to ABS-1, which covers small-variant ABSENT states; this
+covers the SV block.
+
+- **Evidence:** `analysis/inherited_matched_check/RESULTS.md` (scripts
+  `check.py`, `score_truth.py`, `compare_h37rv.py`; scale200_fix job
+  52598492; truth7 scored against finished assemblies).
+- **Terms.** An *absorbed* or *inherited* SV is a difference between the
+  sample's matched reference R and H37Rv. The sample's reads are aligned to
+  R, so if the sample shares it no caller sees it.
+
+**How the pipeline handles them today:**
+1. `bin/p4b_place_sv.py`, "the inherited half":
+   - every R-carried graph VCF record of 50 bp or more becomes a row with
+     `component=inherited`, `FILTER=INHERITED`;
+   - it is skipped if any called SV lies within 200 bp (any type, any
+     size);
+   - the caller rules (dysgu AF >= 0.2, HC hand-off, tatC-helY rule,
+     callable mask) run on called rows only;
+   - `callable` is blank for these rows.
+2. `bin/p5_sv_matrix.py` keeps them (`--keep-filter PASS,INHERITED`):
+   - inherited-only clusters get `qual_band=composed` and an assumed PPV of
+     0.631;
+   - the comment near "Break the FILTER exclusion down" still says they are
+     excluded by default PASS. It is stale; fix it.
+3. **Deletions** are re-genotyped in every sample (`bin/p5_svgt.sh` interval
+   mode, `bin/p5_sv_genotype.py` `inherited_call`):
+   - ALT only when the H37Rv-frame two-frame table
+     (`runroot/sv2frame/bin/sv_twoframe.py`) confirms it;
+   - REF when H37Rv-frame depth covers the interval without clips;
+   - otherwise NOCALL.
+   - scale200_fix: 5,049 ALT confirmed, 3,119 REF contradicted, 4,479
+     NOCALL.
+   - The matched frame contributes only "probes do not project and the
+     flanks are covered", an inference. R's junction is never read.
+     `sv_twoframe.py`'s header lists a "clips, matched" channel, but only
+     H37Rv-frame clips are computed (`h_clip_*`; `m_state` is copied from
+     svgt_iv).
+4. **Insertions are never checked:**
+   - the interval catalogue (`bin/sv_intervals.py`) is deletions only;
+   - `bin/merge_cohort_vcf.py` writes insertions from the caller matrix,
+     presence-only (`COMPONENT=inherited`).
+   - So every absorbed insertion is reported present in every sample matched
+     to that R.
+
+**What the check measured:**
+- **Deletions, matched-frame junction test** (spanning vs clipped/indel
+  reads at R's junction, MAPQ >= 20):
+  - truth7 "carries" 181/191 right (0.95), against 0.87 unchecked; outside
+    the repeat mask 27/27;
+  - "lacks" right 10/13;
+  - scale200_fix, outside the mask: agrees with the H37Rv frame at 659/663
+    decided cells, and decides 48 of 56 NOCALLs.
+  - **Inside the mask the frames conflict:** 903 matched "carries" vs
+    H37Rv REF, 948 vs NOCALL, 25 "lacks" vs ALT. Not adjudicated (truth7
+    has no H37Rv-frame states).
+- **Insertions, matched-frame depth across Y + clean junctions:**
+  - outside the mask and not tandem: "carries" 24/26 right vs 36/43
+    unchecked, but more than half end unclear/repeat;
+  - tandem repeats (VNTRs, e.g. MIRU40 802,427, 1,955,581, 3,820,390):
+    undecidable. Short reads look the same whether or not the isolate has
+    R's extra unit;
+  - inside the mask: weak (0.55);
+  - no truly absent insertion was ever called "lacks";
+  - **the INS rules were tuned on truth7 after a first look,** so these
+    figures are not blind.
+- **scale200_fix inherited INS:** 1,827 unmasked non-tandem, 1,074 tandem,
+  5,812 masked.
+
+**What to change** (proposed; the user decides the details at the time):
+1. **P5, inherited DEL, second confirmation:**
+   - add the matched-frame junction test (R junction from the graph VCF
+     allele aligned to R's FASTA, as `check.py` `place()`; or from the
+     odgi projection with the frame conversion P3 uses) to
+     `p5_sv_genotype.py`;
+   - rule: both frames agree -> that state; one decides and the other is
+     NOCALL -> that state with its evidence; they conflict -> NOCALL
+     "frames_conflict".
+   - Outside the mask this is validated. Inside the mask, adjudicate first
+     (step 5).
+2. **P5, inherited INS, a genotype instead of presence-only:**
+   - an insertion catalogue of inherited insertions in R coordinates;
+   - genotype each sample by depth across Y (MAPQ >= 20 and MAPQ 0) and
+     clean junctions;
+   - "carries" -> ALT confirmed; "lacks" -> REF; anything else -> NOCALL
+     with a reason (tandem, masked, repeat, low depth, unclear);
+   - `merge_cohort_vcf.py` then writes these states, not the caller
+     matrix's presence-only rows, for inherited insertions.
+   - **Expect many inherited insertions to move from present to NOCALL.**
+     Check the association survivors and the DR controls after.
+3. **Tandem/VNTR insertions and deletions:**
+   - flag by sequence (>= 50% of the changed sequence's 20-mers within
+     300 bp either side, as `check.py`);
+   - report NOCALL "tandem" until a repeat-length genotyper is chosen
+     (parked; established tools only).
+4. **P4b details:**
+   - the 200 bp suppression ignores type and size; restrict it to the same
+     type within 50% in size;
+   - give inherited rows a `callable`/masked value from R's or H37Rv's mask
+     so P5 can route masked events to NOCALL "masked" (as ABS-1 does for
+     small variants).
+5. **Validation before the rerun:**
+   - run the current P5 SV genotyping (with two-frame) on truth7, so both
+     frames can be scored inside the mask;
+   - more finished assemblies with reads would make "lacks" testable
+     (truth7's seven isolates are all close to their R).
+   - Regression tests: a VNTR insertion (MIRU40), a GC-rich PE_PGRS insert
+     carried with near-zero depth (150,890 in SAMD00089643), and an
+     unmasked deletion each frame agrees on.
+6. **Keep one graph VCF per run.** truth7's P4b rows came from an older
+   graph VCF whose records sit a few bp from the current one's (and whose
+   svlen differs by 1 at some). P4b and P5 must read the same build's
+   `graph_collapsed.vcf.gz`, recorded in provenance.
 
 **NAME-1: rename the pipeline's `refbias/` working folders** (added
 2026-10-08). The user: "refbias doesn't make sense". The name dates from the
