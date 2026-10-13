@@ -41,3 +41,18 @@ new alignment. Lineages weighted equally. Job 52760614, 8 min at 8 cores.
 - Gaps (most isolates > 300 at any size): L1.1.3 (88%), L4.1 / 4.1.4 /
   4.3 / 4.3.1 / 4.4 / 4.6.x (90-100%), L4.5 (74%), L1.2.2 (53%),
   L1.1.2 (44%). These need sequencing.
+
+## The P200 panel (user, 2026-10-13: "yes, build the graph with the top 200")
+
+- The 36 GenBank genomes in the top 200 had only the GenBank scan's flags, so
+  they got the CX333 screens they had skipped (`gb_qc/run.sbatch`, job
+  52765567): dnaA rotation (all OK), collinearity, provenance (IS6110
+  profile; NCBI technology not queried), foreign DNA (UniVec + recheck).
+- Excluded: GCA_965140905 (5.09 Mb, ref_covered 1.17: ~670 kb duplicated)
+  and GCA_061389265 (27% of large-block bases inverted, a 1.2 Mb inversion).
+  All others pass (provenance ok, no FOREIGN/VECTOR inserts).
+- Greedy rerun without them added GCA_061381405 (screened in `gb_qc2/`,
+  passes) and GCF_014900275. Pool median 146, 12.0% over 300.
+- Panel: `panel_P200.tsv` (CX333 127+1, Marin 37, GenBank 35; forced H37Rv,
+  GCF_022870265, GCF_000253355, 3 L7). FASTA `runroot/panel/P200/data/fastas/mtb.p200.fasta.gz`
+  (200 paths, 882.9 Mb).

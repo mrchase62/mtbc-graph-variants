@@ -1,0 +1,2 @@
+accession	assembly_method	sequencing_tech	tech_class	is6110_total	is6110_ref_kept	is6110_novel	identical_profile_ref	inserted_bp	deleted_bp	insertions_ge50	tech_from_sequence	flag	review
+GCA_061381405			unknown	10	1	9	no	23104	73591	29	long_read_like	ok	unknown_technology

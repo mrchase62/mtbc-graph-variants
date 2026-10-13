@@ -1,0 +1,14 @@
+accession	ref_pos	insert_len	source	best_homologue_bp	best_homologue_genome	n_homologue_genomes	frac	verdict	recheck_best_bp	recheck_n_genomes	is6110_bp	univec_strong_bp	univec_hit	final_verdict
+GCA_061381405	3943350	5656	gap	5656	GCF_014900055	68	1.0	native				0		native
+GCA_061381405	2268721	5000	indel	5000	GCF_965122045	66	1.0	native				0		native
+GCA_061381405	2634133	4306	gap	4306	GCF_963993145	68	1.0	native				0		native
+GCA_061381405	1480948	3032	indel	3032	GCF_029867065	63	1.0	native				0		native
+GCA_061381405	334641	2945	indel	2945	GCF_965122915	67	1.0	native				0		native
+GCA_061381405	3710381	1875	gap	1875	GCF_965122915	61	1.0	native				0		native
+GCA_061381405	2582457	1359	indel	0		0	0.0	FOREIGN	1358	43	1355	0		native_is6110
+GCA_061381405	483580	1358	indel	0		0	0.0	FOREIGN	1357	47	1355	0		native_is6110
+GCA_061381405	932201	1358	indel	0		0	0.0	FOREIGN	1358	41	1355	0		native_is6110
+GCA_061381405	2180823	1358	indel	0		0	0.0	FOREIGN	1358	43	1356	0		native_is6110
+GCA_061381405	3480370	1358	indel	0		0	0.0	FOREIGN	1358	41	1355	0		native_is6110
+GCA_061381405	2456838	1357	indel	0		0	0.0	FOREIGN	1357	44	1355	0		native_is6110
+GCA_061381405	3935411	1352	gap	1352	GCF_039770655	55	1.0	native				0		native

@@ -34,3 +34,7 @@ test_runs/
 # Production run directory: code from this repo, data linked from the working tree
 runroot/
 analysis/panel_select/lowdepth/
+analysis/panel_select/gb_qc*/rotated*/
+analysis/panel_select/gb_qc*/work_foreign/
+analysis/panel_select/gb_qc*/slurm/
+analysis/panel_select/gb_qc*/logs/
