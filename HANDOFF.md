@@ -147,8 +147,12 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
 - **Build cost approved (user, 2026-10-13: "approve all three steps now"):**
   panel QC and selection ~20 billing-hours; graph build up to ~1,500
   CPU-hours (pggb; expect ~1,200); validation reruns scale200 then the new
-  1K cohort ~350+ billing-hours. Each starts when its inputs are ready. Not
-  covered: P1 on the new 1K cohort (waits on the copy/download decision).
+  1K cohort ~350+ billing-hours. Each starts when its inputs are ready.
+  **P1 on the new 1K cohort approved too** (user, 2026-10-13: "approve P1
+  for the 1K cohort"): ~350 billing-hours (0.6/isolate at 8 cores x ~0.6 at
+  4 cores), H37Rv alignment and calls only, no IS6110 stage 1; reads the
+  CRAMs in place, before the ~10-26 purge; reuse gwas1000 P1 where the
+  isolate overlaps.
   Explain each step before running (standing rule).
 
 - **Cohort (decided, user, 2026-10-13): "start with about 1,000"**, then 10K.
