@@ -172,7 +172,12 @@ graph and cohort, so item 2's rebalancing applies to the new selection.
   **The L5/6 choice matters:** test graph B's pair (GCF_022870225 L5.1,
   GCF_022870205 L6.3.1) both lack the tatC-helY element and flip its
   ancestral state to absent; best pairs are an element-carrying L5.1
-  (e.g. GCF_022870265) + L6.1.1 GCF_000253355. A reduced panel needs
+  (e.g. GCF_022870265) + L6.1.1 GCF_000253355. **Decided (user,
+  2026-10-13): "use the element-carrying L5.1 genome plus GCF_000253355"
+  -> GCF_022870265 (L5.1.1, Marin set A N1176, public reads) +
+  GCF_000253355 (L6.1.1, M. africanum GM041182).** The other two
+  element-carrying L5.1 (GCF_022870245, GCF_045348065) tie on the check
+  (15 differ/unresolved, element present). A reduced panel needs
   parsimony over all outgroups (not production's nearest-first tie-break)
   and OUT-1 for the kit's SV states. Canettii and lineage 8 stay outside
   the graph (the outgroup kit); animal lineages and L9 leave. So of the

@@ -126,7 +126,10 @@ is right by definition. For a deletion of sequence that canettii and L5/6
 also lack, the pseudo-isolate would supply the state.
 
 ## 5. Open points to settle before the rebuild
-- **Which lineage 5/6 genome(s) go in the graph.** The proposal says one or
+- **Which lineage 5/6 genome(s) go in the graph.** Decided 2026-10-13
+  (user): GCF_022870265 (L5.1.1, carries the tatC-helY element) +
+  GCF_000253355 (L6.1.1), the best pair in `analysis/ancestry_need/`.
+  Earlier text: the proposal says one or
   two clean ones. L5 has 8 in CX333 and L6 has 5.
 - **Build OUT-1 on CX333 now,** or with the new graph.
 - **Extend `panel_polarity.py` to an ordered outgroup list,** and move the
