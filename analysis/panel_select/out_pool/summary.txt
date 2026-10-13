@@ -1,0 +1,82 @@
+VALIDATION on new1k (1000 with Mutect2 calls): same nearest genome as P1-based 99.3% (CX333) / 99.2% (pool); Mutect2's pick is within 10 SNPs of the P1-best for 99.9% (median excess 0); r = 1.000, medians 1101 vs 1114
+pool isolates: 33364; with Mutect2 calls: 33364
+lineages: lineage1 2215, lineage2 9598, lineage3 3827, lineage4 17724 (equal weight per lineage)
+
+CROSS-VALIDATED (select on one half, score on the other; unweighted stats)
+select	score	size	median	p90	over150	over300
+half0	half1	50	175	346	58.7%	17.0%
+half0	half1	100	155	317	51.7%	12.4%
+half0	half1	150	147	315	48.7%	12.0%
+half0	half1	175	146	314	48.3%	11.9%
+half0	half1	200	145	314	48.2%	11.9%
+half0	half1	250	145	314	48.0%	11.9%
+half0	half1	300	145	314	48.0%	11.9%
+half0	half1	350	145	314	48.0%	11.9%
+half0	half1	400	145	314	47.9%	11.9%
+half0	half1	CX333 now (289)	150	324	49.9%	13.1%
+half1	half0	50	176	348	59.6%	17.3%
+half1	half0	100	156	318	51.9%	12.7%
+half1	half0	150	149	315	49.3%	12.1%
+half1	half0	175	148	314	49.0%	12.0%
+half1	half0	200	147	314	48.9%	11.9%
+half1	half0	250	147	314	48.8%	11.9%
+half1	half0	300	147	314	48.7%	11.9%
+half1	half0	350	147	314	48.7%	11.9%
+half1	half0	400	147	313	48.7%	11.9%
+half1	half0	CX333 now (289)	152	325	50.7%	13.2%
+
+ALL POOL ISOLATES: last rank that lowers any isolate's distance: 293
+size	median	p90	over150	over300	cx333	marin	genbank
+50	175	348	59.2%	17.2%	33	8	9
+100	154	317	51.4%	12.4%	66	15	19
+150	148	314	48.9%	12.0%	96	27	27
+175	147	314	48.6%	11.9%	108	33	34
+200	146	314	48.5%	11.9%	127	37	36
+250	145.5	314	48.3%	11.9%	162	44	44
+300	145	314	48.3%	11.9%	192	59	49
+350	145	314	48.3%	11.9%	242	59	49
+400	145	314	48.3%	11.9%	266	85	49
+CX333 now (289)	151	324	50.3%	13.2%
+
+BY SUBLINEAGE: isolates, median distance, share over 300
+sublineage	isolates	now_median	now_over300	k175_median	k175_over300	k250_median	k250_over300
+lineage1.1.1	170	213.5	31%	218.5	32%	214.5	32%
+lineage1.1.2	802	387.5	63%	285	44%	285	44%
+lineage1.1.3	236	443	88%	443	88%	443	88%
+lineage1.2.1	484	126	3%	126.5	3%	126	3%
+lineage1.2.2	521	340	57%	319	53%	319	53%
+lineage2.1	45	241	0%	216	0%	216	0%
+lineage2.2.1	9306	49	0%	44	0%	43	0%
+lineage2.2.2	247	298	47%	280	25%	280	25%
+lineage3	2867	280	31%	278	30%	278	30%
+lineage3.1.1	260	69.5	0%	70	0%	69.5	0%
+lineage3.1.2	611	243	0%	232	0%	232	0%
+lineage3.1.3	89	159	1%	158	1%	158	1%
+lineage4	444	220	35%	220	35%	220	35%
+lineage4.1	123	490	100%	476	100%	476	100%
+lineage4.1.1	1024	209	28%	194	24%	194	24%
+lineage4.1.2	4420	137	4%	132	3%	131	3%
+lineage4.1.3	61	518	100%	32	0%	32	0%
+lineage4.1.4	89	523	100%	512	100%	512	100%
+lineage4.2.1	1088	132	3%	128.5	3%	128.5	3%
+lineage4.2.2	510	135.5	35%	126.5	29%	126.5	29%
+lineage4.3	141	374	98%	331	88%	331	88%
+lineage4.3.1	57	382	100%	338	100%	338	100%
+lineage4.3.2	713	171	0%	171	0%	171	0%
+lineage4.3.3	2840	83	1%	83	1%	82	1%
+lineage4.3.4	1175	204	0%	184	0%	184	0%
+lineage4.4	42	336	90%	336	90%	336	90%
+lineage4.4.1	803	186	0%	207	0%	207	0%
+lineage4.4.2	70	254	0%	263	0%	254	0%
+lineage4.5	418	316	76%	316	74%	315	73%
+lineage4.6	58	456	100%	463.5	95%	463.5	95%
+lineage4.6.1	112	168	0%	187.5	29%	187.5	29%
+lineage4.6.2	220	124.5	5%	122.5	5%	122.5	5%
+lineage4.6.3	22	477	100%	466	100%	466	100%
+lineage4.6.4	23	475	100%	495	100%	495	100%
+lineage4.6.5	54	500	100%	423	100%	423	100%
+lineage4.7	437	216	20%	216	20%	216	20%
+lineage4.8	2559	236	13%	223	12%	223	12%
+lineage4.8.1	27	246	0%	248	0%	248	0%
+lineage4.8.2	37	132	0%	142	0%	142	0%
+lineage4.9	144	222	4%	222	4%	222	4%

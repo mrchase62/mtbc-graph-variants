@@ -2464,3 +2464,4 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - User: "yes, run it". Pool 426 of 596 after QC; greedy selection on the 1,000 isolates' P1 calls.
 - Gain stops at 174 genomes on all isolates; cross-validated gain continues slightly to ~250. Gaps (L1.1.3, L1.2.2, L1.1.1, L3, some L4.x) need sequencing. Details: analysis/panel_select/README.md.
 - Panel size is the user's choice; awaiting it before the graph build.
+- Pool selection (33,364 fold-back-passing L1-4 isolates, Mutect2 calls, validated 99% vs P1 on the 1K): flat after ~200 genomes; held-out median 150 -> 145. Recommended ~200. Awaiting the user's size choice.

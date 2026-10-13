@@ -27,3 +27,17 @@ Analysis only; nothing in the pipeline changed. Cost: ~2 CPU-hours
   over 300), 4.1, 4.3.1, 4.6.3-4.6.5. These need sequencing.
 - Lineage 4.6.1 gets worse (182 -> 260) because GCF_045348265 (poly-A run)
   is excluded.
+
+## Selection on the whole passing pool (`select_pool.py` -> `out_pool/`)
+
+User: "yes, start it" (pool = standard screen, L1-4, fold-back <= 2.5;
+33,364 isolates). Isolate calls from the collection's Mutect2 pickles; no
+new alignment. Lineages weighted equally. Job 52760614, 8 min at 8 cores.
+
+- Validation on new1k: same nearest genome as the P1-based distance for
+  99.2%; r = 1.000. Missing per-base depth does not matter.
+- Held-out median: CX333 now 150 / 152; 150 genomes 147 / 149; 175 146 /
+  148; 200 145 / 147; flat after 200. Over 300: 13.1% now, 11.9% at 175+.
+- Gaps (most isolates > 300 at any size): L1.1.3 (88%), L4.1 / 4.1.4 /
+  4.3 / 4.3.1 / 4.4 / 4.6.x (90-100%), L4.5 (74%), L1.2.2 (53%),
+  L1.1.2 (44%). These need sequencing.
