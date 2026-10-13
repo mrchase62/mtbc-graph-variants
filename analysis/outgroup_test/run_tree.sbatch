@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=og_test_tree
 #SBATCH -N 1
-#SBATCH -n 24
+#SBATCH -n 1
+#SBATCH -c 8
 #SBATCH -t 0-03:00
 #SBATCH -p sapphire
 #SBATCH --mem=64G
@@ -14,4 +15,4 @@ ARM="${1:?arm G or K}"
 cd "${SLURM_SUBMIT_DIR}"
 /n/boslfs02/LABS/sfortune_lab/Lab/software/iqtree-3.0.1-Linux-intel/bin/iqtree3 \
     -s "${ARM}.fasta" -m GTR+F+ASC+G4 -B 1000 -alrt 1000 -o GCF_035581225 \
-    -T "${SLURM_CPUS_PER_TASK:-24}" --prefix "${ARM}" -redo
+    -T "${SLURM_CPUS_PER_TASK:-8}" --prefix "${ARM}" -redo

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=vg_deconstruct
 #SBATCH -N 1
-#SBATCH -n 8
+#SBATCH -n 1
+#SBATCH -c 8
 #SBATCH -t 0-04:00
 #SBATCH -p shared
 #SBATCH --mem=64G

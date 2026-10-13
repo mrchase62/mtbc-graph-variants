@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=vcf_decompose
 #SBATCH -N 1
-#SBATCH -n 16
+#SBATCH -n 1
+#SBATCH -c 8
 #SBATCH -t 0-12:00
-#SBATCH -p sapphire
+#SBATCH -p shared
 #SBATCH --mem=64G
 #SBATCH --output=slurm/decompose_%j.out
 #SBATCH --error=slurm/decompose_%j.err

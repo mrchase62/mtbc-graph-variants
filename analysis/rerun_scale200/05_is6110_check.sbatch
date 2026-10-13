@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #SBATCH -J fix1_is6110chk
 #SBATCH -p shared
-#SBATCH -c 2
+#SBATCH -c 1
 #SBATCH --mem=4G
 #SBATCH -t 0-04:00
 #SBATCH -o /n/boslfs02/LABS/sfortune_lab/Lab/mchase/mtbc-graph-variants/analysis/rerun_scale200/logs/%x_%j.out

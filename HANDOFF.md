@@ -134,6 +134,14 @@ Raised by the user 2026-10-12 ("I don't know if this is worth it").
 - Wiring our caller into P2/P4b (user asked 2026-10-12) is paused at the
   reading stage; no read-removal step goes in.
 
+### Slurm core requests fixed (2026-10-13)
+After a Job Defense Shield email: scripts that asked `#SBATCH -n N` (tasks)
+now ask `-n 1 -c N`, so SLURM_CPUS_PER_TASK is always set by Slurm and is
+not inherited from a submitting job. The scale200_fix tree ran IQ-TREE on 1
+of 24 cores for this reason. build_snp_tree.sh is now 8 cores, shared, 32 GB;
+vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
+4. P1/P2 right-sizing (cost list change A) is still the user's decision.
+
 ### Coming next (user, 2026-10-12)
 "We need to redo the graph because of homopolymeric tracts in some of the
 genomes and reselect a cohort from the ~50K sample set." After the caller

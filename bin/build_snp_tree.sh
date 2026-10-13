@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=snp_tree
 #SBATCH -N 1
-#SBATCH -n 24
+#SBATCH -n 1
+#SBATCH -c 8
 #SBATCH -t 0-24:00
-#SBATCH -p sapphire
-#SBATCH --mem=64G
+#SBATCH -p shared
+#SBATCH --mem=32G
 #SBATCH --output=slurm/snptree_%j.out
 #SBATCH --error=slurm/snptree_%j.err
 #
@@ -42,7 +43,7 @@ echo "### outgroup  : $OUTGROUP"
     -m GTR+F+ASC+G4 \
     -B 1000 -alrt 1000 \
     -o "$OUTGROUP" \
-    -T "${SLURM_CPUS_PER_TASK:-24}" \
+    -T "${SLURM_CPUS_PER_TASK:-8}" \
     --prefix "$PREFIX" \
     -redo
 

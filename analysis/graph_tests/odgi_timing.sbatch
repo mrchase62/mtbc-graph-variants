@@ -14,8 +14,8 @@
 # Submit from the repository root:
 #   sbatch analysis/graph_tests/odgi_timing.sbatch
 #SBATCH -p shared
-#SBATCH -c 2
-#SBATCH --mem=16G
+#SBATCH -c 1
+#SBATCH --mem=4G
 #SBATCH -t 06:00:00
 #SBATCH -J odgi_timing
 #SBATCH -o analysis/graph_tests/logs/odgi_timing_%j.out

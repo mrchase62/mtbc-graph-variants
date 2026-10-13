@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=T2_acc
 #SBATCH -N 1
-#SBATCH -n 4
+#SBATCH -n 1
+#SBATCH -c 4
 #SBATCH -t 0-02:00
 #SBATCH -p shared
 #SBATCH --mem=16G

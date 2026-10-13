@@ -22,7 +22,7 @@
 # One array task per line of the sample list ($1). Submit from runroot:
 #   sbatch --array=1-N ../analysis/novel_events/phaseB/08_qc.sbatch <list> <cohort> [extra]
 #SBATCH -p shared
-#SBATCH -c 4
+#SBATCH -c 2
 #SBATCH --mem=8G
 #SBATCH -t 01:00:00
 #SBATCH -J marin_qc
@@ -48,11 +48,11 @@ B="-B /n/netscratch,/n/boslfs02,$W"
 singularity exec $B $CT/mtbc-assembly.sif fastp -i "$IN/$R1" -I "$IN/$R2" \
     -o $W/t1.fq.gz -O $W/t2.fq.gz \
     --detect_adapter_for_pe --correction --qualified_quality_phred 20 --length_required 36 \
-    "${EXTRA[@]}" --json $Q/fastp.json --html $Q/fastp.html --thread 4
+    "${EXTRA[@]}" --json $Q/fastp.json --html $Q/fastp.html --thread 2
 cp -rL /n/boslfs02/LABS/sfortune_lab/Lab/shared/tbprofiler_db $W/tbprofiler_db
 singularity exec $B $CT/tbprofiler_v1.3.sif tb-profiler profile -1 $W/t1.fq.gz -2 $W/t2.fq.gz \
     -p "$S" -d $W/tbp --db_dir $W/tbprofiler_db \
-    --no_delly --no_trim --threads 4 --csv
+    --no_delly --no_trim --threads 2 --csv
 cp $W/tbp/results/$S.results.json $Q/tbprofiler.json
 $E/rasusa reads -c 100 -g 4411532 -s 7 -o $W/d1.fq.gz -o $W/d2.fq.gz $W/t1.fq.gz $W/t2.fq.gz 2> $Q/rasusa.log
 zcat $W/d1.fq.gz $W/d2.fq.gz | awk 'NR%4==2{n+=length($0)} END{print n}' > $Q/final_bases.txt
