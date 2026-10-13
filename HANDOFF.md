@@ -163,7 +163,12 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
   these."** Isolates whose lineage is not in the graph are excluded at cohort
   selection, by TB-Profiler barcode lineage, before P1; no flag-and-genotype
   route. In gwas1000 that is L5 90, L6 90, L9 14 (194 of 996). L7 stays in
-  the graph (user, 2026-10-13: "yes, keep L7 in the graph"), so its 34 stay. The in-graph L5/L6 pair
+  the graph (user, 2026-10-13: "yes, keep L7 in the graph"), but **L7
+  isolates are dropped from the cohort** (user, 2026-10-13: "yes, drop L7
+  from the cohort and keep it in the graph"): only 29 pass the standard
+  screen, too few for association and confounded by geography. The cohort is
+  L1-4 only; L7 genomes stay in the graph for polarity (the ancestral node is
+  the MRCA of L1-4,7). The in-graph L5/L6 pair
   is for polarity only, not for genotyping L5/L6 isolates.
 - **Decided (user, 2026-10-13): "yes, use parsimony over all outgroups for
   every variant class".** At the rebuild:

@@ -2450,3 +2450,4 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - Fold-back screen submitted: job 52659052 (array 0-34%10), 44,293 isolates in 35 chunks (959 already measured reused). Topic 6 (build cost) presented; awaiting approval.
 - Topic 6. User: "approve all three steps now" -> panel QC/selection ~20 bh, graph build <= ~1,500 CPU-h, validation reruns ~350+ bh. Recorded.
 - User: "approve P1 for the 1K cohort" -> ~350 billing-hours approved; runs after the 1K is drawn from the fold-back screen.
+- User: "Consider dropping L7 from the cohort." then "yes, drop L7 from the cohort and keep it in the graph" -> cohort L1-4 only; recorded.
