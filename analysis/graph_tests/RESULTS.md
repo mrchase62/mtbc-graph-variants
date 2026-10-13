@@ -117,3 +117,44 @@ not meaningful.
 5. **The compute saving is small either way.** The case for the reduced
    graph rests on genotyping quality (fewer nested records) and build cost,
    not on per-sample runtime.
+
+# B vs D: does sparse mapping change the variants? (2026-10-13)
+
+User: "yes, run the B vs D check". B and D are the same 52 genomes and
+settings; D was built with pggb `-x auto` (each genome aligned to a subset
+of the others). Both deconstruct VCFs were run through the production
+decomposition (`decompose_arm.sbatch`, jobs 52595664/5, about 10 min each,
+under 1 billing-hour), then compared genome by genome (`compare_arms.py`,
+`compare_B_D.out`/`.tsv`) and the differences classified
+(`explain_B_D.py`, `explain_B_D.out`).
+
+Records after collapsing: B 24,111, D 24,176.
+
+| class | ALT calls in both | only B | only D |
+|---|---:|---:|---:|
+| SNP | 75,078 | 322 | 303 |
+| MNP | 2,015 | 14 | 26 |
+| indel < 50 bp | 10,214 | 513 | 518 |
+| SV >= 50 bp | 4,944 | 239 | 278 |
+
+Summed over 51 genomes: 92,251 calls agree, 2,213 (2.3%) differ.
+
+**What the differing calls are** (each genome's one-arm-only calls):
+- **in the repeat mask:** 1,468 (66%), mostly indels and SVs;
+- **the same variant written differently:** the other arm has a call of
+  the same class and the same length change within 50 bp in that genome
+  (560, 25%). For SNPs this test is loose: any SNP within 50 bp counts;
+- **unexplained:** 185 (0.2% of all calls; 65 only in B, 120 only in D).
+  71 are in one genome, GCF_008761675, and 61 of those form one dense
+  D-only cluster at H37Rv 4,224,126-4,224,342 (a local alignment
+  difference in D). The rest are spread thinly.
+- SNP bases after splitting MNPs: 80,938 the same, 2 different.
+
+**Reading.** Outside the masked repeats and representation shifts, the two
+builds agree at all but about 0.2% of calls, and these are clustered in
+local regions rather than systematic. There is no baseline for how much two
+full builds of the same input differ, so part of this may be ordinary pggb
+run-to-run variation. Sparse mapping gives the same variants for practical
+purposes, at a 20% faster build on 52 genomes (more on about 300). A
+rebuild can use `-x auto`; the 4.22 Mb cluster can be looked at in the
+rebuilt graph's own QC.

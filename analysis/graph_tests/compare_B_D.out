@@ -1,0 +1,11 @@
+genomes: A 51, C 51, shared (excluding NONE) 51
+NONE ALT calls in C: 0
+
+class       both   only A   only C  A-only, C missing C-only, A missing A-only near can. C-only near can.
+SNP       75,078      322      303                 90                 4                0                0
+MNP        2,015       14       26                  0                 0                0                0
+indel     10,214      513      518                  2                 0                0                0
+SV         4,944      239      278                  0                 0                0                0
+
+SNP bases after splitting MNPs: same 80,938, only A 348, only C 355, different base 2
+most-affected genomes (SNP+indel calls differing): GCF_008761675 114, GCF_014900755 48, GCF_965122945 47, GCF_014900695 47, GCF_009730235 47

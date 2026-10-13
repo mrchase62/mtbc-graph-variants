@@ -142,6 +142,14 @@ of 24 cores for this reason. build_snp_tree.sh is now 8 cores, shared, 32 GB;
 vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
 4. P1/P2 were already at 4 cores / 8 GB since 2026-10-07 (e33556b).
 
+### Rebuild topics (2026-10-13)
+- **Sparse mapping checked:** graphs B and D (`-x auto`) agree at all but
+  0.2% of calls outside masked repeats and representation shifts
+  (`analysis/graph_tests/RESULTS.md`). Usable for the rebuild.
+- **Open gap found:** inherited (absorbed) insertions reach the cohort VCF
+  presence-only, without a read check; inherited deletions are confirmed
+  from the H37Rv frame. Not yet discussed further with the user.
+
 ### Coming next (user, 2026-10-12)
 "We need to redo the graph because of homopolymeric tracts in some of the
 genomes and reselect a cohort from the ~50K sample set." After the caller

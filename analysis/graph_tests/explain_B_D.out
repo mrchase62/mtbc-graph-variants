@@ -1,0 +1,10 @@
+class  arm    shifted  masked  other
+SNP    onlyB      189     131      2
+SNP    onlyD      131     148     24
+MNP    onlyB        3      11      0
+MNP    onlyD        3      15      8
+indel  onlyB       99     358     56
+indel  onlyD       93     342     83
+SV     onlyB       21     211      7
+SV     onlyD       21     252      5
+genomes with most 'other' differences: GCF_008761675 71, GCF_014899385 23, GCF_932530315 12, GCF_000193185 11, GCF_000786505 10, GCF_014900315 10
