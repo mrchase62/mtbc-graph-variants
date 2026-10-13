@@ -156,6 +156,11 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
   Explain each step before running (standing rule).
 
 - **Cohort (decided, user, 2026-10-13): "start with about 1,000"**, then 10K.
+  Draw (user: "keep gwas1000 isolates, equal 250 per lineage"):
+  `analysis/cohort_1k/draw_1k.py`, L1-4 x RRDR (TB-Profiler JSON, rpoB
+  761082-761162, freq >= 0.9; agrees with gwas1000's labels 987/996), 125
+  per cell, gwas1000 passers first (525 of 768 pass), fill round-robin over
+  sublineages, seed 20261013. Dry run on half the screen: 1,000 drawn.
   Selection after the collection-wide fold-back screen (old <= 2.5), on top of
   select_isolates.py and lineage 1-4,7. Approved: the screen, ~110 CPU-hours.
 

@@ -2451,3 +2451,4 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - Topic 6. User: "approve all three steps now" -> panel QC/selection ~20 bh, graph build <= ~1,500 CPU-h, validation reruns ~350+ bh. Recorded.
 - User: "approve P1 for the 1K cohort" -> ~350 billing-hours approved; runs after the 1K is drawn from the fold-back screen.
 - User: "Consider dropping L7 from the cohort." then "yes, drop L7 from the cohort and keep it in the graph" -> cohort L1-4 only; recorded.
+- User: "keep gwas1000 isolates, equal 250 per lineage" -> analysis/cohort_1k/draw_1k.py; dry run on 17/35 chunks gives 1,000 (525 gwas1000). Final draw after the screen.
