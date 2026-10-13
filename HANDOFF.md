@@ -144,6 +144,14 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
 
 ### Rebuild topics (2026-10-13)
 
+- **Graph build P200 submitted (2026-10-13, job 52768357).** Panel chosen by
+  demand on the 33,364 fold-back-passing L1-4 isolates (Mutect2 calls,
+  validated 99% vs P1 on new1k), top 200 after QC
+  (`analysis/panel_select/README.md`, `panel_P200.tsv`). Output
+  `runroot/panel/P200/graphs/P200.s10k.k23.K15`; build env overrides
+  MTB_DATA/MTB_FASTAS/MTB_GRAPHS to `runroot/panel/P200`. Next: assets and
+  P0 on the new graph, then validation reruns (scale200, new1k).
+
 - **Build cost approved (user, 2026-10-13: "approve all three steps now"):**
   panel QC and selection ~20 billing-hours; graph build up to ~1,500
   CPU-hours (pggb; expect ~1,200); validation reruns scale200 then the new
