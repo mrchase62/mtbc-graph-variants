@@ -151,8 +151,12 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
   **P1 on the new 1K cohort approved too** (user, 2026-10-13: "approve P1
   for the 1K cohort"): ~350 billing-hours (0.6/isolate at 8 cores x ~0.6 at
   4 cores), H37Rv alignment and calls only, no IS6110 stage 1; reads the
-  CRAMs in place, before the ~10-26 purge; reuse gwas1000 P1 where the
-  isolate overlaps.
+  CRAMs in place, before the ~10-26 purge. gwas1000 P1 can NOT be reused:
+  it predates the build stamps and audit fixes, and P1 refuses it, so all
+  1,000 run (~350, as approved). Submitted 2026-10-13 from runroot with
+  MTB_BUILD_DIR=refbias/build/7713a8d71d8e-fix1: registry row `new1k`
+  (passes `p1` only; the I/O contract checks every listed pass), array
+  52710693, summary 52710695 (`analysis/cohort_1k/logs/p1_submit.txt`).
   Explain each step before running (standing rule).
 
 - **Cohort (decided, user, 2026-10-13): "start with about 1,000"**, then 10K.

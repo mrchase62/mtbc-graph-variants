@@ -2453,3 +2453,4 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - User: "Consider dropping L7 from the cohort." then "yes, drop L7 from the cohort and keep it in the graph" -> cohort L1-4 only; recorded.
 - User: "keep gwas1000 isolates, equal 250 per lineage" -> analysis/cohort_1k/draw_1k.py; dry run on 17/35 chunks gives 1,000 (525 gwas1000). Final draw after the screen.
 - Fold-back screen done: 52659052 (3 OOM chunks rerun as 52685193 at 16 GB); 44,293 measured, ~140 CPU-h. 11,603 (26%) over 2.5. Final 1K drawn: analysis/cohort_1k/cohort_1k.tsv (1,000; 525 gwas1000; 125 per lineage x RRDR).
+- User: "yes, start P1" -> gwas1000 P1 not reusable (pre-stamp, refused by P1), so all 1,000 run (~350 bh, within approval). Registry row new1k (p1 only); P1 array 52710693, summary 52710695.
