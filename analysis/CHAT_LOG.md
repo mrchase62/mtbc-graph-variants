@@ -2454,3 +2454,8 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - User: "keep gwas1000 isolates, equal 250 per lineage" -> analysis/cohort_1k/draw_1k.py; dry run on 17/35 chunks gives 1,000 (525 gwas1000). Final draw after the screen.
 - Fold-back screen done: 52659052 (3 OOM chunks rerun as 52685193 at 16 GB); 44,293 measured, ~140 CPU-h. 11,603 (26%) over 2.5. Final 1K drawn: analysis/cohort_1k/cohort_1k.tsv (1,000; 525 gwas1000; 125 per lineage x RRDR).
 - User: "yes, start P1" -> gwas1000 P1 not reusable (pre-stamp, refused by P1), so all 1,000 run (~350 bh, within approval). Registry row new1k (p1 only); P1 array 52710693, summary 52710695.
+
+## 2026-10-13 — new1k P1 finished
+- Array 52710693 + summary 52710695: 1,001/1,001 COMPLETED, ~200 CPU-hours (approved ~350).
+- `runroot/refbias/new1k/p1/refmap.tsv`: 1,000 rows, build 7713a8d71d8e-fix1. Nearest panel genome has a lineage label for 800 of them; 200 show "unknown" (L1 30, L2 71, L3 55, L4 44). Median SNP distance 166, max 523.
+- Next: panel QC and selection by demand (explain the method first).
