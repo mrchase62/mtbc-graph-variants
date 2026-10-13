@@ -147,8 +147,8 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
 - **Non-target isolates (decided, user, 2026-10-13): "We won't genotype
   these."** Isolates whose lineage is not in the graph are excluded at cohort
   selection, by TB-Profiler barcode lineage, before P1; no flag-and-genotype
-  route. In gwas1000 that is L5 90, L6 90, L9 14 (194 of 996), plus L7's 34
-  if L7 is left out of the graph (scope not final). The in-graph L5/L6 pair
+  route. In gwas1000 that is L5 90, L6 90, L9 14 (194 of 996). L7 stays in
+  the graph (user, 2026-10-13: "yes, keep L7 in the graph"), so its 34 stay. The in-graph L5/L6 pair
   is for polarity only, not for genotyping L5/L6 isolates.
 - **Decided (user, 2026-10-13): "yes, use parsimony over all outgroups for
   every variant class".** At the rebuild:
