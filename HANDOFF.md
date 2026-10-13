@@ -144,6 +144,10 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
 
 ### Rebuild topics (2026-10-13)
 
+- **Cohort (decided, user, 2026-10-13): "start with about 1,000"**, then 10K.
+  Selection after the collection-wide fold-back screen (old <= 2.5), on top of
+  select_isolates.py and lineage 1-4,7. Approved: the screen, ~110 CPU-hours.
+
 - **Non-target isolates (decided, user, 2026-10-13): "We won't genotype
   these."** Isolates whose lineage is not in the graph are excluded at cohort
   selection, by TB-Profiler barcode lineage, before P1; no flag-and-genotype
@@ -237,8 +241,13 @@ graph and cohort, so item 2's rebalancing applies to the new selection.
   graph: `analysis/strategy/OUTGROUP_AND_SV_POLARITY.md`.
 
 ### Wrap-up list (the user's order not yet given)
-1. **CRAM purge, around 2026-10-26.** The user is asking the CRAMs' owner;
-   do not copy them before then. The rerun needs them.
+1. **CRAM purge, around 2026-10-26.** The owner's answer: redo the download
+   and alignment. User (2026-10-13): "I don't want all the data at this
+   point, so I just suggest that we grab what passes and store" -- but
+   "wait on copying". Plan: fold-back screen of the whole collection in place
+   (`analysis/foldback_qc/screen50k/`), select the 1K and 10K cohorts, then
+   copy (or re-download) only those (~11,000 x ~49 MB = ~540 GB). No copy
+   until the user says so.
 2. **Fold-back exclusion:** apply old <= 2.5 and rebalance cohorts (user
    go-ahead needed).
 3. **Production SV caller set: wired in, 2026-10-12 (user: "wire our caller
