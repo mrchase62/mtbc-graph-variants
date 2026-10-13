@@ -143,6 +143,13 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
 4. P1/P2 were already at 4 cores / 8 GB since 2026-10-07 (e33556b).
 
 ### Rebuild topics (2026-10-13)
+
+- **Non-target isolates (decided, user, 2026-10-13): "We won't genotype
+  these."** Isolates whose lineage is not in the graph are excluded at cohort
+  selection, by TB-Profiler barcode lineage, before P1; no flag-and-genotype
+  route. In gwas1000 that is L5 90, L6 90, L9 14 (194 of 996), plus L7's 34
+  if L7 is left out of the graph (scope not final). The in-graph L5/L6 pair
+  is for polarity only, not for genotyping L5/L6 isolates.
 - **Decided (user, 2026-10-13): "yes, use parsimony over all outgroups for
   every variant class".** At the rebuild:
   - one Fitch reconstruction over the panel tree for SNPs, indels, SVs,
@@ -2086,7 +2093,8 @@ distance to the nearest CX333 genome.
    - lineage 8 rooting on scale200;
    - read sketches of gwas1000 isolates against the new candidates.
 7. **Open decisions:** strictly lineages 1-4 or including lineage 7;
-   exclude or flag non-lineage 1-4 isolates (228 of gwas1000's 996); panel
+   exclude or flag non-lineage 1-4 isolates (228 of gwas1000's 996; decided
+   2026-10-13: exclude); panel
    size; sequencing; whether to run the checks.
 
 ## 0j. Three pre-rebuild checks: outgroup, rooting, panel coverage (2026-10-04)
