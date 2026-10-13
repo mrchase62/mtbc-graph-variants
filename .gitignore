@@ -33,3 +33,4 @@ sv2frame/*/
 test_runs/
 # Production run directory: code from this repo, data linked from the working tree
 runroot/
+analysis/panel_select/lowdepth/

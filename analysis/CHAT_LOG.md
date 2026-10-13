@@ -2459,3 +2459,8 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - Array 52710693 + summary 52710695: 1,001/1,001 COMPLETED, ~200 CPU-hours (approved ~350).
 - `runroot/refbias/new1k/p1/refmap.tsv`: 1,000 rows, build 7713a8d71d8e-fix1. Nearest panel genome has a lineage label for 800 of them; 200 show "unknown" (L1 30, L2 71, L3 55, L4 44). Median SNP distance 166, max 523.
 - Next: panel QC and selection by demand (explain the method first).
+
+## 2026-10-13 — panel QC and selection by demand (new1k)
+- User: "yes, run it". Pool 426 of 596 after QC; greedy selection on the 1,000 isolates' P1 calls.
+- Gain stops at 174 genomes on all isolates; cross-validated gain continues slightly to ~250. Gaps (L1.1.3, L1.2.2, L1.1.1, L3, some L4.x) need sequencing. Details: analysis/panel_select/README.md.
+- Panel size is the user's choice; awaiting it before the graph build.

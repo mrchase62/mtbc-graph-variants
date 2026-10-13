@@ -1,0 +1,597 @@
+id	source	lineage	longest_run	flags	notes	in_pool
+GCF_000016925	cx333	lineage4.3.2.1	10G			yes
+GCF_000023625	cx333	lineage4.3.3	33G			yes
+GCF_000153685	cx333	lineage4.1.2.1	9G			yes
+GCF_000154585	cx333	lineage4.3.3	20G			yes
+GCF_000154605	cx333	lineage4.3.3	20G			yes
+GCF_000193185	cx333	lineage2.2.1	10C			yes
+GCF_000195835	cx333	La1.8.1	27G			no
+GCF_000195955	cx333	lineage4.9	9C			forced_reference
+GCF_000224435	cx333	lineage4.3.3	9C			yes
+GCF_000253355	cx333	lineage6	10G			forced_outgroup
+GCF_000253375	cx333	M.canetti	13G			no
+GCF_000270365	cx333	lineage2.2.1	18G	indel_excess;private_hp_excess	snp_excess	no
+GCF_000331445	cx333	lineage4.1.2.1	10G			yes
+GCF_000400615	cx333	lineage2.2.1	12G			yes
+GCF_000572125	cx333	lineage2.2.1	11G			yes
+GCF_000572155	cx333	lineage2.2.1	12G			yes
+GCF_000572175	cx333	lineage2.2.1	11C			yes
+GCF_000572195	cx333	lineage2.2.1	14G			yes
+GCF_000786505	cx333	lineage2.2.1	10G			yes
+GCF_001078615	cx333	La1.8.1	46G			no
+GCF_001275565	cx333	lineage2.2.1	12G		snp_excess	yes
+GCF_001544705	cx333	lineage4.9	12G	private_hp_excess		no
+GCF_001870145	cx333	lineage2.2.1.2	9G			yes
+GCF_002072775	cx333	lineage4.5	10G			yes
+GCF_002116755	cx333	lineage2.2.1	22G			yes
+GCF_002116775	cx333	lineage2.2.1	12C			yes
+GCF_002116795	cx333	lineage2.2.1	12G			yes
+GCF_002116815	cx333	lineage2.2.1	9C	indel_excess;private_hp_excess		no
+GCF_002116835	cx333	lineage2.2.1	11G			yes
+GCF_002116855	cx333	lineage2.2.1	13G			yes
+GCF_002208235	cx333	lineage2.2.2	17C		snp_deficit	yes
+GCF_002356015	cx333	lineage4.3.4.1	9G			yes
+GCF_002356255	cx333	lineage1.1.1.1	12G			yes
+GCF_002357935	cx333	lineage2.2.1	12C			yes
+GCF_002357955	cx333	lineage2.2.1	11G			yes
+GCF_002357975	cx333	lineage2.2.1	11G			yes
+GCF_002975475	cx333	La1.7.1	42C			no
+GCF_003006115	cx333	lineage2.2.1	9G			yes
+GCF_003006135	cx333	lineage2.2.1	9G			yes
+GCF_003287125	cx333	lineage2.2.1	10C			yes
+GCF_003287145	cx333	lineage4.1.2.1	11G			yes
+GCF_003287165	cx333	lineage4.5	10G	indel_excess		no
+GCF_003287185	cx333	lineage2.2.1	9A			yes
+GCF_007833935	cx333	lineage4.1.2	10G			yes
+GCF_008761675	cx333	lineage4.4.1.1	8C	indel_excess		no
+GCF_009664875	cx333	lineage1.1.1	8C			yes
+GCF_009730215	cx333	lineage1.2.1.2.1	8C			yes
+GCF_009730235	cx333	lineage3	8C			yes
+GCF_009762675	cx333	lineage2.2.1	11C			yes
+GCF_012923765	cx333	lineage8	10G			no
+GCF_013010385	cx333	lineage4.3.3	13G			yes
+GCF_013267635	cx333	lineage4.9	9C			yes
+GCF_013267655	cx333	lineage2.2.1.2	9G			yes
+GCF_014884625	cx333	lineage4.3.3	22G			yes
+GCF_014884645	cx333	lineage2.2.1	12G			yes
+GCF_014884665	cx333	lineage2.2.1.1	10G			yes
+GCF_014899205	cx333	lineage4.1.1.3	9G			yes
+GCF_014899225	cx333	lineage2.2.1	10G			yes
+GCF_014899245	cx333	lineage1.1.3.1	10G			yes
+GCF_014899265	cx333	lineage1.1.2	14G			yes
+GCF_014899285	cx333	lineage1.1.3.1	10G			yes
+GCF_014899305	cx333	lineage1.1.2	14G			yes
+GCF_014899325	cx333	lineage1.1.1	13G			yes
+GCF_014899345	cx333	lineage1.1.1	12G			yes
+GCF_014899365	cx333	lineage1.2.2.2	9C			yes
+GCF_014899385	cx333	lineage2.1	12G			yes
+GCF_014899405	cx333	lineage1.1.2	15G			yes
+GCF_014899425	cx333	lineage2.2.1	10C			yes
+GCF_014899445	cx333	lineage1.2.1.1	10C			yes
+GCF_014899465	cx333	lineage1.2.1.1	23C			yes
+GCF_014899485	cx333	lineage1.1.1	10G			yes
+GCF_014899505	cx333	lineage7	27C			yes
+GCF_014899525	cx333	lineage4.8	10G	indel_excess;private_hp_excess		no
+GCF_014899545	cx333	lineage4.1.2.1	11C			yes
+GCF_014899565	cx333	lineage4.4.1.1	8G		snp_deficit	yes
+GCF_014899585	cx333	lineage4.8	10G			yes
+GCF_014899605	cx333	lineage4.3.4.2.1	8G			yes
+GCF_014899625	cx333	lineage4.7	9C			yes
+GCF_014899645	cx333	lineage4.3.3	8G			yes
+GCF_014899665	cx333	lineage1.2.2.1	9C			yes
+GCF_014899685	cx333	lineage4.3.3	14G			yes
+GCF_014899705	cx333	lineage3.1.1	10G			yes
+GCF_014899725	cx333	lineage4.1.2.1	10G			yes
+GCF_014899745	cx333	lineage2.2.1	13C			yes
+GCF_014899765	cx333	lineage4.1.2	11C	private_hp_excess		no
+GCF_014899785	cx333	lineage2.2.2	20C			yes
+GCF_014899805	cx333	lineage4.1.2.1	10G			yes
+GCF_014899825	cx333	lineage2.2.2	13C			yes
+GCF_014899845	cx333	lineage4.3.2.1	11G			yes
+GCF_014899865	cx333	lineage2.2.2	15C			yes
+GCF_014899885	cx333	lineage4.3.3	26G			yes
+GCF_014899905	cx333	lineage4.3.3	20G			yes
+GCF_014899925	cx333	lineage4.1.1.3	11C			yes
+GCF_014899945	cx333	lineage4.3.3	17G			yes
+GCF_014899965	cx333	lineage1.2.1.2.1	8C	indel_excess		no
+GCF_014899985	cx333	lineage1.2.1.2.1	9C			yes
+GCF_014900005	cx333	lineage1.2.1.2	8G			yes
+GCF_014900055	cx333	lineage4.3.4.2	8G			yes
+GCF_014900075	cx333	lineage2.2.1	10G			yes
+GCF_014900095	cx333	lineage4.2.1.1	9G			yes
+GCF_014900115	cx333	lineage2.2.1	14G			yes
+GCF_014900135	cx333	lineage4.2.1	9C			yes
+GCF_014900155	cx333	lineage4.1.2.1	9G			yes
+GCF_014900175	cx333	lineage2.2.1	16G			yes
+GCF_014900195	cx333	lineage2.2.1	9C	private_hp_excess		no
+GCF_014900215	cx333	lineage4.2.1	10G			yes
+GCF_014900235	cx333	lineage4.2.1	9G			yes
+GCF_014900255	cx333	lineage4.2.1	11G			yes
+GCF_014900275	cx333	lineage4.2.1	11G			yes
+GCF_014900295	cx333	lineage4.2.1	10G			yes
+GCF_014900315	cx333	lineage2.2.1	10C			yes
+GCF_014900335	cx333	lineage4.3.3	8G			yes
+GCF_014900355	cx333	lineage3	16G			yes
+GCF_014900375	cx333	lineage4.8	11G	indel_excess;private_hp_excess		no
+GCF_014900395	cx333	lineage2.2.1	20C			yes
+GCF_014900415	cx333	lineage2.2.1	10C			yes
+GCF_014900435	cx333	lineage2.2.1.1	10G			yes
+GCF_014900455	cx333	lineage2.2.1	9G			yes
+GCF_014900475	cx333	lineage2.2.1.1	12G			yes
+GCF_014900495	cx333	lineage2.2.1	10G			yes
+GCF_014900515	cx333	lineage2.2.1	10G			yes
+GCF_014900555	cx333	lineage3.1	11C			yes
+GCF_014900595	cx333	lineage2.2.1	10C			yes
+GCF_014900615	cx333	lineage2.2.1	10C			yes
+GCF_014900635	cx333	lineage2.2.1	9C			yes
+GCF_014900655	cx333	lineage2.2.1	9C			yes
+GCF_014900675	cx333	lineage2.2.1.2	9T			yes
+GCF_014900695	cx333	lineage1.1.2	10G			yes
+GCF_014900715	cx333	lineage2.2.1	11G			yes
+GCF_014900735	cx333	lineage2.2.1	9G			yes
+GCF_014900755	cx333	lineage3	8G			yes
+GCF_014900775	cx333	lineage2.2.1.1	10G			yes
+GCF_014900795	cx333	lineage4.8	9G			yes
+GCF_014900815	cx333	lineage2.2.1	10G			yes
+GCF_014900835	cx333	lineage4.2.2.2	10G			yes
+GCF_014900855	cx333	lineage2.2.1	9G			yes
+GCF_014900895	cx333	lineage1.2.2.2	13G			yes
+GCF_014900965	cx333	lineage2.2.1.1	10G			yes
+GCF_014901035	cx333	lineage2.2.1	9A			yes
+GCF_014901055	cx333	lineage3	9G	private_hp_excess		no
+GCF_014901075	cx333	lineage2.2.1	10C			yes
+GCF_014901095	cx333	lineage3.1.2	9C			yes
+GCF_014901115	cx333	lineage2.2.1	10C			yes
+GCF_014901135	cx333	lineage3.1.2	9G			yes
+GCF_014901155	cx333	lineage2.2.1	9C			yes
+GCF_016917775	cx333	lineage2.2.1	11C			yes
+GCF_019670745	cx333	lineage2.2.1	8G			yes
+GCF_021559895	cx333	lineage5.3	9C			no
+GCF_022023995	cx333	lineage4.4.1	10C			yes
+GCF_022870125	cx333	lineage1.1.1	8G	indel_excess		no
+GCF_022870145	cx333	lineage7	11G			yes
+GCF_022870165	cx333	lineage6.2.1	9G			no
+GCF_022870185	cx333	lineage6	10G			no
+GCF_022870205	cx333	lineage6.3.1	8G			no
+GCF_022870225	cx333	lineage5.1	11G			no
+GCF_022870245	cx333	lineage5.1.4	8G			no
+GCF_022870265	cx333	lineage5.1.1	9G			forced_outgroup
+GCF_022870285	cx333	lineage4.2.1.1	9G	indel_excess		no
+GCF_022870305	cx333	lineage4.3.3	9G	indel_excess		no
+GCF_022870325	cx333	lineage4.6.2.2	9G			yes
+GCF_022870345	cx333	lineage3	8G			yes
+GCF_022870365	cx333	lineage3	11G			yes
+GCF_022870385	cx333	lineage3.1	11C	indel_excess		no
+GCF_022870405	cx333	lineage2.1	14C			yes
+GCF_022870425	cx333	lineage1.1.2	10G	indel_excess		no
+GCF_022870445	cx333	lineage1.2.1.2	8G	indel_excess		no
+GCF_022871085	cx333	lineage2.2.1	10G			yes
+GCF_022871105	cx333	lineage2.2.1	9G			yes
+GCF_022871125	cx333	lineage2.2.1	18C	private_hp_excess		no
+GCF_022871145	cx333	lineage2.2.1	25C			yes
+GCF_026167585	cx333	lineage2.2.1	10C			yes
+GCF_026185275	cx333	lineage4.9	9C			yes
+GCF_026727575	cx333	La1.8.1	13G			no
+GCF_026727615	cx333	La1.8.1	21G			no
+GCF_027912555	cx333	lineage2.2.1	10C			yes
+GCF_028583125	cx333	La1.7.1	11C			no
+GCF_028583145	cx333	La1.8.2	14G			no
+GCF_028583165	cx333	La1.8.2	30G			no
+GCF_028583185	cx333	La1.2	12C			no
+GCF_028583205	cx333	La1.8.2	10C			no
+GCF_028583225	cx333	La1.2	12G			no
+GCF_028583245	cx333	La1.2	16C			no
+GCF_028583265	cx333	La1.2	9C			no
+GCF_028583285	cx333	La1.8.2	19G			no
+GCF_028583305	cx333	La1.8.2	24G			no
+GCF_028768425	cx333	La1.8.1	39G			no
+GCF_029867045	cx333	lineage4.1.2.1	9G			yes
+GCF_029867065	cx333	lineage4.3.2	9G			yes
+GCF_029867085	cx333	lineage4.3.3	10G			yes
+GCF_029867105	cx333	lineage4.4.1	8G			yes
+GCF_029867125	cx333	lineage4.1.2.1	10G			yes
+GCF_029867145	cx333	lineage4.1.2.1	10G			yes
+GCF_029867165	cx333	lineage4.4.1.1	8G	indel_excess		no
+GCF_029867185	cx333	lineage4.5	9G			yes
+GCF_029867205	cx333	lineage4.1.1	10C			yes
+GCF_029867225	cx333	lineage4	8G			yes
+GCF_029867245	cx333	lineage2.2.1	10G			yes
+GCF_029867265	cx333	lineage4.3.3	11G			yes
+GCF_030053035	cx333	lineage4.3.3	13G			yes
+GCF_030323705	cx333	lineage2.2.2	15C			yes
+GCF_030323725	cx333	lineage1.1.2	9G			yes
+GCF_030323745	cx333	lineage2.2.1.1	9C			yes
+GCF_030323765	cx333	lineage1.1.1.1	11G			yes
+GCF_030323785	cx333	lineage2.2.1	9G			yes
+GCF_030323805	cx333	lineage1.2.1.2	8G			yes
+GCF_030866945	cx333	lineage4.5	10G			yes
+GCF_030866965	cx333	lineage4.4.2	14C			yes
+GCF_030866985	cx333	lineage2.2.1	17C			yes
+GCF_030867005	cx333	lineage4.4.2	9G			yes
+GCF_030867025	cx333	lineage4.4.2	11G			yes
+GCF_033124145	cx333	lineage1.1.1	11G	indel_excess;private_hp_excess		no
+GCF_033124885	cx333	lineage1.2.1.2.1	8G			yes
+GCF_033125685	cx333	lineage1.2.1.2.1	8G			yes
+GCF_033126485	cx333	lineage1.1	11G			yes
+GCF_035581225	cx333	M.canetti	16C			no
+GCF_037076265	cx333	lineage1.1.1.1	10G			yes
+GCF_037076275	cx333	lineage1.1.1.1	8G			yes
+GCF_037076285	cx333	lineage2.2.1	9G			yes
+GCF_037076295	cx333	lineage1.1.1.1	10G			yes
+GCF_037076305	cx333	lineage1.1.1.1	12G			yes
+GCF_037076315	cx333	lineage1.1.1.1	12G			yes
+GCF_037076325	cx333	lineage2.2.1	10G			yes
+GCF_037076335	cx333	lineage2.2.1	9T			yes
+GCF_037101195	cx333	lineage2.2.1.1	11G			yes
+GCF_037942495	cx333	lineage4.5	10G			yes
+GCF_037942805	cx333	lineage4.7	9C			yes
+GCF_039555355	cx333	lineage4.1.2.1	16C			yes
+GCF_039555365	cx333	La2	48G			no
+GCF_039555375	cx333		15G			no
+GCF_039770655	cx333	lineage9	377T	homopolymer_run(377 T)		no
+GCF_039906425	cx333	lineage2.2.1	14C	indel_excess;private_hp_excess		no
+GCF_039906605	cx333	lineage2.2.1.1	10G			yes
+GCF_039907175	cx333	lineage4.5	10G			yes
+GCF_039907295	cx333	lineage2.2.1	10G			yes
+GCF_039907365	cx333	lineage2.2.1	12G			yes
+GCF_040208985	cx333	lineage1.2.1.2.1	8G			yes
+GCF_040208995	cx333	lineage1.2.1.2.1	8G			yes
+GCF_040209205	cx333	lineage1.2.1.2.1	8G			yes
+GCF_040209215	cx333	lineage1.2.1.2	8C			yes
+GCF_040209325	cx333	lineage1.2.1.2.1	8C			yes
+GCF_040209395	cx333	lineage1.2.1.2	8G			yes
+GCF_040735115	cx333	lineage4.5	10G			yes
+GCF_042692185	cx333	lineage4.5	10C			yes
+GCF_042982005	cx333	La1.8.1	39C			no
+GCF_044359985	cx333	lineage4.5	9T			yes
+GCF_045348055	cx333	lineage4.6.1.2	9G			yes
+GCF_045348065	cx333	lineage5.1.1	12G			no
+GCF_045348245	cx333	lineage4.6.1.2	9G			yes
+GCF_045348255	cx333	lineage5.2	9G			no
+GCF_045348265	cx333	lineage4.6.1.1	484A	homopolymer_run(484 A)		no
+GCF_049959555	cx333	lineage4.1.2.1	9G			yes
+GCF_050259585	cx333	La2	1015G	homopolymer_run(1015 G)		no
+GCF_059622605	cx333	lineage4.4.1.1	8G			yes
+GCF_059622665	cx333	lineage2.2.1.1	12G			yes
+GCF_059622685	cx333	lineage4.4.1.1	8G			yes
+GCF_059622705	cx333	lineage4.1.1.3	10G			yes
+GCF_059622725	cx333	lineage2.2.1.1	13G			yes
+GCF_059622745	cx333	lineage2.2.1.1	9T			yes
+GCF_059622765	cx333	lineage2.2.1.1	12G			yes
+GCF_059622825	cx333	lineage2.2.1	12C			yes
+GCF_059717755	cx333	La1.8.1	18G			no
+GCF_900520315	cx333	lineage4.8	10G			yes
+GCF_902459825	cx333	La1.2	21G			no
+GCF_904810325	cx333		27G			no
+GCF_904810335	cx333		19C			no
+GCF_904810345	cx333		29G			no
+GCF_904810355	cx333		14G			no
+GCF_904810365	cx333		17C			no
+GCF_932527315	cx333	lineage1.1.2	16C			yes
+GCF_932527325	cx333	lineage2.2.1	15G			yes
+GCF_932527465	cx333	lineage3.1.1	9G			yes
+GCF_932530315	cx333	lineage4.8	8G			yes
+GCF_932530395	cx333	lineage1.1.2	11C			yes
+GCF_963993135	cx333	lineage4.4.1.1	9G			yes
+GCF_963993145	cx333	lineage4.4.1.2	9G			yes
+GCF_963993155	cx333	lineage4.4.1.1	9G			yes
+GCF_963993165	cx333	lineage4.4.1.1	9G			yes
+GCF_963993175	cx333	lineage4.4.1.1	9G			yes
+GCF_963993185	cx333	lineage4.4.1.1	9G			yes
+GCF_963993195	cx333	lineage4.4.1.1	9G			yes
+GCF_963993205	cx333	lineage4.4.1.1	9G			yes
+GCF_963993215	cx333	lineage4.4.1.1	9G			yes
+GCF_963993225	cx333	lineage4.4.1.1	9G			yes
+GCF_963993235	cx333	lineage4.4.1.1	9G			yes
+GCF_963993245	cx333	lineage4.4.1.1	9G			yes
+GCF_963993255	cx333	lineage4.4.1.1	9G			yes
+GCF_963993265	cx333	lineage4.4.1.1	9G			yes
+GCF_963993275	cx333	lineage4.4.1.1	9G			yes
+GCF_963993285	cx333	lineage4.4.1.1	9G			yes
+GCF_963993295	cx333	lineage4.4.1.1	9G			yes
+GCF_965121805	cx333	lineage2.2.1	9T	private_hp_excess		no
+GCF_965121955	cx333	lineage5.3	18A			no
+GCF_965122045	cx333	lineage5.1.5	10C			no
+GCF_965122915	cx333	lineage1.1.3.2	9A			yes
+GCF_965122945	cx333	lineage1.1.3.2	10G			yes
+GCF_965124265	cx333	lineage2.2.1	9C	private_hp_excess		no
+GCF_965124535	cx333	lineage6	8G	private_hp_excess		no
+GCF_965124815	cx333	lineage1.1.3.2	10C			yes
+GCF_965124865	cx333	lineage4.1.2.1	9C	private_hp_excess		no
+GCF_977011255	cx333	lineage3	9G			yes
+GCF_977011275	cx333	lineage3.1.1	10G			yes
+GCF_977011295	cx333	lineage3.1.1	10G			yes
+GCF_977011305	cx333	lineage3.1.1	11C			yes
+GCF_977011315	cx333	lineage4.3.4.2.1	8G			yes
+GCF_977011325	cx333	lineage3	9G			yes
+GCF_977011345	cx333	lineage3.1.1	11G			yes
+GCF_977011355	cx333	lineage3.1.1	11G			yes
+GCF_977011365	cx333	lineage3.1.1	10C			yes
+GCF_977011375	cx333	lineage3	9G			yes
+GCF_977011385	cx333	lineage3	12G			yes
+GCF_977011395	cx333	lineage2.2.1	9G			yes
+GCF_977011405	cx333	lineage1.1.2	11G			yes
+GCF_977011415	cx333	lineage3.1.1	10G			yes
+GCF_977011425	cx333	lineage3.1.1	10G		snp_excess	yes
+GCF_977011435	cx333	lineage3.1.1	11G			yes
+GCF_977011445	cx333	lineage3.1.1	12C		snp_excess	yes
+GCF_977011475	cx333	lineage1.1.2	10G			yes
+GCF_977011495	cx333	lineage4.3.3	13G			yes
+GCF_977011505	cx333	lineage3.1.1	9C			yes
+GCF_977011515	cx333	lineage4.3.4.2.1	8G			yes
+GCF_977011525	cx333	lineage3.1.1	10C			yes
+GCF_977011535	cx333	lineage3.1.1	9C			yes
+GCF_977011545	cx333	lineage4.3.4.2.1	8C			yes
+GCF_977011555	cx333	lineage4.1.2.1	9G			yes
+GCF_977011565	cx333	lineage3.1.1	9G			yes
+GCF_977011575	cx333	lineage3.1.1	10C			yes
+GCF_977011585	cx333	lineage4.1.2.1	9C			yes
+GCF_977011595	cx333	lineage3.1.1	10G			yes
+GCF_977011605	cx333	lineage3.1.1	10C			yes
+GCF_977011615	cx333	lineage4.2.2.2	10C			yes
+GCF_977011625	cx333	lineage3.1.1	10G			yes
+GCF_982191695	cx333	lineage4.9	9C			yes
+GCF_982191705	cx333	lineage2.2.1	15G		snp_deficit	yes
+GCF_015265495	marin_candidate	La3	10C			no
+N0153	marin_candidate	lineage1.1.1.1	10G			yes
+mada_1-10	marin_candidate	lineage1.1.2	12G			yes
+mada_118	marin_candidate	lineage1.1.2	10G			yes
+mada_1-39	marin_candidate	lineage1.1.2	14G		ppe38_atypical(E2)	yes
+mada_117	marin_candidate	lineage1.1.2	14G			yes
+mada_2-46	marin_candidate	lineage1.1.2	58C			yes
+mada_1-1	marin_candidate	lineage1.1.2	12G			yes
+mada_122	marin_candidate	lineage1.1.2	15G			yes
+mada_1-36	marin_candidate	lineage1.1.2	15G			yes
+mada_1-51	marin_candidate	lineage1.1.2	17G			yes
+mada_1-44	marin_candidate	lineage1.1.2	17G			yes
+R27252	marin_candidate	lineage1.2.2.1	11G			yes
+R23887	marin_candidate	lineage1.2.2.2	17G			yes
+R30215	marin_candidate	lineage2.2.1	12C			yes
+R37765	marin_candidate	lineage2.2.1	12G			yes
+706-05	marin_candidate	lineage2.2.1	9C		is6110_truncated(2)	yes
+TB2780	marin_candidate	lineage2.2.1	10G			yes
+TB1236	marin_candidate	lineage2.2.1	15C			yes
+TB2659	marin_candidate	lineage2.2.1	78G			yes
+mada_115	marin_candidate	lineage2.2.1	10G			yes
+TB3396	marin_candidate	lineage2.2.1	48G			yes
+R29816	marin_candidate	lineage2.2.1	16C			yes
+TB3091	marin_candidate	lineage2.2.1	9G			yes
+TB2995	marin_candidate	lineage2.2.1	13G		is6110_truncated(2)	yes
+R28703	marin_candidate	lineage2.2.1	21C			yes
+TB2512	marin_candidate	lineage2.2.1	10C		is6110_truncated(2)	yes
+TB2981	marin_candidate	lineage2.2.1	10C		is6110_truncated(2)	yes
+TB3113	marin_candidate	lineage2.2.1	10C		is6110_truncated(2)	yes
+R24120	marin_candidate	lineage2.2.1	16C			yes
+R27657	marin_candidate	lineage2.2.1	17C			yes
+R36431	marin_candidate	lineage2.2.1	20C			yes
+R28012	marin_candidate	lineage2.2.1	16C			yes
+R30078	marin_candidate	lineage2.2.1	17C			yes
+R30234	marin_candidate	lineage2.2.1	22C			yes
+R31095	marin_candidate	lineage2.2.1	21C			yes
+mada_1-11	marin_candidate	lineage2.2.1.1	10G			yes
+R29598	marin_candidate	lineage2.2.1.1	10G			yes
+R21893	marin_candidate	lineage2.2.2	23C			yes
+R23146	marin_candidate	lineage2.2.2	18G			yes
+R30420	marin_candidate	lineage2.2.2	23C			yes
+R28980	marin_candidate	lineage2.2.2	19C			yes
+R26778	marin_candidate	lineage2.2.2	22C			yes
+R20260	marin_candidate	lineage2.2.2	25C			yes
+R20574	marin_candidate	lineage2.2.2	27C			yes
+R26791	marin_candidate	lineage2.2.2	24C			yes
+R27725	marin_candidate	lineage2.2.2	17C			yes
+R27937	marin_candidate	lineage2.2.2	15C			yes
+R18043	marin_candidate	lineage2.2.2	21G			yes
+R22601	marin_candidate	lineage2.2.2	17C			yes
+QC-9	marin_candidate	lineage3	9G			yes
+QC-3	marin_candidate	lineage3	9G			yes
+QC-5	marin_candidate	lineage3	9G			yes
+mada_1-30	marin_candidate	lineage3.1.1	13G			yes
+R21770	marin_candidate	lineage4.1.1.3	11G			yes
+mada_1-32	marin_candidate	lineage4.1.1.3	10G			yes
+R21839	marin_candidate	lineage4.1.1.3	11G			yes
+R20896	marin_candidate	lineage4.1.1.3	21G			yes
+R30396	marin_candidate	lineage4.1.1.3	22G			yes
+mada_102	marin_candidate	lineage4.1.2	11G		ppe38_atypical(E1d)	yes
+TB3334	marin_candidate	lineage4.1.2	11G			yes
+mada_151	marin_candidate	lineage4.1.2.1	12G			yes
+mada_139	marin_candidate	lineage4.1.2.1	15G			yes
+mada_129	marin_candidate	lineage4.1.2.1	23G			yes
+TB3169	marin_candidate	lineage4.1.2.1	9G			yes
+mada_105	marin_candidate	lineage4.1.2.1	13G			yes
+mada_1-41	marin_candidate	lineage4.1.3	9C			yes
+mada_2-31	marin_candidate	lineage4.1.3	9C			yes
+R15311	marin_candidate	lineage4.3.2.1	17G			yes
+TB3162	marin_candidate	lineage4.3.3	94C			yes
+TB2661	marin_candidate	lineage4.3.3	22G			yes
+TB3386	marin_candidate	lineage4.3.3	14A			yes
+QC-1	marin_candidate	lineage4.3.3	13T			yes
+QC-6	marin_candidate	lineage4.3.3	9G			yes
+mada_2-25	marin_candidate	lineage4.4.1.1	8G		ppe38_atypical(E3p)	yes
+mada_103	marin_candidate	lineage4.4.1.1	11G			yes
+TB4620	marin_candidate	lineage4.5	9G			yes
+TB3054	marin_candidate	lineage4.6	10C			yes
+mada_120	marin_candidate	lineage4.6.2.2	9G			yes
+mada_126	marin_candidate	lineage4.6.2.2	11G			yes
+mada_123	marin_candidate	lineage4.8	12C			yes
+R23571	marin_candidate	lineage4.8	11C			yes
+mada_1-12	marin_candidate	lineage4.8	13G			yes
+mada_1-15	marin_candidate	lineage4.8	13G			yes
+mada_128	marin_candidate	lineage4.8	11G			yes
+TB2968	marin_candidate	lineage4.8	10G			yes
+mada_1-50	marin_candidate	lineage4.8	11G			yes
+mada_1-53	marin_candidate	lineage4.8	12G			yes
+mada_2-53	marin_candidate	lineage4.8	8G			yes
+N1177	marin_candidate	lineage6.3.1	8G			no
+GCA_000009445	genbank	La1.2.BCG	19C	genbank:BCG		no
+GCA_000194075	genbank	La1.2.BCG	22G	genbank:BCG		no
+GCA_000270345	genbank	lineage2.2.1	16G	genbank:indel_excess(376 vs 97.5)		no
+GCA_000277085	genbank	lineage4.3	18C	genbank:indel_excess(1490 vs 54.0);private_hp_excess(52 vs 1.0)		no
+GCA_000277105	genbank	lineage1.2.2.2	12G	genbank:indel_excess(1650 vs 113);private_hp_excess(63 vs 1)		no
+GCA_000338715	genbank	La1.2.BCG	19C	genbank:BCG		no
+GCA_000364825	genbank	lineage2.2.1.1	12G			yes
+GCA_000389905	genbank	lineage4.1.1.3	9C	genbank:indel_excess(4422 vs 59);private_hp_excess(31 vs 1);Ns(6)		no
+GCA_000389925	genbank	lineage3	11G	genbank:indel_excess(1783 vs 94.5)		no
+GCA_000389945	genbank	lineage1.1.2	9G			yes
+GCA_000954155	genbank	lineage2.2.1	12G	genbank:indel_excess(542 vs 97.5);private_hp_excess(73 vs 1.0)		no
+GCA_001043255	genbank	La1.2.BCG	14C	genbank:BCG		no
+GCA_001544675	genbank	lineage4.9	9C	genbank:indel_excess(475 vs 21.0);private_hp_excess(106 vs 0.5)		no
+GCA_001544735	genbank	La1.2.BCG	26G	genbank:indel_excess(2271 vs 150);private_hp_excess(868 vs 2);BCG		no
+GCA_001544775	genbank	La1.8.1	28G	genbank:indel_excess(571 vs 153);private_hp_excess(87 vs 2)		no
+GCA_001544815	genbank	unplaced:Mycobacterium tuberculosis variant micro	14C	genbank:indel_excess(831 vs 150);private_hp_excess(219 vs 2)		no
+GCA_001544855	genbank	lineage6	9G	genbank:indel_excess(2087 vs 164);private_hp_excess(766 vs 2)		no
+GCA_001544895	genbank	lineage2.2.1	9G	genbank:indel_excess(1087 vs 97.5);private_hp_excess(308 vs 1.0)		no
+GCA_001544935	genbank	lineage2.2.1	20G	genbank:indel_excess(1487 vs 97.5);private_hp_excess(504 vs 1.0)		no
+GCA_001544955	genbank	lineage4.5	10G	genbank:indel_excess(316 vs 55);private_hp_excess(41 vs 1)		no
+GCA_001544985	genbank	lineage4.4.2	11C	genbank:indel_excess(419 vs 44);private_hp_excess(66 vs 0)		no
+GCA_001545015	genbank	lineage4.2.2	8G	genbank:indel_excess(286 vs 67.0);private_hp_excess(45 vs 3.5)		no
+GCA_001545055	genbank	lineage3	9T	genbank:indel_excess(322 vs 94.5);private_hp_excess(43 vs 1.0)		no
+GCA_002895185	genbank	lineage2.2.1.1	12G	genbank:indel_excess(939 vs 97.5);private_hp_excess(505 vs 1.0)		no
+GCA_011044455	genbank	lineage2.2.1	10C	genbank:indel_excess(333 vs 97.5);private_hp_excess(35 vs 1.0)		no
+GCA_015265495	genbank	La3	10C			no
+GCA_030566555	genbank	lineage1.2.2.2	9A	genbank:indel_excess(373 vs 113);genbank:PRJNA994284		no
+GCA_030566695	genbank	lineage3	9C	genbank:indel_excess(308 vs 94.5);genbank:PRJNA994284		no
+GCA_030566795	genbank	lineage1.1.3.1	10G	genbank:indel_excess(327 vs 105);genbank:PRJNA994284		no
+GCA_030566935	genbank	lineage1.1.2	12C	genbank:PRJNA994284		no
+GCA_030567075	genbank	lineage4.1.2.1	9C	genbank:indel_excess(204 vs 59);genbank:PRJNA994284		no
+GCA_030567215	genbank	lineage4.8	14A	genbank:indel_excess(236 vs 45.0);genbank:PRJNA994284		no
+GCA_030567615	genbank	lineage4.1.2.1	10A	genbank:indel_excess(323 vs 59);genbank:PRJNA994284		no
+GCA_030567835	genbank	lineage3	12A	genbank:indel_excess(284 vs 94.5);genbank:PRJNA994284		no
+GCA_030568075	genbank	lineage4.3.4.2	8G	genbank:indel_excess(366 vs 54.0);genbank:PRJNA994284		no
+GCA_030568355	genbank	lineage3	8G	genbank:indel_excess(387 vs 94.5);genbank:PRJNA994284		no
+GCA_030568595	genbank	lineage1.2.2.1	9G	genbank:indel_excess(386 vs 113);genbank:PRJNA994284		no
+GCA_030568815	genbank	lineage2.2.1	10G	genbank:indel_excess(296 vs 97.5);genbank:PRJNA994284		no
+GCA_030568995	genbank	lineage1.1.3	16C	genbank:indel_excess(393 vs 105);genbank:PRJNA994284		no
+GCA_030569215	genbank	lineage1.1.2	9C	genbank:indel_excess(831 vs 105);genbank:PRJNA994284		no
+GCA_030569355	genbank	lineage1.2.1.2.1	8C	genbank:PRJNA994284		no
+GCA_030569575	genbank	lineage3	9T	genbank:PRJNA994284		no
+GCA_030569735	genbank	lineage4.1.2.1	9C	genbank:indel_excess(330 vs 59);genbank:PRJNA994284		no
+GCA_030569895	genbank	lineage1.2.2.2	9C	genbank:indel_excess(1260 vs 113);private_hp_excess(51 vs 1);genbank:PRJNA994284		no
+GCA_030570075	genbank	lineage3.1.2	10C	genbank:PRJNA994284		no
+GCA_030570275	genbank	lineage4.1.1.1	10G	genbank:indel_excess(192 vs 59);genbank:PRJNA994284		no
+GCA_030570495	genbank	lineage1.2.2.1	10C	genbank:indel_excess(1056 vs 113);genbank:PRJNA994284		no
+GCA_030570695	genbank	lineage4.1.2.1	15G	genbank:indel_excess(1206 vs 59);genbank:PRJNA994284		no
+GCA_030570955	genbank	lineage1.1.3.1	15C	genbank:indel_excess(1009 vs 105);genbank:PRJNA994284		no
+GCA_030571135	genbank	lineage4.1.1.1	10G	genbank:indel_excess(222 vs 59);genbank:PRJNA994284		no
+GCA_030571315	genbank	lineage1.1.2	14G	genbank:indel_excess(1339 vs 105);genbank:PRJNA994284		no
+GCA_030571475	genbank	lineage3	14C	genbank:indel_excess(1297 vs 94.5);private_hp_excess(31 vs 1.0);genbank:PRJNA994284		no
+GCA_030571775	genbank	lineage3.1.2.1	11G	genbank:indel_excess(411 vs 87.0);genbank:PRJNA994284		no
+GCA_030571915	genbank	lineage4.1.2.1	11A	genbank:indel_excess(512 vs 59);genbank:PRJNA994284		no
+GCA_030572055	genbank	lineage1.2.2.2	8C	genbank:indel_excess(660 vs 113);genbank:PRJNA994284		no
+GCA_030572195	genbank	lineage3	9G	genbank:indel_excess(890 vs 94.5);genbank:PRJNA994284		no
+GCA_030572375	genbank	lineage1.2.2.2	13G	genbank:indel_excess(411 vs 113);genbank:PRJNA994284		no
+GCA_030572595	genbank	lineage1.2.1.2.1	8G	genbank:PRJNA994284		no
+GCA_030572755	genbank	lineage1.1.3	17G	genbank:PRJNA994284		no
+GCA_030572955	genbank	lineage4.9	11G	genbank:indel_excess(610 vs 21.0);genbank:PRJNA994284		no
+GCA_030573175	genbank	lineage4.3.4.2	8C	genbank:indel_excess(1067 vs 54.0);genbank:PRJNA994284		no
+GCA_030573405	genbank	lineage3.1.1	10C	genbank:indel_excess(1518 vs 87.0);genbank:PRJNA994284		no
+GCA_030573615	genbank	lineage1.1.2	11C	genbank:indel_excess(375 vs 105);genbank:PRJNA994284		no
+GCA_030573855	genbank	lineage1.1.3.1	20G	genbank:indel_excess(779 vs 105);genbank:PRJNA994284		no
+GCA_030574035	genbank	lineage3	9C	genbank:indel_excess(413 vs 94.5);genbank:PRJNA994284		no
+GCA_030574235	genbank	lineage3	9C	genbank:indel_excess(596 vs 94.5);genbank:PRJNA994284		no
+GCA_030574415	genbank	lineage1.1.2	16G	genbank:indel_excess(1050 vs 105);private_hp_excess(32 vs 2);genbank:PRJNA994284		no
+GCA_030574615	genbank	lineage1.1.3.3	13G	genbank:indel_excess(662 vs 105);genbank:PRJNA994284		no
+GCA_030574795	genbank	lineage3	10G	genbank:indel_excess(311 vs 94.5);genbank:PRJNA994284		no
+GCA_030575155	genbank	lineage1.1.3.1	13C	genbank:indel_excess(780 vs 105);genbank:PRJNA994284		no
+GCA_030575355	genbank	lineage1.2.2.2	8C	genbank:indel_excess(533 vs 113);genbank:PRJNA994284		no
+GCA_030575535	genbank	lineage1.1.3.1	14C	genbank:indel_excess(1130 vs 105);genbank:PRJNA994284		no
+GCA_030575675	genbank	lineage1.1.3.1	12C	genbank:indel_excess(629 vs 105);genbank:PRJNA994284		no
+GCA_030575835	genbank	lineage1.1.3.1	18C	genbank:indel_excess(2037 vs 105);private_hp_excess(49 vs 2);genbank:PRJNA994284		no
+GCA_030576055	genbank	lineage1.1.3.1	13C	genbank:indel_excess(470 vs 105);genbank:PRJNA994284		no
+GCA_030576235	genbank	lineage1.1.3.1	11C	genbank:indel_excess(447 vs 105);genbank:PRJNA994284		no
+GCA_030576415	genbank	lineage1.1.3.3	19C	genbank:indel_excess(477 vs 105);genbank:PRJNA994284		no
+GCA_030576775	genbank	lineage1.1.3.1	11G	genbank:indel_excess(1584 vs 105);genbank:PRJNA994284		no
+GCA_030576955	genbank	lineage1.1.3.1	22C	genbank:indel_excess(320 vs 105);genbank:PRJNA994284		no
+GCA_030577095	genbank	lineage1.1.3.3	10C	genbank:indel_excess(590 vs 105);genbank:PRJNA994284		no
+GCA_030577335	genbank	lineage3	13C	genbank:indel_excess(874 vs 94.5);genbank:PRJNA994284		no
+GCA_030577515	genbank	lineage1.1.3.3	12C	genbank:indel_excess(589 vs 105);genbank:PRJNA994284		no
+GCA_030577695	genbank	lineage3	9C	genbank:PRJNA994284		no
+GCA_033127285	genbank	lineage2.1	10G	genbank:indel_excess(374 vs 104.5);private_hp_excess(110 vs 3.0)		no
+GCA_033782915	genbank	La3	9G			no
+GCA_038955375	genbank	lineage1.1.1	8G	genbank:private_hp_excess(121 vs 2)		no
+GCA_041272255	genbank	La1.8.1	42G			no
+GCA_044359725	genbank	lineage1.1.2	10G	genbank:PRJNA994284		no
+GCA_047782875	genbank	lineage4.8	9G			yes
+GCA_047782885	genbank	lineage4.1.2.1	9G			yes
+GCA_047782895	genbank	lineage4.1.1.2	11G			yes
+GCA_047782905	genbank	lineage4.2.1	10G	genbank:private_hp_excess(34 vs 3.5)		no
+GCA_047782915	genbank	lineage4.2.1	10G			yes
+GCA_047782925	genbank	lineage2.2.1	9G			yes
+GCA_047782935	genbank	lineage2.2.1	9G			yes
+GCA_047782945	genbank	lineage4.2.2.2	8G			yes
+GCA_047782955	genbank	lineage2.2.1	10C			yes
+GCA_050310085	genbank	lineage2.2.2	9C	genbank:indel_excess(1374 vs 97.5);private_hp_excess(219 vs 1.0)		no
+GCA_050310095	genbank	lineage2.2.2	39G	genbank:indel_excess(1120 vs 97.5);private_hp_excess(122 vs 1.0)		no
+GCA_050310105	genbank	lineage2.2.2	9G	genbank:indel_excess(951 vs 97.5);private_hp_excess(63 vs 1.0)		no
+GCA_050310115	genbank	lineage2.2.2	8G	genbank:indel_excess(1061 vs 97.5);private_hp_excess(80 vs 1.0)		no
+GCA_050310125	genbank	lineage2.2.2	9G	genbank:indel_excess(955 vs 97.5);private_hp_excess(54 vs 1.0)		no
+GCA_054791015	genbank	lineage4.3.2	9G	genbank:Ns(359)		no
+GCA_061372805	genbank	lineage2.2.1	10G			yes
+GCA_061372815	genbank	lineage2.2.1	25C			yes
+GCA_061373385	genbank	lineage2.2.1	16C			yes
+GCA_061373395	genbank	lineage2.2.1	17G			yes
+GCA_061373945	genbank	lineage2.2.1	9G			yes
+GCA_061373955	genbank	lineage2.2.1	9G			yes
+GCA_061374485	genbank	lineage2.2.1	9G			yes
+GCA_061374495	genbank	lineage2.2.1	11G			yes
+GCA_061375045	genbank	lineage2.2.1	9C			yes
+GCA_061375055	genbank	lineage2.2.1.1	9G			yes
+GCA_061375585	genbank	lineage2.1	10G			yes
+GCA_061375595	genbank	lineage2.1	14C			yes
+GCA_061376125	genbank	lineage2.1	9C			yes
+GCA_061376155	genbank	lineage2.1	16C			yes
+GCA_061376645	genbank	lineage2.2.1	11C			yes
+GCA_061376655	genbank	lineage2.2.1.2	9G			yes
+GCA_061376985	genbank	lineage2.2.1	9G			yes
+GCA_061377015	genbank	lineage2.2.2	17C			yes
+GCA_061377465	genbank	lineage2.2.1	9G			yes
+GCA_061380915	genbank	lineage2.2.1	10G			yes
+GCA_061381405	genbank	lineage4.3.4.2	8G			yes
+GCA_061381435	genbank	lineage3	9C			yes
+GCA_061381865	genbank	lineage4.1.2	11C			yes
+GCA_061381915	genbank	lineage4.3.3	10G			yes
+GCA_061382245	genbank	lineage4.3.4.2.1	8G			yes
+GCA_061382295	genbank	lineage1.2.2.2	8G			yes
+GCA_061382665	genbank	lineage4.2.1	10G			yes
+GCA_061382675	genbank	lineage4.1.1.3	9C			yes
+GCA_061383125	genbank	lineage4.3.3	16G			yes
+GCA_061383135	genbank	lineage4.1.2.1	11G			yes
+GCA_061383625	genbank	lineage2.2.1	11G			yes
+GCA_061383675	genbank	lineage4.1.1.3	9G			yes
+GCA_061384205	genbank	lineage4.3.4.2.1	8G			yes
+GCA_061384215	genbank	lineage4.6.1.2	9G			yes
+GCA_061384705	genbank	lineage4.1.2.1	10G			yes
+GCA_061384715	genbank	lineage4.6.1.2	9G			yes
+GCA_061385255	genbank	lineage4.6.1.2	9G			yes
+GCA_061385285	genbank	lineage3.1.2.1	12G			yes
+GCA_061385765	genbank	lineage4.7	9C			yes
+GCA_061385775	genbank	lineage2.2.1	10G			yes
+GCA_061386085	genbank	lineage1.1.2	9G			yes
+GCA_061386095	genbank	lineage1.1.2	11G			yes
+GCA_061386525	genbank	lineage2.2.1.2	10G			yes
+GCA_061386535	genbank	lineage2.2.1.2	9G			yes
+GCA_061386965	genbank	lineage4.1.2.1	9G			yes
+GCA_061386975	genbank	lineage2.2.2	10G			yes
+GCA_061387425	genbank	lineage1.1.1	9G			yes
+GCA_061387435	genbank	lineage7	10G			yes
+GCA_061387865	genbank	lineage6.2.1	9G			no
+GCA_061387875	genbank	lineage6	10G			no
+GCA_061388365	genbank	lineage6.3.1	8G			no
+GCA_061388385	genbank	lineage5.1	11G			no
+GCA_061388845	genbank	lineage5.1.4	8G			no
+GCA_061388855	genbank	lineage5.1.1	9G			no
+GCA_061389265	genbank	lineage4.2.1.1	9G			yes
+GCA_061389275	genbank	lineage4.3.3	9G			yes
+GCA_061389685	genbank	lineage4.6.2.2	8G			yes
+GCA_061389695	genbank	lineage3	11G			yes
+GCA_061390065	genbank	lineage2.2.1	9G			yes
+GCA_061390075	genbank	lineage2.1	11C			yes
+GCA_061390545	genbank	lineage2.2.1.1	258G	homopolymer_run(258 G)		no
+GCA_061390555	genbank	lineage1.1.2	10G			yes
+GCA_061391065	genbank	lineage1.2.1.2	8G			yes
+GCA_061392535	genbank	lineage3	8G			yes
+GCA_061392705	genbank	lineage3.1	9G			yes
+GCA_932530255	genbank	lineage4.1.2.1	8C			yes
+GCA_965124305	genbank	lineage6.3.1	8C			no
+GCA_965140905	genbank	lineage4.3.4.2	8G			yes
+GCA_978400845	genbank	lineage2.2.1.1	14C			yes
+GCA_978422705	genbank	lineage4.4.1.1	8G			yes
