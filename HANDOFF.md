@@ -148,7 +148,13 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
   (`analysis/graph_tests/RESULTS.md`). Usable for the rebuild.
 - **Open gap found:** inherited (absorbed) insertions reach the cohort VCF
   presence-only, without a read check; inherited deletions are confirmed
-  from the H37Rv frame. Not yet discussed further with the user.
+  from the H37Rv frame. **Matched-genome check run**
+  (`analysis/inherited_matched_check/RESULTS.md`): it confirms/rejects
+  inherited deletions reliably outside the repeat mask (agrees with the
+  H37Rv frame at 659/663 cells, resolves 48/56 NOCALLs); for insertions it
+  helps only outside the mask and outside tandem repeats; VNTR copy number
+  is beyond it. Inside the mask the two frames conflict (~1,900 cells),
+  unadjudicated. No production change yet.
 
 ### Coming next (user, 2026-10-12)
 "We need to redo the graph because of homopolymeric tracts in some of the

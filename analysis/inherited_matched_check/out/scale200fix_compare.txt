@@ -1,0 +1,28 @@
+
+Inherited DELETIONS (all): matched-genome call (rows) x H37Rv-frame state in the cohort VCF (columns)
+                                     ALT  ALT (non-inherited evidenc                      NOCALL  NOCALL (non-inherited evid                         REF  REF (non-inherited evidenc              not catalogued
+carries                            2,728                           3                         988                           3                         907                          28                         624
+lacks                                 25                           0                          60                           0                         164                           0                          31
+unclear                               33                           0                          39                           1                          32                           0                           9
+low_depth                            104                           0                         227                           1                          16                           0                         168
+unplaced                              69                           0                          58                           0                          18                           3                         128
+
+Inherited DELETIONS (outside the mask): matched-genome call (rows) x H37Rv-frame state in the cohort VCF (columns)
+                                     ALT                      NOCALL                         REF              not catalogued
+carries                              581                          40                           4                          10
+lacks                                  0                           8                          78                           3
+low_depth                              0                           2                           0                           0
+unplaced                              12                           6                           1                           5
+
+Inherited DELETIONS (inside the mask): matched-genome call (rows) x H37Rv-frame state in the cohort VCF (columns)
+                                     ALT  ALT (non-inherited evidenc                      NOCALL  NOCALL (non-inherited evid                         REF  REF (non-inherited evidenc              not catalogued
+carries                            2,147                           3                         948                           3                         903                          28                         614
+lacks                                 25                           0                          52                           0                          86                           0                          28
+unclear                               33                           0                          39                           1                          32                           0                           9
+low_depth                            104                           0                         225                           1                          16                           0                         168
+unplaced                              57                           0                          52                           0                          17                           3                         123
+
+Inherited INSERTIONS: matched-genome call by class (today all are reported present)
+  other    1,827: carries 759, lacks 28, unclear 552, low_depth 6, unplaced 40, repeat 442
+  tandem   1,074: carries 786, lacks 2, unclear 249, unplaced 14, repeat 23
+  masked   5,812: carries 2,644, lacks 32, unclear 1,855, low_depth 472, unplaced 314, repeat 495

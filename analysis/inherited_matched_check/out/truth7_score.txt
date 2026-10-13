@@ -1,0 +1,88 @@
+inherited events in the 7 truth isolates (all; 'tandem'/'tandem_no' are outside the mask): matched-genome call against the assembly
+
+DEL            truly carried  truly absent  unknown
+  carries                181            10       17
+  lacks                    3            10        0
+  unclear                  0             3        2
+  low_depth                8             4        6
+  unplaced                 0             1       11
+  present as reported today (no check): 192 right, 28 wrong (precision 0.873)
+  'carries' precision 0.948 (181/191); 'lacks' correct 10/13; truly absent caught 10/28
+
+INS            truly carried  truly absent  unknown
+  carries                 72            47        8
+  lacks                    0             0        1
+  unclear                 29            32        2
+  repeat                   9            18        1
+  low_depth                6             7        3
+  unplaced                 0            12        4
+  present as reported today (no check): 116 right, 116 wrong (precision 0.500)
+  'carries' precision 0.605 (72/119); 'lacks' correct 0/0; truly absent caught 0/116
+
+inherited events in the 7 truth isolates (outside; 'tandem'/'tandem_no' are outside the mask): matched-genome call against the assembly
+
+DEL            truly carried  truly absent  unknown
+  carries                 27             0        2
+  lacks                    0             1        0
+  present as reported today (no check): 27 right, 1 wrong (precision 0.964)
+  'carries' precision 1.000 (27/27); 'lacks' correct 1/1; truly absent caught 1/1
+
+INS            truly carried  truly absent  unknown
+  carries                 36            17        0
+  unclear                  5             4        0
+  repeat                   7             4        0
+  unplaced                 0             2        0
+  present as reported today (no check): 48 right, 27 wrong (precision 0.640)
+  'carries' precision 0.679 (36/53); 'lacks' correct 0/0; truly absent caught 0/27
+
+inherited events in the 7 truth isolates (inside; 'tandem'/'tandem_no' are outside the mask): matched-genome call against the assembly
+
+DEL            truly carried  truly absent  unknown
+  carries                154            10       15
+  lacks                    3             9        0
+  unclear                  0             3        2
+  low_depth                8             4        6
+  unplaced                 0             1       11
+  present as reported today (no check): 165 right, 27 wrong (precision 0.859)
+  'carries' precision 0.939 (154/164); 'lacks' correct 9/12; truly absent caught 9/27
+
+INS            truly carried  truly absent  unknown
+  carries                 36            30        8
+  lacks                    0             0        1
+  unclear                 24            28        2
+  repeat                   2            14        1
+  low_depth                6             7        3
+  unplaced                 0            10        4
+  present as reported today (no check): 68 right, 89 wrong (precision 0.433)
+  'carries' precision 0.545 (36/66); 'lacks' correct 0/0; truly absent caught 0/89
+
+inherited events in the 7 truth isolates (tandem; 'tandem'/'tandem_no' are outside the mask): matched-genome call against the assembly
+
+DEL            truly carried  truly absent  unknown
+  carries                  5             0        0
+  present as reported today (no check): 5 right, 0 wrong (precision 1.000)
+  'carries' precision 1.000 (5/5); 'lacks' correct 0/0; truly absent caught 0/0
+
+INS            truly carried  truly absent  unknown
+  carries                 12            15        0
+  unclear                  0             4        0
+  unplaced                 0             1        0
+  present as reported today (no check): 12 right, 20 wrong (precision 0.375)
+  'carries' precision 0.444 (12/27); 'lacks' correct 0/0; truly absent caught 0/20
+
+inherited events in the 7 truth isolates (tandem_no; 'tandem'/'tandem_no' are outside the mask): matched-genome call against the assembly
+
+DEL            truly carried  truly absent  unknown
+  carries                 22             0        2
+  lacks                    0             1        0
+  present as reported today (no check): 22 right, 1 wrong (precision 0.957)
+  'carries' precision 1.000 (22/22); 'lacks' correct 1/1; truly absent caught 1/1
+
+INS            truly carried  truly absent  unknown
+  carries                 24             2        0
+  unclear                  5             0        0
+  repeat                   7             4        0
+  unplaced                 0             1        0
+  present as reported today (no check): 36 right, 7 wrong (precision 0.837)
+  'carries' precision 0.923 (24/26); 'lacks' correct 0/0; truly absent caught 0/7
+
