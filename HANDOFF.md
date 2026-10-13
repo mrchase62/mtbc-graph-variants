@@ -143,6 +143,29 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
 4. P1/P2 were already at 4 cores / 8 GB since 2026-10-07 (e33556b).
 
 ### Rebuild topics (2026-10-13)
+- **Decided (user, 2026-10-13): "yes, use parsimony over all outgroups for
+  every variant class".** At the rebuild:
+  - one Fitch reconstruction over the panel tree for SNPs, indels, SVs,
+    IS6110 and accessory, from each panel genome's graph VCF genotype;
+  - it replaces both `bin/ancestral_alleles.py`'s SNP-only AA and
+    `bin/panel_polarity.py`'s single-outgroup read. The reference
+    implementation is `analysis/ancestry_need/ancestry_need.py`.
+  - The ancestral node is the MRCA of L1-4,7. The outgroups are
+    GCF_022870265 (L5.1.1), GCF_000253355 (L6.1.1), L8 GCF_012923765 and
+    canettii GCF_035581225.
+  - A tie at that node is resolved by Fitch's downward pass over the whole
+    tree, all outgroups together, never nearest-first. Under nearest-first,
+    L5.1 and L6.1 join at the same node and disagree on the tatC-helY
+    element, so list order would decide it.
+  - L8 and canettii rows: SNPs from the kit (`genome_states.py`); indels,
+    SVs and other events from OUT-1. Until OUT-1 exists, L5.1 and L6.1
+    decide those ties.
+  - Unchanged: the 5% panel-AF guard for outgroup-ALT-ancestral, and
+    "presence is derived" for accessory sequence absent from H37Rv.
+  - Tests: tatC-helY present under any outgroup order; the fault B case; a
+    tie inside L1-4 only the outgroups resolve.
+  - Expect indels and SVs now "unpolarised, ALT derived" to get a measured
+    direction, some flipped. Recheck association survivors and DR controls.
 - **Sparse mapping checked:** graphs B and D (`-x auto`) agree at all but
   0.2% of calls outside masked repeats and representation shifts
   (`analysis/graph_tests/RESULTS.md`). Usable for the rebuild.

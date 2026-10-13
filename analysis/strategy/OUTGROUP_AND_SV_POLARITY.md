@@ -132,7 +132,9 @@ also lack, the pseudo-isolate would supply the state.
   Earlier text: the proposal says one or
   two clean ones. L5 has 8 in CX333 and L6 has 5.
 - **Build OUT-1 on CX333 now,** or with the new graph.
-- **Extend `panel_polarity.py` to an ordered outgroup list,** and move the
+- **Decided 2026-10-13 (user): parsimony over all outgroups for every
+  variant class** (HANDOFF "Rebuild topics"), not an ordered list. Earlier
+  text: extend `panel_polarity.py` to an ordered outgroup list, and move the
   ancestral node to the L1-4,7 MRCA.
 - **Non-target isolates in cohorts** (L5/6 beyond the in-graph genomes, L8,
   L9, animal lineages): exclude, or flag, at P1 by barcode lineage
