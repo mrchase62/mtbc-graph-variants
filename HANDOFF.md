@@ -150,8 +150,12 @@ graph and cohort, so item 2's rebalancing applies to the new selection.
 - **Scope, leading option, not final (user, 2026-10-12): "L1-4 and L7 plus
   one or two L5/6, as proposed"** (sections 0g, 0i, 0k). Later the same day:
   "I am still on the fence about removing lineages from the graph that may
-  provide key ancestry for specific loci." Runtime gain being measured
-  (`analysis/graph_tests/odgi_timing.sbatch`).
+  provide key ancestry for specific loci." **Runtime measured**
+  (`analysis/graph_tests/RESULTS.md`, odgi timing): per lookup, CX333 is
+  ~10x the 50-genome L1-4,7 test graph; +2 L5/6 adds ~8%, +canettii 50%.
+  Graph-querying stages are ~13% of gwas1000's cost, so a ~300-genome
+  L1-4,7 panel would save an estimated 3-5% per sample (not 5-10%); the
+  case for it is genotyping quality and build cost, not runtime.
 - **Ancestry check done** (`analysis/ancestry_need/RESULTS.md`): of 47,280
   records varying inside L1-4,7, the ingroup decides 98.3% alone; of the
   816 needing an outside genome, the proposed panel (best L5/6 pair + L8 +
