@@ -629,6 +629,13 @@ the repository.
 - **Relation to the hold:** needed before any graph without canettii. The
   user put graph work on hold, so this is scheduled with it, but it can be
   built and tested on the current CX333 graph.
+- **Decided (user, 2026-10-13): ET1291 (GCF_035581225) only**; CIPT
+  140010059 / GCF_000253375 dropped. The kit also covers L8 (GCF_012923765)
+  for the all-classes parsimony. Not built on CX333 ("I thought cx333 has
+  genomes we want to replace?"): the pseudo-isolate run goes through the
+  graph, so it waits for the new graph. The direct assembly alignment
+  (indels/SVs via paftools, IS6110/accessory by sequence alignment) is
+  against H37Rv and does not depend on any graph; timing open.
 
 **Decided (user, 2026-10-08): local de novo assembly stays an audit run, on
 request.** It is SPAdes, then minimap2 contigs against H37Rv
