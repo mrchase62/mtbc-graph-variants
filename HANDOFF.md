@@ -144,6 +144,13 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
 
 ### Rebuild topics (2026-10-13)
 
+- **Build cost approved (user, 2026-10-13: "approve all three steps now"):**
+  panel QC and selection ~20 billing-hours; graph build up to ~1,500
+  CPU-hours (pggb; expect ~1,200); validation reruns scale200 then the new
+  1K cohort ~350+ billing-hours. Each starts when its inputs are ready. Not
+  covered: P1 on the new 1K cohort (waits on the copy/download decision).
+  Explain each step before running (standing rule).
+
 - **Cohort (decided, user, 2026-10-13): "start with about 1,000"**, then 10K.
   Selection after the collection-wide fold-back screen (old <= 2.5), on top of
   select_isolates.py and lineage 1-4,7. Approved: the screen, ~110 CPU-hours.

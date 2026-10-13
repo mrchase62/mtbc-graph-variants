@@ -2448,3 +2448,4 @@ rows come from, the graph (G) or each assembly aligned straight to H37Rv
 - User: "yes, keep L7 in the graph" -> recorded; gwas1000 L7 isolates (34) stay.
 - Topic 5. User: "start with about 1,000. I think we should consider fold-back chimera screening all the samples and copy over just the ones that we will use in the 1K and 10K cohorts" -> plan ~110 CPU-hours screen, ~540 GB copy. User: "yes, run the screen; wait on copying. his response was just to redo the download and alignment. I don't want all the data at this point, so I just suggest that we grab what passes and store." select_isolates.py: 45,536 of 54,461 pass; L1-4,7 ~45,250.
 - Fold-back screen submitted: job 52659052 (array 0-34%10), 44,293 isolates in 35 chunks (959 already measured reused). Topic 6 (build cost) presented; awaiting approval.
+- Topic 6. User: "approve all three steps now" -> panel QC/selection ~20 bh, graph build <= ~1,500 CPU-h, validation reruns ~350+ bh. Recorded.
