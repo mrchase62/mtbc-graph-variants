@@ -140,7 +140,7 @@ now ask `-n 1 -c N`, so SLURM_CPUS_PER_TASK is always set by Slurm and is
 not inherited from a submitting job. The scale200_fix tree ran IQ-TREE on 1
 of 24 cores for this reason. build_snp_tree.sh is now 8 cores, shared, 32 GB;
 vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
-4. P1/P2 right-sizing (cost list change A) is still the user's decision.
+4. P1/P2 were already at 4 cores / 8 GB since 2026-10-07 (e33556b).
 
 ### Coming next (user, 2026-10-12)
 "We need to redo the graph because of homopolymeric tracts in some of the
@@ -1205,7 +1205,7 @@ tenth of their memory.
 
 | | change | saving | method change? |
 |---|---|---|---|
-| A | P1 and P2 to 4 cores, 4 GB | about -54% on them, about 8,000 billing-hours at 10k | no |
+| A | P1 and P2 to 4 cores, 4 GB | about -54% on them, about 8,000 billing-hours at 10k | no. **Done 2026-10-07 as 4 cores / 8 GB (e33556b; GATK heap 6 GB), identical results** |
 | B | P1g and P1i to 2 GB | about -25% | no |
 | C | serial_requeue for short per-sample tasks | half the billing again | no, but needs E first |
 | D | a cheaper P1 reference selector (panel-informative sites from a read subsample, or k-mer sketch distance) | most of P1 | **yes**: inventory everything that reads P1's VCF, then validate against gwas1000's refmap |
