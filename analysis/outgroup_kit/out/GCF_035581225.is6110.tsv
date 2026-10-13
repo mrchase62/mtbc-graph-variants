@@ -1,0 +1,7 @@
+contig	copy_start	copy_end	strand	h37rv_pos	h37rv_gap	state
+NZ_CP141297.1	2446033	2447373	-	2364847	-2	site_absent_in_h37rv
+NZ_CP141297.1	3571079	3572434	+	3486313	-2	site_absent_in_h37rv
+NZ_CP141297.1	3640710	3642065	-			flank_unplaced
+NZ_CP141297.1	3800167	3801505	-			flank_unplaced
+NZ_CP141297.1	3801999	3803355	+			flank_unplaced
+NZ_CP141297.1	4157376	4158730	-	4057667	-3	site_absent_in_h37rv

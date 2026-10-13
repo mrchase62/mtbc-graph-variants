@@ -635,7 +635,8 @@ the repository.
   genomes we want to replace?"): the pseudo-isolate run goes through the
   graph, so it waits for the new graph. The direct assembly alignment
   (indels/SVs via paftools, IS6110/accessory by sequence alignment) is
-  against H37Rv and does not depend on any graph; timing open.
+  against H37Rv and does not depend on any graph. Built 2026-10-13:
+  `bin/outgroup_kit.py`, `analysis/outgroup_kit/README.md`.
 
 **Decided (user, 2026-10-08): local de novo assembly stays an audit run, on
 request.** It is SPAdes, then minimap2 contigs against H37Rv
