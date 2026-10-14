@@ -196,7 +196,9 @@ def harmonize(recs, h37_contig, copies=()):
                         c[s] = DUP_CELL
                         sources[j].add(src)
                         n["rule3 SV INS cells handed to the IS6110 arm"] += 1
-                    elif cj[s].split(":", 1)[-1] in ("REF", "ABSENT"):
+                    # the state is the SECOND field: a cell may carry a
+                    # trailing evidence field (GT:ST:EV, ABS-1)
+                    elif cj[s].split(":")[1:2] in (["REF"], ["ABSENT"]):
                         n["rule3 SV INS ALT where the IS6110 arm says REF/ABSENT (kept)"] += 1
 
     # rule 3: caller SV insertion cells that are IS6110 insertions

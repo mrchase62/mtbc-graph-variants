@@ -172,7 +172,12 @@ FIELDS = ["sample", "reference", "build_id", "svtype", "svlen", "frame",
 # qual_caller: the caller whose record supplied `qual` (the representative's),
 # so p5_sv_matrix.py bands it on that caller's scale (audit P4P5-11)
 # callable: yes / no for called rows (span +-50 bp clear of R's uncallable
-# mask), blank for inherited rows, which are in H37Rv coordinates
+# mask). For inherited rows, which are in H37Rv coordinates, `no` when the
+# event is masked under ABS-1's rule (bin/inherited_check.py Mask.site: its
+# span, or either end within 150 bp, overlaps the build's repeat_mask.bed),
+# else `yes`. P5 routes a masked inherited INSERTION to NOCALL
+# "masked"; a masked inherited deletion is genotyped in both frames (ABS-2,
+# user 2026-10-14).
 
 
 def main():
@@ -362,9 +367,33 @@ def main():
     # `component` says which half a row came from, and `filter` is INHERITED
     # because these carry no caller FILTER of their own.
     n_inh = 0
+    n_inh_masked = 0
+    n_kept_near = 0
     if not a.no_inherited:
-        called_at = sorted(int(r["h37rv_pos"]) for r in rows
+        # THE CALLED HALF SUPPRESSES ONLY THE SAME EVENT (HANDOFF ABS-2 item
+        # 4). Any called SV within 200 bp used to drop the inherited row,
+        # whatever its type and size, so a 60 bp insertion call next to R's
+        # 2 kb deletion silently removed the deletion. Now the called row must
+        # be the same type and within 50% in size (the smaller at least half
+        # the larger), the rule truth scoring uses.
+        called_at = sorted((int(r["h37rv_pos"]), r["svtype"], int(r["svlen"] or 0))
+                           for r in rows
                            if r["frame"] == "h37rv" and r["h37rv_pos"] != "")
+        called_pos = [c[0] for c in called_at]
+
+        def same_called(pos, svt, ln):
+            i = bisect.bisect_left(called_pos, pos - 200)
+            near = False
+            while i < len(called_at) and called_at[i][0] <= pos + 200:
+                _, t2, l2 = called_at[i]
+                near = True
+                if t2 == svt and (not l2 or min(l2, ln) / max(l2, ln) >= 0.5):
+                    return True, near
+                i += 1
+            return False, near
+
+        import inherited_check as _ic
+        rmask = _ic.Mask(_ic.load_mask(a.mask))
         child, hdr = [], None
         for line in op(a.graph_vcf):
             if line.startswith("#"):
@@ -427,11 +456,19 @@ def main():
                             for kv in f[7].split(";") if kv)
                 if info.get("LV") == "0" and has_child(pos, pos + max(len(ref), 1)):
                     continue
-                i = bisect.bisect_left(called_at, pos - 200)
-                if i < len(called_at) and called_at[i] <= pos + 200:
-                    continue          # the called half already states this
                 svt = "INS" if d > 0 else "DEL"
                 end = pos + (0 if d > 0 else abs(d))
+                same, near = same_called(pos, svt, abs(d))
+                if same:
+                    continue          # the called half already states this
+                n_kept_near += near
+                # masked under ABS-1's rule: deleted bases pos+1..end, or the
+                # insertion point, with either end padded by a read length
+                if svt == "DEL":
+                    msk = rmask.site(pos + 1, end, (pos + 1, end))
+                else:
+                    msk = rmask.site(pos, pos + 1, (pos, pos + 1))
+                n_inh_masked += msk
                 n_inh += 1
                 rows.append(dict(
                     sample=a.sample, reference=a.reference,
@@ -440,7 +477,8 @@ def main():
                     h37rv_pos=pos, h37rv_end=end, r_pos="", r_end="",
                     node_pos="", node_end="", src="graph_vcf", n_callers=0,
                     sr="", pe="", qual="", filter="INHERITED",
-                    component="inherited", qual_caller="", callable=""))
+                    component="inherited", qual_caller="",
+                    callable="no" if msk else "yes"))
 
     # header-only when there is nothing, never an IndexError on rows[0]; an
     # empty table and a missing file must not look the same downstream
@@ -452,13 +490,15 @@ def main():
         w.writeheader(); w.writerows(rows)
     os.replace(a.out + ".tmp", a.out)
     print(f"    inherited: {n_inh} SV records from R's own differences "
-          f"from H37Rv")
+          f"from H37Rv, {n_inh_masked} masked; {n_kept_near} kept beside a "
+          f"called SV of another type or size")
     print(f"  {a.sample}: {len(recs)} caller records -> {len(events)} events; "
           f"{counts['placed']} placed on the H37Rv path, "
           f"{counts['breakend']} as breakend pairs")
     if n_rule:
         print("    dropped by rule: " + ", ".join(f"{k} {v}" for k, v in sorted(n_rule.items())))
-    print(f"    uncallable called rows: {sum(r['callable'] == 'no' for r in rows)}")
+    print(f"    uncallable called rows: "
+          f"{sum(r['callable'] == 'no' and r['component'] == 'called' for r in rows)}")
     for k in ("reverse_strand", "span_mismatch"):
         if counts[k]:
             print(f"    {k.replace('_', ' ')}: {counts[k]}")

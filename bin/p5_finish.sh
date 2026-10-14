@@ -268,6 +268,29 @@ if [[ -z "${SV_STATES:-}" ]]; then
 fi
 [[ -s "${SV_STATES:-}" ]] || SV_STATES=""
 [[ -n "$SV_STATES" ]] && echo "  SV states: ${SV_STATES}"
+# INHERITED INSERTIONS AS MEASURED (HANDOFF ABS-2). The caller matrix states
+# an inherited insertion present in every sample whose reference carries it;
+# p5_svgt.sh --merge collects each sample's matched-frame genotype of them
+# (bin/p5_inherited_sv.py), and sv_matrix.members.tsv says which cells
+# inheritance alone made ALT. Without them those cells are written as before
+# and labelled EV=inherited_unchecked, which a VCF rebuild of an older cohort
+# still allows.
+INHSTATES="${INHSTATES:-${OUTDIR}/inherited_sv_states.tsv}"
+SVMEMBERS="${SVMEMBERS:-${OUTDIR}/sv_matrix.members.tsv}"
+INH_ARGS=()
+if [[ -s "$INHSTATES" ]]; then
+    [[ -s "$SVMEMBERS" ]] || { echo "FATAL: ${INHSTATES} but no ${SVMEMBERS};" \
+        "rerun p5_finish.sh --pre" >&2; exit 1; }
+    # matched-frame states older than the SV matrix name P4b rows of another
+    # generation
+    [[ "$INHSTATES" -nt "${OUTDIR}/sv_matrix.tsv" ]] || { echo "FATAL: ${INHSTATES}" \
+        "is older than ${OUTDIR}/sv_matrix.tsv; rerun pass p5svgt" >&2; exit 1; }
+    INH_ARGS=(--inherited-sv-states "$INHSTATES" --sv-members "$SVMEMBERS")
+    echo "  inherited insertions genotyped in ${INHSTATES}"
+else
+    echo "  NOTE no ${INHSTATES}: inherited insertions stay presence-only," \
+         "labelled EV=inherited_unchecked"
+fi
 # NOT resolved here. merge_cohort_vcf.py maps a cohort name to its stage-2
 # table itself, and deliberately refuses to fall back to the unprefixed pilot
 # file for a cohort that has none -- a shell loop that tried the pilot's table
@@ -327,6 +350,7 @@ MERGE=("$MTB_PY" bin/merge_cohort_vcf.py "${SMALL[@]}" \
     ${IS6110_STATES:+--is6110-states "$IS6110_STATES"} \
     ${SV_STATES:+--sv-states "$SV_STATES"} \
     "${IV_ARGS[@]}" \
+    "${INH_ARGS[@]}" \
     "${ACC_ARGS[@]}" \
     --cohort-name "$COHORT_NAME")
 
@@ -390,6 +414,15 @@ bash bin/stamp_build_id.sh "${OUTDIR}/merged.vcf.gz"
 # count, a record bcftools cannot parse, a REF that does not match H37Rv, or an
 # unsorted contig -- each of which the pipeline's own readers tolerated.
 bash bin/vcf_gate.sh "${OUTDIR}/merged.vcf.gz" "$H37RV_FASTA"
+
+# PER SAMPLE, WHAT RESTS ON THE REFERENCE ALONE (HANDOFF ABS-1 item 4): the
+# cells whose state was read off the matched reference and not the sample's
+# reads, the ABSENT/NOCALL reasons, and a flag where the reference comes from
+# a deeper sublineage than the sample's own lineage call.
+echo
+echo "=== calls resting only on the reference ==="
+"$MTB_PY" bin/p5_reference_only.py --vcf "${OUTDIR}/merged.vcf.gz" \
+    --refmap "$REFMAP" --out "${OUTDIR}/reference_only.tsv"
 
 echo
 echo "=== chain rebuilt from one generation ==="

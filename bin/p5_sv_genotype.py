@@ -57,6 +57,34 @@ A probe whose projection reports dist != 0 has no equivalent in the sample's
 reference at all; when most probes are like that the cell is ABSENT, which is a
 different statement from either REF or NOCALL and the matrix already carries it.
 
+INHERITED DELETIONS ARE READ IN BOTH FRAMES (HANDOFF ABS-2, 2026-10-14). The
+H37Rv frame (sv2frame/bin/sv_twoframe.py) was the only read-level check, and
+the matched frame contributed an inference. bin/p5_inherited_sv.py now reads
+R's own junction in the sample's alignment to R, and the two are combined:
+
+  tandem (a VNTR unit or duplication of its flanks)          NOCALL "tandem"
+  both frames agree                                           that state
+  one decides, the other is NOCALL                            that state
+  they conflict                                               NOCALL "frames_conflict"
+
+Outside the mask the two frames agreed at 659 of 663 decided scale200_fix
+cells and the matched frame decided 48 of 56 the H37Rv frame left NOCALL;
+truth7 put matched-frame "carries" at 27/27 outside the mask
+(analysis/inherited_matched_check/RESULTS.md). Inside the repeat mask the same
+rule is applied: on ctrl25_p200's 25 finished assemblies it was right at 432
+masked inherited-deletion cells and wrong at 16, against 384 / 124 for the
+H37Rv frame alone, and the user decided 2026-10-14 ("yes, accept all three")
+to genotype them rather than NOCALL them. Their evidence ends in `_inmask` so
+they can be told apart.
+
+AN INTERVAL ABSENT FROM R IS CHECKED TOO (ABS-1). An interval none of whose
+probes project into R, with uncovered flanks, used to be ABSENT unread -- the
+ctpV case, SAMEA2297133's intact gene stated ABSENT inside R's 1,296 bp
+deletion. R's deletion over it is now checked in the sample's P1 alignment to
+H37Rv (bin/inherited_check.py): reads across both ends mean the sequence is
+here, and the H37Rv-frame state stands (REF or ALT); reads joining the ends
+keep ABSENT; a masked interval, or anything else, is NOCALL with its reason.
+
 Two modes:
   --probes-out   write the H37Rv probe positions, for the projection step
   --out          read the projection back and write this sample's states
@@ -65,6 +93,7 @@ import argparse, bisect, collections, csv, gzip, os, subprocess, sys, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from p5_states import load_gvcf, load_gvcf_blocks, make_cov, make_in_spans
+import inherited_check as ic
 
 
 def gvcf_depth(path, min_dp):
@@ -265,6 +294,29 @@ def genotype_intervals(a, ivs):
     elif not a.trust_inherited:
         print("  NOTE no --twoframe table: inherited candidates cannot be "
               "confirmed and will be NOCALL rather than ALT")
+    # ---- the matched frame and the ABSENT check (ABS-2, ABS-1) -------------
+    chk = None
+    if a.inherited_check:
+        if not os.path.exists(a.inherited_check):
+            sys.exit(f"FATAL: no {a.inherited_check}")
+        chk = {}
+        for q in csv.DictReader(open(a.inherited_check, newline=""), delimiter="\t"):
+            if q.get("sample") and q["sample"] != a.sample:
+                sys.exit(f"FATAL: {a.inherited_check} holds {q['sample']}, not "
+                         f"{a.sample}")
+            if q.get("kind") == "DEL":
+                chk[q["id"]] = q
+        missing = [r["interval"] for r in ivs if r["interval"] not in chk]
+        if missing:
+            sys.exit(f"FATAL: {a.inherited_check} has no row for {len(missing):,} "
+                     f"catalogue intervals (e.g. {missing[0]}); it was made from "
+                     f"another catalogue. Rerun bin/p5_inherited_sv.py")
+        print(f"  matched-frame and ABSENT checks for {len(chk):,} intervals "
+              f"from {a.inherited_check}")
+    elif not (a.no_inherited_check or a.trust_inherited):
+        sys.exit("FATAL: interval mode needs --inherited-check (from "
+                 "bin/p5_inherited_sv.py), or --no-inherited-check to reproduce "
+                 "output written before 2026-10-14")
 
     def inherited_call(kind, flank_ok):
         """Promote an inherited candidate only on positive evidence."""
@@ -274,26 +326,46 @@ def genotype_intervals(a, ivs):
             return "NOCALL", f"{kind}, flanks not covered"
         if not flank_ok or a.no_promote:
             return "NOCALL", f"{kind}, flanks not covered"
+        q = chk.get(r["interval"]) if chk is not None else None
+        # ABS-2: a tandem event is not decided by either frame. A masked one
+        # IS genotyped (user, 2026-10-14) and says so in its evidence
+        inmask = "_inmask" if q is not None and q.get("masked") == "yes" else ""
+        if q is not None and q.get("tandem") == "yes":
+            return "NOCALL", f"{kind}_tandem"
         hit = tf.get(r["interval"])
         if hit is None:
-            return "NOCALL", f"{kind}_unconfirmed, no second frame"
-        hs, hclips = hit
-        # THE H37Rv-FRAME STATE DECIDES; A CLIP CLUSTER ALONE DOES NOT (audit
-        # P4P5-3). `clips >= 1` used to promote before the state was looked
-        # at, so an interval whose H37Rv-frame depth covered it in full was
-        # "confirmed" by one end's clip cluster, which is common in repeats
-        # and at IS6110 junctions: 995 ALT cells in scale200, 7,321 in
-        # gwas1000. sv_twoframe.py's own ALT already takes clips into account
-        # (both ends clipped at ambiguous depth), so its state is the
-        # confirmation. Full depth with clips at an end is conflicting
-        # evidence and is NOCALL; full depth without clips contradicts.
-        if hs == "ALT":
-            return "ALT", f"{kind}_confirmed"
-        if hs == "REF":
-            if hclips >= 1:
-                return "NOCALL", f"{kind}_depth_present_but_clipped"
-            return "REF", f"{kind}_contradicted"
-        return "NOCALL", f"{kind}_unconfirmed"
+            h, hwhy = "NOCALL", f"{kind}_unconfirmed, no second frame"
+        else:
+            hs, hclips = hit
+            # THE H37Rv-FRAME STATE DECIDES; A CLIP CLUSTER ALONE DOES NOT
+            # (audit P4P5-3). `clips >= 1` used to promote before the state
+            # was looked at, so an interval whose H37Rv-frame depth covered it
+            # in full was "confirmed" by one end's clip cluster, which is
+            # common in repeats and at IS6110 junctions: 995 ALT cells in
+            # scale200, 7,321 in gwas1000. sv_twoframe.py's own ALT already
+            # takes clips into account (both ends clipped at ambiguous depth),
+            # so its state is the confirmation. Full depth with clips at an
+            # end is conflicting evidence and is NOCALL; full depth without
+            # clips contradicts.
+            if hs == "ALT":
+                h, hwhy = "ALT", f"{kind}_confirmed"
+            elif hs == "REF" and hclips >= 1:
+                h, hwhy = "NOCALL", f"{kind}_depth_present_but_clipped"
+            elif hs == "REF":
+                h, hwhy = "REF", f"{kind}_contradicted"
+            else:
+                h, hwhy = "NOCALL", f"{kind}_unconfirmed"
+        if chk is None:
+            return h, hwhy                    # --no-inherited-check: as before
+        # R's junction in the sample's own alignment to R (ABS-2 item 1). The
+        # evidence names which frame decided; each frame's own reading goes
+        # to the h_frame and m_frame columns
+        m_call = q.get("call", "") if q is not None else ""
+        st, which = ic.combine_frames(h, m_call)
+        frames[r["interval"]] = (hwhy, m_call)
+        return st, f"{kind}_{which}{inmask}"
+
+    frames = {}
 
     counts, evid, out = collections.Counter(), collections.Counter(), []
     for r in ivs:
@@ -336,6 +408,18 @@ def genotype_intervals(a, ivs):
             if not flank_ok or a.no_promote:
                 state, why = "ABSENT", (f"{len(ok)}/{len(probes)} probes "
                                         f"project, flanks not covered")
+                q = chk.get(r["interval"]) if chk is not None else None
+                if q is not None and not a.no_promote:
+                    # ABS-1: R lacks the interval; do the sample's reads?
+                    v = q.get("h_junction", "")
+                    if v == "present_here":
+                        hs = (tf.get(r["interval"]) or ("NOCALL", 0))[0]
+                        state = hs if hs in ("REF", "ALT") else "NOCALL"
+                        why = f"absent_checked_present_{state.lower()}"
+                    elif v == "deleted_here":
+                        why = "absent_junction_joined"
+                    else:
+                        state, why = "NOCALL", f"absent_{v or 'unchecked'}"
             else:
                 state, why = inherited_call("inherited_unrecorded", flank_ok)
         elif frac >= a.present_frac:
@@ -348,16 +432,22 @@ def genotype_intervals(a, ivs):
             state, why = "NOCALL", "ambiguous depth"
         counts[state] += 1
         evid[why] += 1
+        hf, mf = frames.get(r["interval"], ("", ""))
         out.append(dict(sample=a.sample, interval=r["interval"],
                         svtype=r["svtype"], state=state, evidence=why,
                         covered_frac=f"{frac:.3f}", depth=("mapq" if filtered
                                                            else "gvcf"),
                         is6110_prox=r.get("is6110_prox", "0"),
-                        n_projected=len(ok), n_probes=len(probes)))
+                        n_projected=len(ok), n_probes=len(probes),
+                        h_frame=hf, m_frame=mf))
     with open(a.out, "w", newline="") as fh:
+        # h_frame / m_frame: each frame's own reading of an inherited deletion
+        # (the H37Rv frame's evidence, the matched frame's call), so a
+        # frames_conflict can be looked into
         w = csv.DictWriter(fh, delimiter="\t", fieldnames=[
             "sample", "interval", "svtype", "state", "evidence",
-            "covered_frac", "depth", "is6110_prox", "n_projected", "n_probes"])
+            "covered_frac", "depth", "is6110_prox", "n_projected", "n_probes",
+            "h_frame", "m_frame"])
         w.writeheader()
         w.writerows(out)
     n = len(out)
@@ -433,6 +523,18 @@ def main():
                          "the two-frame check measured a 26.5% contradiction "
                          "rate for that class. Kept for reproducing earlier "
                          "output, not for new runs.")
+    ap.add_argument("--inherited-check", default="",
+                    help="this sample's table from bin/p5_inherited_sv.py: the "
+                         "matched-frame reading of R's junction for every "
+                         "inherited deletion, the masked and tandem flags, and "
+                         "the H37Rv-frame check of R's deletion for an interval "
+                         "absent from R (HANDOFF ABS-1, ABS-2). Required in "
+                         "interval mode unless --no-inherited-check.")
+    ap.add_argument("--no-inherited-check", action="store_true",
+                    help="genotype inherited deletions from the H37Rv frame "
+                         "alone and state an interval absent from R ABSENT "
+                         "unread, as before 2026-10-14. For reproducing "
+                         "earlier output, not for new runs")
     ap.add_argument("--no-promote", action="store_true",
                     help="never write ALT from evidence, only from a call")
     a = ap.parse_args()

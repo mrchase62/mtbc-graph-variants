@@ -85,3 +85,13 @@ p5vcf	pre	cohort	yes	${OUTROOT}/p5/states.u8.npy	the small-variant states array
 p5vcf	pre	build	yes	${BUILD}/assets/ancestral.tsv	ancestral alleles (p0_prepare.sh --step ancestral)
 p5vcf	pre	cohort	yes	${OUTROOT}/p5/sv_matrix.tsv	the SV table
 p5vcf	post	cohort	yes	${OUTROOT}/p5/merged.vcf.gz	the cohort-level deliverable
+p1	post	sample	yes	${WORKPFX}p1/${S}.h37rv.bam	P1's H37Rv alignment; P5 checks every ABSENT and inherited SV against it (ABS-1, 2026-10-14)
+p5	pre	build	yes	${BUILD}/assets/panel_differences.tsv.gz	each panel genome's deletions and no-genotype sites (p0_prepare.sh --step panel_diffs), for the ABSENT check
+p5	pre	sample	yes	${WORKPFX}p1/${S}.h37rv.bam	the ABSENT check reads the ends of R's deletion here
+p5	post	cohort	yes	${OUTROOT}/p5/states.ev.u8.npy	each cell's evidence code, FORMAT/EV in the merged VCF
+p5	post	cohort	yes	${OUTROOT}/p5/sv_matrix.members.tsv	which P4b rows, called or inherited, each SV cell came from
+p5svgt	pre	build	yes	${BUILD}/assets/panel_differences.tsv.gz	R's deletions and insertions, for the matched-frame check (ABS-2)
+p5svgt	pre	sample	yes	${WORKPFX}p1/${S}.h37rv.bam	the ABSENT check of intervals absent from R
+p5svgt	pre	sample	yes	${OUTROOT}/p4b/${S}.sv_placed.tsv	the inherited insertions to genotype
+p5svgt	post	cohort	yes	${OUTROOT}/p5/inherited_sv_states.tsv	matched-frame genotypes of inherited SVs; the merged VCF's inherited insertions
+p5vcf	post	cohort	yes	${OUTROOT}/p5/reference_only.tsv	per sample, calls resting only on the reference, and the deeper-sublineage flag

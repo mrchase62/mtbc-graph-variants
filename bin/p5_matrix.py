@@ -110,16 +110,21 @@ def main():
     # used by this script at all.
     # One reader for every consumer; the sparse format lives in p5_states_io.
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from p5_states_io import CODE, NAME, load_states, samples_in, save_array
+    from p5_states_io import (CODE, NAME, load_states, samples_in, save_array,
+                              save_evidence)
     samples = samples_in(a.dir, meta)
     if not samples:
         print("no state files found", file=sys.stderr); return 1
-    M = load_states(a.dir, keys, samples)
+    M, EV, ev_codes = load_states(a.dir, keys, samples, with_evidence=True)
     # The one parse of the sparse files for the whole cohort: every consumer
     # after this memory-maps the array instead of re-reading 10,000 files.
     save_array(a.array_dir or a.dir, M, samples, keys)
+    # Each cell's evidence code, the same shape, written after the states so
+    # its mtime vouches for being their generation (p5_states_io.open_evidence)
+    save_evidence(a.array_dir or a.dir, EV, ev_codes)
     print(f"  states array {M.shape[0]:,} keys x {M.shape[1]:,} samples "
-          f"({M.nbytes / 1e6:,.0f} MB) -> {a.array_dir or a.dir}/states.u8.npy")
+          f"({M.nbytes / 1e6:,.0f} MB) -> {a.array_dir or a.dir}/states.u8.npy"
+          f", evidence codes ({len(ev_codes.names) - 1} reasons) beside it")
 
     # Reference-artefact flag, as a general screen rather than a list of the 437
     # sites section 21.1 happened to find. A site where most of the 333-genome
@@ -201,6 +206,22 @@ def main():
     print(f"\n  ABSENT is the state a plain VCF cannot express: "
           f"{tot['ABSENT']} cells")
     print(f"    T6 measured 508,039 such cells being written as REF or missing")
+    # what each ABSENT and NOCALL rests on (ABS-1): the evidence codes
+    # Counted in row blocks: one (evidence, state) pair per cell as a uint16,
+    # never a whole-matrix temporary (5.4 GB per copy at 10,000 isolates).
+    ev_tot = collections.Counter()
+    rows_kept = np.flatnonzero(keep_mask)
+    for b0 in range(0, len(rows_kept), 20000):
+        blk = rows_kept[b0:b0 + 20000]
+        pair = EV[blk].astype(np.uint16) * 4 + M[blk]
+        cnt = np.bincount(pair.ravel(), minlength=256 * 4)
+        for v in np.flatnonzero(cnt):
+            if v // 4:
+                ev_tot[(NAME[v % 4], ev_codes.names[v // 4])] += int(cnt[v])
+    if ev_tot:
+        print(f"\n  evidence behind the cells (FORMAT/EV in the merged VCF)")
+        for (st, name), n_c in sorted(ev_tot.items(), key=lambda x: (x[0][0], -x[1])):
+            print(f"    {st:<7s}{name:<24s}{n_c:>9d}")
 
     byreg = collections.Counter(k["region"] for i, k in enumerate(keys)
                                 if keep_mask[i])

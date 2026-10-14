@@ -9,8 +9,7 @@
 #SBATCH --output=slurm/archive_%A_%a.out
 #SBATCH --error=slurm/archive_%A_%a.err
 #
-# Keep the alignments later passes read, as lossless CRAM on durable storage,
-# and optionally drop the ones nothing reads.
+# Keep the alignments later passes read, as lossless CRAM on durable storage.
 #
 #   sbatch --array=1-N bin/archive_alignments.sh --archive   # one sample per task
 #   sbatch --array=1-N bin/archive_alignments.sh --restore   # CRAM back to BAM
@@ -30,10 +29,15 @@
 #   P1GDIR/<s>.isclean.bam  -> .archive.cram   ${H37CLEAN} (H37Rv.isclean)
 #                           the SV two-frame step (p5_svgt.sh --twoframe)
 #                           reads it for element-proximal intervals
+#   P1WORK/<s>.h37rv.bam    -> .archive.cram   ${BUILD}/refs/GCF_000195955.fasta
+#                           P1's own alignment to H37Rv. Nothing after P1 read
+#                           it until 2026-10-14; P5 now checks every ABSENT and
+#                           every interval absent from R against it (HANDOFF
+#                           ABS-1: p5_merge.sh --states, p5_svgt.sh --states),
+#                           so it is archived, no longer dropped.
 #
-# WHAT NOTHING READS, and is deleted only with ARCHIVE_DROP_UNUSED=1
-#   P1WORK/<s>.h37rv.bam    P1's own alignment; P1 keeps its VCF, nothing
-#                           after P1 opens the BAM
+# ARCHIVE_DROP_UNUSED is accepted and does nothing: every alignment above is
+# read by a later pass.
 #
 # VERIFIED BEFORE ANYTHING IS REMOVED. Each CRAM is decoded and compared with
 # its BAM: the record count, every record with its auxiliary tags sorted (CRAM
@@ -81,6 +85,7 @@ kept() {
     printf '%s\t%s\n' "${P2WORK}/${s}.bam" "${BUILD}/refs/${r}.fasta"
     printf '%s\t%s\n' "${P1IDIR}/${s}.isclean.bam" "${CLEANDIR}/${r}.isclean.fasta"
     printf '%s\t%s\n' "${P1GDIR}/${s}.isclean.bam" "$H37CLEAN"
+    printf '%s\t%s\n' "${P1WORK}/${s}.h37rv.bam" "${BUILD}/refs/GCF_000195955.fasta"
 }
 
 cram_of() { printf '%s' "${1%.bam}.archive.cram"; }
@@ -158,13 +163,14 @@ samples() {
 
 if [[ "$STEP" == "--status" ]]; then
     printf '%-14s %8s %8s %8s\n' kind bam archive neither
-    for kind in matched isclean p1g; do
+    for kind in matched isclean p1g p1; do
         nb=0; na=0; nn=0
         while read -r s; do
             while IFS=$'\t' read -r bam fa; do
-                case "$kind" in matched) [[ "$bam" == *isclean* ]] && continue ;;
+                case "$kind" in matched) [[ "$bam" == "${P2WORK}/"* ]] || continue ;;
                                 isclean) [[ "$bam" == "${P1IDIR}/"*isclean* ]] || continue ;;
-                                p1g)     [[ "$bam" == "${P1GDIR}/"* ]] || continue ;; esac
+                                p1g)     [[ "$bam" == "${P1GDIR}/"* ]] || continue ;;
+                                p1)      [[ "$bam" == "${P1WORK}/"* ]] || continue ;; esac
                 if [[ -s "$bam" ]]; then nb=$((nb + 1))
                 elif [[ -s "$(cram_of "$bam")" ]]; then na=$((na + 1))
                 else nn=$((nn + 1)); fi
@@ -183,13 +189,5 @@ while read -r s; do
         if [[ "$STEP" == "--archive" ]]; then archive_one "$bam" "$fa" || rc=1
         else restore_one "$bam" "$fa" || rc=1; fi
     done < <(kept "$s")
-    if [[ "$STEP" == "--archive" && "${ARCHIVE_DROP_UNUSED:-0}" == 1 && "$rc" -eq 0 ]]; then
-        for f in "${P1WORK}/${s}.h37rv.bam"; do
-            if [[ -e "$f" ]]; then
-                rm -f "$f" "${f}.bai"
-                echo "  ${f}: removed (ARCHIVE_DROP_UNUSED=1; nothing after its own pass reads it)"
-            fi
-        done
-    fi
 done < <(samples "$STEP" "${2:-}")
 exit "$rc"

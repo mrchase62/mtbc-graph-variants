@@ -30,7 +30,22 @@ How each is decided:
   ABSENT  the sample's reference R has no base for the key's H37Rv position:
           R's sequence where the position lands is H37Rv's with a gap that
           contains it (deleted_in_ref). dist.to.ref != 0 alone is NOT that.
+          AND THE SAMPLE'S OWN READS AGREE (HANDOFF ABS-1, 2026-10-14). R's
+          deletion is R's, not yet the sample's: on scale200_fix 2,279 + 161
+          core ABSENT cells were wrong, the sample carrying the sequence at
+          normal depth (SAMEA2297133's intact ctpV among them). So each such
+          ABSENT is checked in the sample's P1 alignment to H37Rv at the ends
+          of R's deletion (bin/inherited_check.py): reads that join the two
+          ends keep it ABSENT; reads that run across both ends replace it with
+          the sample's own H37Rv-frame call; a masked site (its span, or an
+          end of R's deletion within 150 bp, in the repeat mask), or anything the
+          junctions do not decide, is NOCALL with its reason.
   NOCALL  nothing observed, or the evidence does not decide.
+
+EVERY ABSENT AND NOCALL CARRIES ITS REASON, written as a fourth column of the
+sparse state file and carried to FORMAT/EV of the merged VCF, so a consumer
+can tell a masked site from an unprojected one from a call that rests only on
+the reference (`node_not_on_r`: a node-frame key R's path does not traverse).
 
 WHAT dist.to.ref MEANS (audit P4P5-1). `odgi position -r R` walks the graph
 from the H37Rv base to the nearest node on R's path; the distance is the bases
@@ -483,6 +498,35 @@ def main():
                          "spans R's junction whether or not the sample has "
                          "the sequence, and GATK cannot call it that long")
     ap.add_argument("--min-dp", type=int, default=5)
+    # THE ABSENT CHECK (HANDOFF ABS-1). No defaults: each is this sample's or
+    # this build's, and p5_merge.sh passes them. --no-absent-check is the only
+    # way to run without them, and it labels every such ABSENT `unchecked`.
+    ap.add_argument("--h37rv-bam", default="",
+                    help="the sample's P1 alignment to H37Rv "
+                         "(P1WORK/<sample>.h37rv.bam): reads across or joining "
+                         "the ends of R's deletion decide an ABSENT")
+    ap.add_argument("--h37rv-vcf", default="",
+                    help="the sample's P1 H37Rv-frame calls "
+                         "(P1WORK/<sample>.h37rv.vcf.gz): where the reads show "
+                         "the sequence present, the sample's own call there "
+                         "replaces ABSENT")
+    ap.add_argument("--panel-diffs", default="",
+                    help="<build>/assets/panel_differences.tsv.gz (P0 step "
+                         "panel_diffs): R's deletions and no-genotype sites")
+    ap.add_argument("--graph-vcf", default="",
+                    help="<build>/assets/graph_collapsed.vcf.gz; the panel "
+                         "table must have been made from it")
+    ap.add_argument("--repeat-mask", default="",
+                    help="<build>/assets/repeat_mask.bed: a site, or either end "
+                         "of R's deletion within 150 bp, in it is NOCALL "
+                         "`masked`")
+    ap.add_argument("--samtools", default=os.environ.get("MTB_SAMTOOLS", "samtools"))
+    ap.add_argument("--absent-detail", default="",
+                    help="optional per-ABSENT table of the check's read counts")
+    ap.add_argument("--no-absent-check", action="store_true",
+                    help="state ABSENT from R's deletion alone, as before "
+                         "2026-10-14, with evidence `unchecked`. For "
+                         "reproducing earlier output, not for new runs")
     ap.add_argument("--out", required=True)
     ap.add_argument("--dense", action="store_true",
                     help="write the old one-row-per-key form. The default is "
@@ -497,6 +541,15 @@ def main():
                          "different key set is refused rather than silently "
                          "misaligned.")
     a = ap.parse_args()
+    if not a.no_absent_check:
+        miss = [f"--{n.replace('_', '-')}" for n in
+                ("h37rv_bam", "h37rv_vcf", "panel_diffs", "graph_vcf",
+                 "repeat_mask") if not getattr(a, n)]
+        if miss:
+            print(f"  FATAL: the ABSENT check needs {', '.join(miss)} (or "
+                  f"--no-absent-check to reproduce output written before it)",
+                  file=sys.stderr)
+            return 1
 
     keys = list(csv.DictReader(open(a.keys, newline=""), delimiter="\t"))
     placed = list(csv.DictReader(open(a.placed, newline=""), delimiter="\t"))
@@ -624,11 +677,12 @@ def main():
         return all(cov(x) and not in_alt(x) for x in ps)
 
     def ref_state(p, canon, strand="+", hp=None, kalt=""):
-        """REF, ALT or NOCALL at R position p for a key whose H37Rv reference
-        allele is `canon`. With `hp`, the key's H37Rv position, the allele R
-        itself carries there is checked before a reference block is read as
-        REF: the block says the sample matches R, not that it matches
-        H37Rv."""
+        """(state, reason): REF, ALT or NOCALL at R position p for a key whose
+        H37Rv reference allele is `canon`. With `hp`, the key's H37Rv
+        position, the allele R itself carries there is checked before a
+        reference block is read as REF: the block says the sample matches R,
+        not that it matches H37Rv. The reason is the evidence code a NOCALL
+        carries into the merged VCF (FORMAT/EV); REF and ALT carry none."""
         if in_alt(p):
             ra = alt_at.get(p)
             # A SNP whose called base IS the H37Rv base is a reversion: the
@@ -636,33 +690,33 @@ def main():
             if ra and len(ra[0]) == 1 and len(ra[1]) == 1 and len(canon) == 1:
                 b = ra[1].translate(COMP) if strand == "-" else ra[1]
                 if b == canon and ra[2] >= a.min_dp:
-                    return "REF"
+                    return "REF", ""
             n_other["gvcf_non_ref"] += 1
-            return "NOCALL"
+            return "NOCALL", "gvcf_non_ref"
         if not cov(p):
-            return "NOCALL"
+            return "NOCALL", "no_coverage"
         if hp is None:
-            return "REF"
+            return "REF", ""
         ra = r_allele(h37, rseq, hp, p, strand, canon, kalt)
         if ra == "REF":
-            return "REF"
+            return "REF", ""
         if ra == "ALT":
             # The sample matches R and R carries the key's allele. A long
             # deletion in R is the exception: the block over R's junction is
             # there whether or not the sample has the sequence.
             if len(canon) - len(kalt) >= a.large_indel:
                 n_other["r_carries_large_deletion"] += 1
-                return "NOCALL"
+                return "NOCALL", "r_large_deletion"
             # R's whole allele must be covered, and for an indel the base
             # after it too, so the reads span the junction
             if not span_covered(p, strand,
                                 len(kalt) + (len(kalt) != len(canon))):
                 n_other["r_carries_alt_span_uncovered"] += 1
-                return "NOCALL"
+                return "NOCALL", "r_alt_span_uncovered"
             n_other["r_carries_alt"] += 1
-            return "ALT"
+            return "ALT", ""
         n_other["r_carries_other_allele"] += 1
-        return "NOCALL"
+        return "NOCALL", "r_other_allele"
 
     frames = graph_frame.Frames()
 
@@ -692,9 +746,12 @@ def main():
 
     counts = {"ALT": 0, "REF": 0, "ABSENT": 0, "NOCALL": 0}
     reversions = 0
+    n_abs = collections.Counter()
+    abs_rows = []
     for k in keys:
         canon = k["canonical_ref"].upper()
         rec = by_key.get(k["key"])
+        ev = ""
         if rec is not None:
             alt = rec["alt"].upper()
             if alt == canon:
@@ -730,9 +787,11 @@ def main():
                 nd = k.get("node") or ""
                 paths = nodepaths.get(nd)
                 if paths is None:
-                    state, allele = "NOCALL", ""
+                    state, allele, ev = "NOCALL", "", "node_unknown"
                 elif a.reference and a.reference not in paths:
-                    state, allele = "ABSENT", ""
+                    # read off the graph alone, never off the sample's reads:
+                    # one of the calls that rest only on the reference
+                    state, allele, ev = "ABSENT", "", "node_not_on_r"
                 else:
                     # THE REFERENCE DOES CARRY THIS SEQUENCE, so the sample was
                     # looked at here and the only question is whether the reads
@@ -746,16 +805,16 @@ def main():
                     hit = nodepos.get((nd, a.reference))
                     off = int(k.get("node_offset") or 0)
                     if hit is None:
-                        state, allele = "NOCALL", ""
+                        state, allele, ev = "NOCALL", "", "node_no_position"
                     elif hit[2] > 1:
                         # The reference visits this node more than once, so its
                         # copies share reads and depth at one of them settles
                         # nothing. 8.8% of pairs.
-                        state, allele = "NOCALL", ""
+                        state, allele, ev = "NOCALL", "", "node_repeat"
                     elif mtb_norm.forward_offset(off, hit[1], hit[3]) is None:
                         # walked in reverse with no node length: the base
                         # cannot be found, so it is not looked at
-                        state, allele = "NOCALL", ""
+                        state, allele, ev = "NOCALL", "", "node_unplaceable"
                     else:
                         # `start` is 1-based along the PANEL path (the GFA
                         # walk). The key's node offset is the node's FORWARD
@@ -791,13 +850,13 @@ def main():
                         # key's REF, so it has to complement there.
                         rs = ("-" if frames.complement_needed(a.reference,
                                                               hit[1]) else "+")
-                        st = ref_state(p, canon, rs)
+                        st, ev = ref_state(p, canon, rs)
                         state, allele = (st, canon if st == "REF" else "")
             elif pr is None:
                 # odgi returned nothing for this position: unmeasured, not
                 # shown to be deleted
                 n_proj["no projection"] += 1
-                state, allele = "NOCALL", ""
+                state, allele, ev = "NOCALL", "", "no_projection"
             elif pr[1] != 0 and not homologous(h37, rseq, int(k["h37rv_pos"]),
                                                pr[0], pr[2]):
                 # The H37Rv base is on a node R does not walk and the target
@@ -807,28 +866,88 @@ def main():
                 if deleted_in_ref(h37, rseq, int(k["h37rv_pos"]), pr[0], pr[2],
                                   pr[1]):
                     n_proj["off R's path, deleted in R: ABSENT"] += 1
-                    state, allele = "ABSENT", ""
+                    # R's deletion, not yet the sample's: checked against the
+                    # sample's own reads below (ABS-1), unless opted out
+                    state, allele, ev = "ABSENT", "", "unchecked"
+                    abs_rows.append(len(rows))
                 else:
                     n_proj["off R's path, unresolved: NOCALL"] += 1
-                    state, allele = "NOCALL", ""
+                    state, allele, ev = "NOCALL", "", "r_path_unresolved"
             elif (int(k["h37rv_pos"]) in other_at
                   or (int(k["h37rv_pos"]) in ins_anchor
                       and len(canon) != len(k.get("canonical_alt") or canon))):
                 # the sample has a placed record here for a different allele
                 n_other["placed_other_allele"] += 1
-                state, allele = "NOCALL", ""
+                state, allele, ev = "NOCALL", "", "placed_other_allele"
             else:
                 if pr[1] != 0:
                     # a substitution in R: the position exists, at the target
                     n_proj["off R's path, homologous: genotyped"] += 1
                 kalt = (k.get("canonical_alt") or "").upper()
-                st = ref_state(pr[0], canon, pr[2], int(k["h37rv_pos"]), kalt)
+                st, ev = ref_state(pr[0], canon, pr[2], int(k["h37rv_pos"]), kalt)
                 state, allele = (st, canon if st == "REF" else
                                  kalt if st == "ALT" else "")
-        counts[state] += 1
         rows.append(dict(sample=a.sample, key=k["key"], state=state,
                          allele=allele, frame=k["frame"],
-                         region=k["region"], kind=k["kind"]))
+                         region=k["region"], kind=k["kind"], evidence=ev))
+
+    # ---- ABS-1: every ABSENT that R's deletion explains, against the reads --
+    # Read off R and the graph alone these were wrong at 10,247 of 85,465
+    # testable scale200_fix cells (the sample covers them at normal depth),
+    # 2,279 + 161 of them confidently, in core sequence. Each is now checked
+    # in the sample's P1 alignment to H37Rv: bin/inherited_check.py says how,
+    # and analysis/inherited_absent/ holds the measurement.
+    #   present_here  -> the sample's own H37Rv-frame call (REF, ALT, or NOCALL
+    #                    when P1 called another allele or the depth is short)
+    #   deleted_here  -> ABSENT stays, evidence `junction_joined`
+    #   anything else -> NOCALL, the verdict as its reason (masked, mixed,
+    #                    unresolved, r_no_genotype, no_r_deletion)
+    if abs_rows and not a.no_absent_check:
+        import inherited_check as ic
+        diffs = ic.PanelDiffs(a.panel_diffs, a.reference, a.graph_vcf or None)
+        mask = ic.Mask.from_bed(a.repeat_mask)
+        h37f = ic.H37rvFrame(a.h37rv_bam, a.samtools, vcf=a.h37rv_vcf, h37=h37)
+        det = []
+        for i in abs_rows:
+            r, k = rows[i], keys[i]
+            canon = k["canonical_ref"].upper()
+            kalt = (k.get("canonical_alt") or "").upper()
+            s0 = int(k["h37rv_pos"])
+            e0 = s0 + max(len(canon), 1) - 1
+            v, d, jev = ic.check_absent(diffs, mask, h37f, s0, e0)
+            if v == "present_here":
+                st, why = h37f.small_call(k["key"], s0, e0, a.min_dp)
+                r["state"] = st
+                r["allele"] = canon if st == "REF" else kalt if st == "ALT" else ""
+                r["evidence"] = why
+            elif v == "deleted_here":
+                r["evidence"] = "junction_joined"
+            else:
+                r["state"], r["allele"], r["evidence"] = "NOCALL", "", v
+            n_abs[(v, r["state"])] += 1
+            det.append([a.sample, a.reference, k["key"], s0, e0,
+                        d[0] if d else "", d[1] if d else "",
+                        jev.get("bridge_start", ""), jev.get("bridge_end", ""),
+                        jev.get("clip_start", ""), jev.get("clip_end", ""),
+                        jev.get("joined", ""), v, r["state"], r["evidence"]])
+        if a.absent_detail:
+            with open(a.absent_detail + ".tmp", "w") as fh:
+                fh.write("sample\treference\tkey\tstart\tend\tr_del_start\t"
+                         "r_del_end\tbridge_start\tbridge_end\tclip_start\t"
+                         "clip_end\tjoined\tverdict\tstate\tevidence\n")
+                for x in det:
+                    fh.write("\t".join(map(str, x)) + "\n")
+            os.replace(a.absent_detail + ".tmp", a.absent_detail)
+        print(f"  {a.sample}: ABSENT check on {len(abs_rows)} keys R's deletions "
+              f"explain (median H37Rv depth {h37f.baseline:.0f}, bridging floor "
+              f"{h37f.min_bridge:.0f} reads)")
+        for (v, st), n in sorted(n_abs.items()):
+            print(f"    {v:<14} -> {st:<7} {n:>7}")
+    elif abs_rows:
+        print(f"  NOTE --no-absent-check: {len(abs_rows)} ABSENT calls rest on "
+              f"the reference alone (evidence `unchecked`)")
+    for r in rows:
+        counts[r["state"]] += 1
 
     if a.dense:
         with open(a.out, "w", newline="") as fh:
@@ -844,14 +963,20 @@ def main():
         import hashlib
         h = hashlib.sha1("\n".join(k["key"] for k in keys).encode()).hexdigest()
         with open(a.out, "w", newline="") as fh:
+            # `#absent_check` says whether ABSENT was checked against the
+            # reads (ABS-1); p5_merge.sh redoes a sample whose file says not
             fh.write(f"#format\tsparse-v1\n#sample\t{a.sample}\n"
                      f"#default\tREF\n#n_keys\t{len(keys)}\n"
-                     f"#keys_sha1\t{h}\n")
-            fh.write("idx\tstate\tallele\n")
+                     f"#keys_sha1\t{h}\n"
+                     f"#absent_check\t{'no' if a.no_absent_check else 'v1'}\n")
+            # The fourth column is the evidence code, FORMAT/EV in the merged
+            # VCF. A REF is written only when it has one: an ABSENT the check
+            # turned into the sample's own REF.
+            fh.write("idx\tstate\tallele\tevidence\n")
             for i, r in enumerate(rows):
-                if r["state"] == "REF":
+                if r["state"] == "REF" and not r["evidence"]:
                     continue
-                fh.write(f"{i}\t{r['state']}\t{r['allele']}\n")
+                fh.write(f"{i}\t{r['state']}\t{r['allele']}\t{r['evidence']}\n")
     n = len(rows)
     print(f"  {a.sample}: {len(h_keys)} H37Rv keys, {n_lines} projection lines, "
           f"{n_multi} positions the reference visits more than once, "
