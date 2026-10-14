@@ -483,6 +483,7 @@ on boslogin06, which is not durable).
 ### Fix list for the next rerun (added 2026-10-08)
 
 **In plain terms (ABS-1, ABS-2; added 2026-10-14 at the user's request).**
+ABS = calls inherited ("absorbed") from the matched reference.
 Each isolate's reads are aligned to its matched reference R, the closest
 panel genome. Wherever R differs from H37Rv, the isolate is assumed to share
 the difference, because its reads cannot show it against R. These inherited
@@ -654,6 +655,15 @@ covers the SV block.
    svlen differs by 1 at some). P4b and P5 must read the same build's
    `graph_collapsed.vcf.gz`, recorded in provenance.
 
+**In plain terms (SPLIT-1; added 2026-10-14).** SPLIT = one structural
+event split across several VCF records. When copies of an insertion differ by
+even one base between genomes, the graph writes each version as its own
+record (a ~5 kb insertion at 2,268,721 is 57 records). Each record then
+covers a scattered subset of isolates, which looks like repeated gains and
+splits association signal. Fix: merge same-site records of one type and
+similar length into one presence/absence event; keep copy-number series
+(VNTRs, gene duplications) as counts.
+
 **SPLIT-1: merge split SV records into one event** (added 2026-10-14, user:
 "yes, add the merge to the fix list"). Before P5 on new1k_p200.
 
@@ -686,6 +696,16 @@ cohort's calls. Proposed: `results/` or `out/`; the user decides at the time.
   36 scripts in `bin/` named a `refbias/` path.
 - **Timing (user):** deal with it later, once the pipeline is stable. Not
   part of the next rerun.
+
+**In plain terms (AA-1; added 2026-10-14).** AA = ancestral allele, the
+VCF `AA` tag: the allele at the common ancestor of lineages 1-4 and 7, which
+decides whether a variant counts as gained or lost. Today every AA looks
+equally certain. Some are not: the site changed several times on the panel
+tree (homoplastic), only the outgroups decided it, or no AA exists and ALT is
+simply assumed derived. Fix: record the number of changes (`AA_CHANGES`),
+flag HOMOPLASTIC (>= 2 changes, threshold confirmed by the user 2026-10-14:
+"use 2 changes as the homoplastic threshold") and OUTGROUP, and mark every
+record's polarity as reconstructed or assumed (`AA_SOURCE`).
 
 **AA-1: flag unreliable ancestral alleles** (added 2026-10-08, user).
 
