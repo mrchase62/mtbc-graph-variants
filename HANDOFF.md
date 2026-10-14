@@ -214,7 +214,7 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
     canettii indel/SV states come from outgroup kit route A
     (`bin/outgroup_kit.py`, `analysis/outgroup_kit/out/`) until OUT-1 (route
     B) replaces them. Without them the tatC-helY element ties on P200 (L5.1
-    and L6.1 disagree). Implemented, uncommitted: `bin/panel_ancestral.py
+    and L6.1 disagree). Implemented and merged 2026-10-14: `bin/panel_ancestral.py
     --kit-events`, P0 `ANC_KIT_EVENTS`; rules and CX333 validation in
     `docs/PANEL_TREE.md` section 1 and `analysis/parsimony_check/`.
 - **Sparse mapping checked:** graphs B and D (`-x auto`) agree at all but
