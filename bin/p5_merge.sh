@@ -156,11 +156,15 @@ _st="${OUTDIR}/${SAMPLE}.states.tsv"
 if [[ -s "$_st" ]]; then
     _have="$(awk -F'\t' '$1=="#keys_sha1"{print $2; exit} !/^#/{exit}' "$_st")"
     _want="$("$MTB_PY" -c 'import csv,sys; sys.path.insert(0,"bin"); import p5_states_io as io; print(io.keys_sha1(list(csv.DictReader(open(sys.argv[1]),delimiter="\t"))))' "$KEYS")"
-    if [[ -n "$_have" && "$_have" == "$_want" ]]; then
+    # ...and with the ABSENT check (ABS-1, 2026-10-14): a file written before
+    # it states ABSENT on R's word alone and must be redone, keys unchanged
+    _abs="$(awk -F'\t' '$1=="#absent_check"{print $2; exit} !/^#/{exit}' "$_st")"
+    if [[ -n "$_have" && "$_have" == "$_want" && "$_abs" == v1 ]]; then
         echo "[P5] ${SAMPLE}: already done against this key set"; exit 0
     fi
     echo "[P5] ${SAMPLE}: states file is from a different key set" \
-         "(${_have:-no checksum} vs ${_want}); recomputing"
+         "(${_have:-no checksum} vs ${_want}) or has no ABSENT check" \
+         "(${_abs:-none}); recomputing"
 fi
 
 
@@ -295,10 +299,28 @@ else
     echo "[P5] ${SAMPLE}: ${REFID} projection assembled from the store"
 fi
 
+# THE ABSENT CHECK (HANDOFF ABS-1): an ABSENT that R's deletion explains is
+# checked against the sample's own P1 alignment to H37Rv, at the ends of R's
+# deletion, before it is written. Every input is this sample's or the build's,
+# and a missing one is FATAL here rather than a silently unchecked ABSENT.
+P1WORK="${P1WORK:-refbias/work/p1}"
+H37BAM="${P1WORK}/${SAMPLE}.h37rv.bam"
+H37VCF="${P1WORK}/${SAMPLE}.h37rv.vcf.gz"
+PANEL_DIFFS="${BUILD}/assets/panel_differences.tsv.gz"
+RMASK="${BUILD}/assets/repeat_mask.bed"
+[[ -s "$H37BAM" ]] || { echo "FATAL: ${SAMPLE}: no P1 alignment at ${H37BAM}; the ABSENT" \
+    "check reads it (bin/archive_alignments.sh --restore brings back an archived one)" >&2; exit 1; }
+[[ -s "$H37VCF" ]] || { echo "FATAL: ${SAMPLE}: no P1 H37Rv-frame VCF at ${H37VCF}" >&2; exit 1; }
+[[ -s "$PANEL_DIFFS" ]] || { echo "FATAL: no ${PANEL_DIFFS}; run bin/p0_prepare.sh --step panel_diffs" >&2; exit 1; }
+[[ -s "$RMASK" ]] || { echo "FATAL: no ${RMASK}" >&2; exit 1; }
+mkdir -p "${OUTDIR}/absent_check"
 "$MTB_PY" bin/p5_states.py --sample "$SAMPLE" --reference "$REFID" \
     --keys "$KEYS" --placed "$PLACED" --gvcf "$GVCF" --h37rv "$H37RV_FA" \
     --projected "$PROJ_USE" \
     --node-paths "$NODE_PATHS" --node-positions "$NODE_POSITIONS" \
+    --h37rv-bam "$H37BAM" --h37rv-vcf "$H37VCF" --panel-diffs "$PANEL_DIFFS" \
+    --graph-vcf "$GRAPH_VCF" --repeat-mask "$RMASK" \
+    --absent-detail "${OUTDIR}/absent_check/${SAMPLE}.absent_check.tsv" \
     --out "${OUTDIR}/${SAMPLE}.states.tsv.tmp"
 # renamed only once complete: the skip above trusts any states file whose
 # checksum matches, so a task killed mid-write must not leave one behind

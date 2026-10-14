@@ -199,8 +199,8 @@ if [[ "$LIST" == 1 ]]; then
     echo "graph    : $OG"
     echo "build id : $BUILD_ID"
     echo "build dir: $BUILD"
-    for s in stamp paths accessions gff refs frames assets catalogue nodes is6110_intervals \
-             ancestral manifest; do
+    for s in stamp paths accessions gff refs frames assets catalogue nodes panel_diffs \
+             is6110_intervals ancestral manifest; do
         if [[ -s "${BUILD}/logs/$s.done" ]]; then
             printf "  %-16s done   %s\n" "$s" "$(head -1 "${BUILD}/logs/$s.done")"
         else printf "  %-16s MISSING\n" "$s"; fi
@@ -593,6 +593,27 @@ step_nodes() {
     _mark nodes
 }
 
+# --- step: panel_diffs -------------------------------------------------------
+# Each panel genome's own deletions from H37Rv (every size), its insertions of
+# 50 bp or more, and the sites where it has no genotype, from the build's
+# collapsed graph VCF (bin/panel_differences.py; HANDOFF fix list ABS-1 item 1
+# and ABS-2). P5 reads it to check an ABSENT call or an inherited SV against
+# the sample's own reads: the ends of R's deletion are where reads either cross
+# or join, and a site where R has no genotype cannot be tested by any junction.
+# A property of the panel, so made once per build, from the build's own copy of
+# the VCF. About a minute.
+step_panel_diffs() {
+    _inputs graph_vcf_sha256 "${BUILD}/assets/graph_collapsed.vcf.gz" \
+            code_sha256 bin/panel_differences.py
+    _done panel_diffs && { _say "panel_diffs: already done"; return 0; }
+    _have assets || { echo "FATAL: step 'panel_diffs' needs step 'assets' done first" >&2; return 1; }
+    local out="${BUILD}/assets/panel_differences.tsv.gz"
+    "$MTB_PY" bin/panel_differences.py \
+        --graph-vcf "${BUILD}/assets/graph_collapsed.vcf.gz" \
+        --out "$out" || return 1
+    _mark panel_diffs
+}
+
 # --- step: is6110_intervals --------------------------------------------------
 # The P1 tie-break's per-reference IS6110 interval counts. p1_summary.py read
 # them from is6110/assets/isclean_matched, outside the build, and a missing
@@ -818,8 +839,9 @@ step_manifest() {
     local s2
     # ancestral too (review 2, R2-BUILD-2): without it the build was marked
     # complete and the chain failed only at its last pass, p5vcf
+    # panel_diffs too (ABS-1/ABS-2, 2026-10-14): P5 refuses to run without it
     for s2 in stamp paths accessions gff refs frames assets catalogue nodes \
-              is6110_intervals ancestral; do
+              panel_diffs is6110_intervals ancestral; do
         _have "$s2" || incomplete="${incomplete} ${s2}"
     done
     if [[ -n "$incomplete" ]]; then
@@ -840,6 +862,7 @@ if [[ -n "$STEP" ]]; then
     _run "$STEP"
 else
     _run stamp; _run paths; _run accessions; _run assets; _run catalogue; _run nodes
+    _run panel_diffs
     _say "cheap steps complete. Remaining, run explicitly:"
     _say "  bash bin/p0_prepare.sh --step gff"
     _say "  sbatch --array=1-\$(wc -l < ${BUILD}/assets/accessions.txt) bin/p0_prepare.sh --step refs"

@@ -500,7 +500,8 @@ class AlignmentArchive(unittest.TestCase):
         for sub in ("build/refs", "clean", "p2w", "p1i", "p1w", "p1g"):
             os.makedirs(os.path.join(d, sub))
         for fa in (f"{d}/build/refs/R.fasta", f"{d}/clean/R.isclean.fasta",
-                   f"{d}/clean/H37Rv.isclean.fasta"):
+                   f"{d}/clean/H37Rv.isclean.fasta",
+                   f"{d}/build/refs/GCF_000195955.fasta"):
             write(fa, f">c\n{ref}\n")
         sam = (f"@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:c\tLN:{header_len}\n"
                "@RG\tID:S\tSM:S\n"
@@ -537,6 +538,9 @@ class AlignmentArchive(unittest.TestCase):
             self.assertTrue(os.path.exists(f"{d}/p2w/S.archive.cram"))
             # the p1g alignment is read by the SV two-frame step: archived, not dropped
             self.assertTrue(os.path.exists(f"{d}/p1g/S.isclean.archive.cram"))
+            # P1's H37Rv alignment is read by P5's ABSENT check (ABS-1):
+            # archived too, no longer dropped as unused
+            self.assertTrue(os.path.exists(f"{d}/p1w/S.h37rv.archive.cram"))
             r = self.run_step("--restore", env)
             self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
             view = lambda f: subprocess.run([st, "view", f], capture_output=True,

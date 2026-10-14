@@ -261,6 +261,9 @@ class P5ReadsForwardOffset(unittest.TestCase):
              "--placed", f"{d}/placed.tsv", "--gvcf", f"{d}/s.g.vcf",
              "--projected", f"{d}/proj.pos",
              "--h37rv", f"{d}/refs/GCF_000195955.fasta",
+             # node-frame keys only: the ABSENT check (ABS-1) has nothing to
+             # read here, and is tested in test_audit_absent_check.py
+             "--no-absent-check",
              "--out", f"{d}/s.states.tsv", *extra],
             capture_output=True, text=True,
             env=dict(os.environ, MTB_GRAPH_FRAMES=f"{d}/frames.tsv"))

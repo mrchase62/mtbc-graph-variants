@@ -105,6 +105,16 @@ sensitivity look like the least reliable. So:
   * the summary and the recommended filter are reported per component,
     because their precision differs: DEL PPV 0.573 for the union against
     0.118 for the called half alone.
+
+AN INHERITED CELL HERE IS NOT YET THE SAMPLE'S (HANDOFF ABS-2, 2026-10-14).
+A cell is ALT because the sample's matched reference carries the event; no
+read of the sample was looked at. The deletions are genotyped again per
+sample at the catalogue's intervals, in both frames (bin/p5_sv_genotype.py);
+the insertions by bin/p5_inherited_sv.py in the sample's alignment to its
+reference. So that the merge can replace exactly the cells inheritance alone
+made ALT, and keep any a caller reached, the membership of every cell is
+written beside the matrix: `<out>.members.tsv` (or --members-out), one row
+per (cluster key, sample, P4b row key, component).
 """
 import argparse, collections, csv, os, statistics, sys
 
@@ -226,6 +236,9 @@ def main():
                          "and is deliberately not read from --calibration.")
     ap.add_argument("--calibration", default="refbias/STAGE11.calibration.tsv")
     ap.add_argument("--out", default="refbias/p5/sv_matrix.tsv")
+    ap.add_argument("--members-out", default="",
+                    help="which P4b rows each cell came from; default "
+                         "<out minus .tsv>.members.tsv")
     a = ap.parse_args()
 
     bands = load_bands(a.calibration)
@@ -269,7 +282,8 @@ def main():
                                    n_callers=int(x["n_callers"]),
                                    qual=x["qual"], sr=x["sr"], pe=x["pe"],
                                    component=x.get("component", "called"),
-                                   qual_caller=x.get("qual_caller") or ""))
+                                   qual_caller=x.get("qual_caller") or "",
+                                   member=x.get("key", "")))
             except ValueError:
                 continue
     n_big = sum(1 for e in events if e["svlen"] > a.max_svlen)
@@ -288,16 +302,15 @@ def main():
           f"{n_big} longer than {a.max_svlen} bp")
     # Break the FILTER exclusion down, because two very different things hide
     # in one number. A row failing a caller's quality filter is a weak call.
-    # A row with FILTER=INHERITED is P4b's COMPOSED half, added 2026-09-20:
-    # it carries no caller FILTER of its own and is excluded here by the
-    # default --keep-filter PASS, which is a design decision rather than a
-    # quality judgement. P4b's own header says "labelled, not blended", and
-    # nothing in this script reads `component` yet, so leaving the exclusion
-    # invisible would hide an open question. See refbias/archive/README.md.
+    # A row with FILTER=INHERITED is P4b's COMPOSED (inherited) half. It is
+    # KEPT by the default --keep-filter PASS,INHERITED (since 2026-09-21; see
+    # the header) and banded `composed`, so it shows up here only when a run
+    # passes a --keep-filter without INHERITED, and is then named for what it
+    # is: excluded by that choice, not by quality.
     if n_filt_by:
         for k, v in sorted(n_filt_by.items(), key=lambda kv: -kv[1]):
-            tag = ("  <- P4b's composed half, excluded by design, not by "
-                   "quality" if k == "INHERITED" else "")
+            tag = ("  <- P4b's composed half, excluded by --keep-filter, not "
+                   "by quality" if k == "INHERITED" else "")
             print(f"      {k:<12s} {v:6d}{tag}")
 
     # cluster across samples on the project's own tolerance
@@ -388,7 +401,9 @@ def main():
             max_qual=round(best_q, 1) if best else "",
             qual_band=band, stage11_ppv=ppv,
             qual_from=qual_src, component=component,
-            cells=cells))
+            cells=cells,
+            members=sorted({(m["sample"], m["member"], m.get("component", "called"))
+                            for m in c["members"]})))
 
     # KEYS MUST BE UNIQUE, and clustering does not guarantee it. The key is
     # built from a cluster's MEDIAN position and MEDIAN length, so two
@@ -418,6 +433,17 @@ def main():
               f"suffix; two clusters shared a median position and length:")
         for k, na in dupes[:10]:
             print(f"    {k}  n_alt={na}")
+
+    mout = a.members_out or ((a.out[:-4] if a.out.endswith(".tsv") else a.out)
+                             + ".members.tsv")
+    with open(mout + ".tmp", "w", newline="") as fh:
+        w = csv.writer(fh, delimiter="\t", lineterminator="\n")
+        w.writerow(["key", "sample", "member", "component"])
+        for r in rows:
+            for sm, mk, comp in r["members"]:
+                w.writerow([r["key"], sm, mk, comp])
+    os.replace(mout + ".tmp", mout)
+    print(f"  cell membership -> {mout}")
 
     with open(a.out, "w", newline="") as fh:
         w = csv.writer(fh, delimiter="\t", lineterminator="\n")

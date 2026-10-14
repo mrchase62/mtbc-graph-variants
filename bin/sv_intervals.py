@@ -39,7 +39,12 @@ INSERTIONS ARE NOT HERE, and that is a scope decision rather than an
 oversight. Depth across an insertion point is the same whether or not the
 sample carries the inserted sequence, so the instrument this catalogue exists
 to feed cannot genotype them. They stay in the caller-derived block, which is
-presence-only and labelled as such.
+presence-only and labelled as such -- except the insertions a sample INHERITS
+from its matched reference (HANDOFF ABS-2, 2026-10-14). Those are in the
+reference the reads were aligned to, so bin/p5_inherited_sv.py genotypes them
+there, by depth across the inserted sequence and its junctions, and the merged
+VCF writes that genotype instead of the caller matrix's presence-only cell.
+They are keyed on P4b's rows, not on this catalogue.
 """
 import argparse, bisect, collections, csv, gzip, os, sys
 

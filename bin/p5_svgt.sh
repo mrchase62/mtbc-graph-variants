@@ -31,9 +31,13 @@
 # frame while the SV matrix is in H37Rv's, and for 110 of 333 accessions those
 # frames differ by a rotation and for 22 also by strand.
 #
-# Insertions are NOT genotyped here and stay NOCALL. Depth across an insertion
-# point is the same whether or not the sample carries the insertion; testing
-# that needs spanning reads from the BAM, which is a different instrument.
+# Insertions are NOT genotyped by depth here. Depth across an insertion point
+# in H37Rv's frame is the same whether or not the sample carries the
+# insertion. The exception, since 2026-10-14 (HANDOFF ABS-2), is the insertions
+# a sample INHERITS from its matched reference: there the inserted sequence is
+# in the reference the reads were aligned to, so bin/p5_inherited_sv.py reads
+# depth across it and its junctions in that frame, in interval mode's --states
+# step, and --merge collects them into inherited_sv_states.tsv for the merge.
 set -euo pipefail
 
 _mtb_env=""
@@ -75,6 +79,9 @@ else
     PROBES_NAME="probes.h37rv.txt"
     OUTSUF="svgt"
 fi
+# bin/p5_inherited_sv.py's per-sample tables (ABS-2, interval mode), kept out
+# of SVDIR, whose every *.tsv --merge reads as a states table
+INHDIR="${INHDIR:-${OUTDIR}/inherited_sv}"
 # the build's own graph, as its stamp records it (was a glob over CX333)
 OG="${OG:-$(awk -F'\t' '$1=="graph"{print $2}' "${BUILD}/build_info.tsv")}"
 ODGI="${MTB_ODGI:?MTB_ODGI is unset; see config/project_env.sh}"
@@ -238,7 +245,14 @@ case "$STEP" in
         --h37rv-path "$H37RV_PATH" --probes-out "$PROBES"
     ;;
   --merge)
-    exec "$MTB_PY" - "$SVDIR" "${OUTDIR}/${OUTSUF}_states.tsv" <<'PY'
+    # The states tables, and in interval mode the matched-frame tables
+    # (inherited_sv_states.tsv: the merged VCF's inherited insertions, ABS-2)
+    MERGE_SETS=("$SVDIR" "${OUTDIR}/${OUTSUF}_states.tsv")
+    if [[ -n "$IVTAB" && -z "${TRUST_INHERITED:-}" ]]; then
+        MERGE_SETS+=("$INHDIR" "${OUTDIR}/inherited_sv_states.tsv")
+    fi
+    for ((_i = 0; _i < ${#MERGE_SETS[@]}; _i += 2)); do
+    "$MTB_PY" - "${MERGE_SETS[$_i]}" "${MERGE_SETS[$((_i + 1))]}" <<'PY'
 import csv, glob, os, sys, collections
 d, out = sys.argv[1], sys.argv[2]
 files = sorted(glob.glob(os.path.join(d, "*.tsv")))
@@ -258,7 +272,8 @@ print(f"  {len(files)} samples, {t:,} SV cells  " +
       "  ".join(f"{k} {v:,} ({v/t:.1%})" for k, v in sorted(n.items())))
 print(f"  -> {out}")
 PY
-    ;;
+    done
+    exit 0 ;;
   --project)
     # ONE TASK PER REFERENCE, BEFORE THE PER-SAMPLE ARRAY. Filling the store
     # from inside the per-sample tasks made every sample of an as-yet
@@ -291,11 +306,15 @@ else
 fi
 [[ -n "${SAMPLE:-}" ]] || { echo "FATAL: no refmap row" >&2; exit 1; }
 OUT="${SVDIR}/${SAMPLE}.${OUTSUF}.tsv"
+INH="${INHDIR}/${SAMPLE}.inherited_sv.tsv"
 # Done only if written AFTER the current probe list. The probes are rebuilt
 # from the SV matrix or interval catalogue by --probes, and SV keys shift when
 # cluster membership changes, so an older per-sample table either fails to join
 # or -- worse -- joins to the wrong cluster. The skip used to test existence.
-if [[ -s "$OUT" && "$OUT" -nt "$PROBES" ]]; then
+# In interval mode the matched-frame table must exist too and predate the
+# states (ABS-2): a table written before it genotyped inherited SVs unread.
+if [[ -s "$OUT" && "$OUT" -nt "$PROBES" ]] \
+        && [[ -z "$IVTAB" || -n "${TRUST_INHERITED:-}" || ( -s "$INH" && "$OUT" -nt "$INH" ) ]]; then
     echo "[P5svgt] ${SAMPLE}: already done against the current probes"; exit 0
 fi
 [[ -s "$OUT" ]] && echo "[P5svgt] ${SAMPLE}: output predates ${PROBES}; recomputing"
@@ -385,6 +404,30 @@ if [[ -n "$IVTAB" ]]; then
         echo "FATAL: ${SAMPLE}: no two-frame table newer than ${IVTAB} at" \
              "${TWOFRAME}; run --twoframe (or TRUST_INHERITED=1)" >&2
         exit 1
+    fi
+    # THE MATCHED FRAME, AND THE ABSENT CHECK (HANDOFF ABS-2, ABS-1). R's own
+    # junction for every inherited deletion and insertion, read in this
+    # sample's P2 alignment to R; the masked and tandem flags; and, for an
+    # interval absent from R, R's deletion checked in the P1 alignment to
+    # H37Rv. bin/p5_inherited_sv.py writes it, p5_sv_genotype.py combines it
+    # with the H37Rv frame, and the merged VCF takes the insertions' states
+    # from it (merged by --merge into inherited_sv_states.tsv).
+    if [[ -z "${TRUST_INHERITED:-}" ]]; then
+        H37BAM="${P1WORK:-refbias/work/p1}/${SAMPLE}.h37rv.bam"
+        SVPLACED="${P4BDIR:-refbias/p4b}/${SAMPLE}.sv_placed.tsv"
+        for _f in "$H37BAM" "$SVPLACED" "${BUILD}/assets/panel_differences.tsv.gz"; do
+            [[ -s "$_f" ]] || { echo "FATAL: ${SAMPLE}: no ${_f} (the panel table:" \
+                "bin/p0_prepare.sh --step panel_diffs; the P1 BAM:" \
+                "bin/archive_alignments.sh --restore)" >&2; exit 1; }
+        done
+        mkdir -p "$INHDIR"
+        "$MTB_PY" bin/p5_inherited_sv.py --sample "$SAMPLE" --reference "$REFID" \
+            --intervals "$IVTAB" --sv-placed "$SVPLACED" --build "$BUILD" \
+            --bam "$BAM" --h37rv-bam "$H37BAM" \
+            --minimap2 "${MTB_MINIMAP2:?MTB_MINIMAP2 is unset}" \
+            --out "${INH}.tmp"
+        mv -f "${INH}.tmp" "$INH"
+        TF_ARGS+=(--inherited-check "$INH")
     fi
     "$MTB_PY" bin/p5_sv_genotype.py --intervals "$IVTAB" --sample "$SAMPLE" \
         --reference "$REFID" --gvcf "$GVCF" --bam "$BAM" \

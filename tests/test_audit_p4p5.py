@@ -57,7 +57,8 @@ def sparse_states(path, keys):
     for line in open(path):
         if line.startswith("#") or line.startswith("idx"):
             continue
-        i, st, _ = line.rstrip("\n").split("\t")
+        # idx, state, allele[, evidence]: the fourth column is ABS-1's
+        i, st = line.rstrip("\n").split("\t")[:2]
         got[keys[int(i)]["key"]] = st
     return {k["key"]: got.get(k["key"], "REF") for k in keys}
 
@@ -165,6 +166,9 @@ class ProjectionAndReferenceAllele(unittest.TestCase):
              "--node-positions", write(f"{d}/node_positions.tsv",
                                        "node\taccession\tstart\tstrand\t"
                                        "n_occurrences\tlength\n"),
+             # the projection logic, before the reads are consulted: the
+             # ABSENT check (ABS-1) is tested in test_audit_absent_check.py
+             "--no-absent-check",
              "--out", f"{d}/s.states.tsv"],
             capture_output=True, text=True, env=env)
         cls.st = (sparse_states(f"{d}/s.states.tsv", cls.keys)
@@ -257,6 +261,9 @@ class TwoFrameConfirmation(unittest.TestCase):
                  f"{d}/iv.tsv", "--reference", "R", "--sample", "S",
                  "--gvcf", f"{d}/g.vcf", "--projected", f"{d}/proj.pos",
                  "--twoframe", f"{d}/tf.tsv", "--mapq-scope", "never",
+                 # the H37Rv frame alone; both frames are tested in
+                 # test_audit_absent_check.py (ABS-2)
+                 "--no-inherited-check",
                  "--out", f"{d}/out.tsv"], capture_output=True, text=True)
             self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
             return {q["interval"]: q["state"] for q in rows(f"{d}/out.tsv")}

@@ -110,7 +110,7 @@ def read_sparse(state_dir, keys_path, refmap_path):
     order = [r["sample"] for r in
              csv.DictReader(open(refmap_path, newline=""), delimiter="\t")]
     samples = samples_in(state_dir, order)
-    M = load_states(state_dir, keys, samples)
+    M, EV, codes = load_states(state_dir, keys, samples, with_evidence=True)
     # keys.tsv carries two columns matrix.tsv silently dropped, and both are
     # withheld here so this path reproduces the dense one exactly rather than
     # changing published output as a side effect of a storage change:
@@ -136,8 +136,22 @@ def read_sparse(state_dir, keys_path, refmap_path):
             r = {kk: vv for kk, vv in k.items() if kk not in DROP}
             for j, sm in enumerate(samples):
                 r[sm] = NAME[col[j]]
+            _attach_evidence(r, EV[i], samples, codes.names)
             yield r
     return gen(), samples
+
+
+def _attach_evidence(r, evrow, samples, names):
+    """r["_ev"] = {sample: evidence code} for the cells that have one: the
+    reason behind an ABSENT or NOCALL (HANDOFF ABS-1 item 4), written to
+    FORMAT/EV. Rows of a cohort finished before the evidence array existed
+    get none."""
+    if evrow is None:
+        return
+    import numpy as np
+    nz = np.flatnonzero(np.asarray(evrow))
+    if len(nz):
+        r["_ev"] = {samples[j]: names[evrow[j]] for j in nz}
 
 def read_array(array_dir, keys_path, want=None):
     """Rows as read_sparse returns them, from the memory-mapped states array.
@@ -148,9 +162,10 @@ def read_array(array_dir, keys_path, want=None):
     """
     import numpy as np
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from p5_states_io import NAME, open_array
+    from p5_states_io import NAME, open_array, open_evidence
     keys = list(csv.DictReader(open(keys_path, newline=""), delimiter="\t"))
     M, samples = open_array(array_dir, keys)
+    EV, ev_names = open_evidence(array_dir, M.shape)
     DROP = ("node_offset", "canonical_alt")     # as read_sparse, see there
 
     def gen():
@@ -163,6 +178,8 @@ def read_array(array_dir, keys_path, want=None):
             r = {kk: vv for kk, vv in k.items() if kk not in DROP}
             for j, sm in enumerate(samples):
                 r[sm] = NAME[col[j]]
+            if EV is not None:
+                _attach_evidence(r, EV[i], samples, ev_names)
             yield r
     return gen(), samples, keys
 
@@ -254,6 +271,13 @@ def _header_body(w):
       'absorbed into the record of the arm that owns the event '
       '(bin/harmonize_records.py). Kept so the GT mapping loses '
       'nothing">\n')
+    w('##FORMAT=<ID=EV,Number=1,Type=String,Description="Evidence behind the '
+      'cell, where the pipeline records one: why an ABSENT or NOCALL is what it '
+      'is (e.g. masked, junction_joined, no_projection, frames_conflict, '
+      'tandem), how an inherited SV was confirmed (two_frames, h37rv_only, '
+      'matched_only), and node_not_on_r / inherited_unchecked for calls that '
+      'rest only on the matched reference. Trailing field: absent where none '
+      'is recorded">\n')
     for line in _harm.HEADER:
         w(line)
 
@@ -275,9 +299,30 @@ def write_header(w, a, nodes_used, order):
                        "FILTER", "INFO", "FORMAT"] + order) + "\n")
 
 
+_EV_OK = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+             "0123456789_.|/+-")
+
+
+def ev_value(text):
+    """An evidence string as a FORMAT value: no tab, colon, comma, semicolon,
+    space or `=`, which would break the cell or a reader that splits it."""
+    return "".join(c if c in _EV_OK else "_" for c in str(text)).strip("_")
+
+
+def vcf_cell(state, ev=""):
+    """One sample's GT:ST[:EV] cell. EV is a trailing FORMAT field, written
+    only where there is evidence (VCF allows trailing fields to be dropped),
+    so a record with none keeps the plain GT:ST form."""
+    c = f'{STATE_GT.get(state, ".")}:{state or "NA"}'
+    ev = ev_value(ev) if ev else ""
+    return c + ":" + ev if ev else c
+
+
 def record_line(rec):
     """(VCF line, whether * was added) for one record tuple."""
     chrom, pos, ident, ref, alts, info, cells = rec
+    # FORMAT is GT:ST, or GT:ST:EV when any cell carries evidence
+    fmt = "GT:ST:EV" if any(c.count(":") >= 2 for c in cells.split("\t")) else "GT:ST"
     # GT=2 is the * allele (ABSENT). Every block maps ABSENT to 2, but only the
     # small-variant block used to add *, so the SV, interval, accessory and
     # IS6110 records wrote GT=2 against one ALT -- 976 records in scale200, and
@@ -288,7 +333,7 @@ def record_line(rec):
         alts = list(alts) + ["*"]
         added = True
     return ("\t".join([chrom, str(pos), ident, ref, ",".join(alts), ".",
-                       "PASS", ";".join(info), "GT:ST"]) + "\t" + cells + "\n",
+                       "PASS", ";".join(info), fmt]) + "\t" + cells + "\n",
             added)
 
 
@@ -501,6 +546,18 @@ def main():
                     help="svgt_iv_states.tsv from p5_svgt.sh in interval mode, "
                          "keyed on `interval`")
     ap.add_argument("--is6110-keys", default="")
+    ap.add_argument("--inherited-sv-states", default="",
+                    help="inherited_sv_states.tsv from p5_svgt.sh --merge "
+                         "(bin/p5_inherited_sv.py): each sample's matched-frame "
+                         "genotype of the insertions it inherits from its "
+                         "reference (HANDOFF ABS-2). With it, an inherited "
+                         "insertion is written as measured -- ALT, REF or "
+                         "NOCALL with its reason -- instead of present in every "
+                         "sample matched to that reference. Needs --sv-members.")
+    ap.add_argument("--sv-members", default="",
+                    help="sv_matrix.members.tsv from bin/p5_sv_matrix.py: "
+                         "which of a sample's P4b rows, called or inherited, "
+                         "each caller-matrix cell came from")
     ap.add_argument("--sv-states", default="",
                     help="per-sample SV states from bin/p5_sv_genotype.py. The "
                          "SV matrix never writes REF, on the measured grounds "
@@ -849,8 +906,8 @@ def main():
                 info.append("AA_INVERTED")
         if r.get("frame") == "node":
             info.append(f"NODE={r.get('node','')}")
-        cells = "\t".join(f'{STATE_GT.get(states.get(s, ""), ".")}:'
-                          f'{states.get(s, "") or "NA"}' for s in order)
+        evs = r.get("_ev") or {}          # FORMAT/EV, from the evidence array
+        cells = "\t".join(vcf_cell(states.get(s, ""), evs.get(s, "")) for s in order)
         add((chrom, pos, r["key"], ref, alts, info, cells))
         n_small += 1
 
@@ -865,6 +922,57 @@ def main():
             sv_rows.append(r)
     sv_keys = {r["key"] for r in sv_rows}
     sv_state = collections.defaultdict(dict)
+
+    # ---- inherited insertions, as measured (ABS-2) -------------------------
+    # The caller matrix states an inherited insertion ALT in every sample whose
+    # reference carries it: nothing ever read the sample. p5_inherited_sv.py
+    # genotypes each one in the sample's own alignment to its reference, and
+    # the membership table says which cells came from inheritance alone, so
+    # only those are replaced; a cell any caller reached keeps its ALT.
+    if bool(a.inherited_sv_states) != bool(a.sv_members):
+        sys.exit("FATAL: --inherited-sv-states and --sv-members go together")
+    members = collections.defaultdict(lambda: collections.defaultdict(list))
+    inh_ins = {}
+    if a.sv_members:
+        for path in (a.sv_members, a.inherited_sv_states):
+            if not os.path.exists(path):
+                sys.exit(f"FATAL: no {path}")
+        for q in csv.DictReader(open(a.sv_members, newline=""), delimiter="\t"):
+            if q["key"] in sv_keys:
+                members[q["key"]][q["sample"]].append((q["member"], q["component"]))
+        for q in csv.DictReader(open(a.inherited_sv_states, newline=""),
+                                delimiter="\t"):
+            if q.get("kind") == "INS":
+                inh_ins[(q["sample"], q["id"])] = (q["state"], q.get("evidence", ""))
+        print(f"  inherited insertions genotyped in the matched frame: "
+              f"{len(inh_ins):,} (sample, event) pairs from {a.inherited_sv_states}")
+    PRIORITY = {"ALT": 0, "REF": 1, "NOCALL": 2}
+    n_inh = collections.Counter()
+
+    def inherited_cell(r, s, st):
+        """(state, evidence) of a caller-matrix cell that inheritance alone
+        made ALT; (st, "") for any other cell."""
+        if st != "ALT":
+            return st, ""
+        mem = members.get(r["key"], {}).get(s) if members else None
+        if mem is None:
+            if not members and r.get("component") == "inherited":
+                n_inh["inherited ALT kept, no membership table: unchecked"] += 1
+                return st, "inherited_unchecked"
+            return st, ""
+        if any(c != "inherited" for _, c in mem):
+            return st, ""                      # a caller reached it
+        if r.get("svtype") != "INS":
+            # an inherited deletion the catalogue does not hold: no check
+            n_inh["inherited DEL outside the catalogue: unchecked"] += 1
+            return st, "inherited_unchecked"
+        got = [inh_ins[(s, m)] for m, _ in mem if (s, m) in inh_ins]
+        if not got:
+            n_inh["inherited INS with no matched-frame genotype: unchecked"] += 1
+            return st, "inherited_unchecked"
+        new, ev = min(got, key=lambda g: PRIORITY.get(g[0], 3))
+        n_inh[f"inherited INS ALT -> {new}"] += 1
+        return new, ev
     if a.sv_states and os.path.exists(a.sv_states):
         n_sv_state = collections.Counter()
         rdr = csv.DictReader(open(a.sv_states), delimiter="\t")
@@ -901,6 +1009,7 @@ def main():
     # scale200 rather than improve anything. Those stay presence-only and say so
     # in COMPONENT.
     iv_states = collections.defaultdict(dict)
+    iv_ev = collections.defaultdict(dict)
     ivs = []
     if a.sv_intervals and a.sv_interval_states:
         # catalogue first, so only this shard's intervals have cells loaded
@@ -912,6 +1021,12 @@ def main():
                                 delimiter="\t"):
             if q["interval"] in iv_ids:
                 iv_states[q["interval"]][q["sample"]] = q["state"]
+                # FORMAT/EV: the reason behind an ABSENT or NOCALL, and how
+                # an inherited deletion was decided (ABS-1, ABS-2)
+                evq = q.get("evidence") or ""
+                if evq and (q["state"] in ("ABSENT", "NOCALL")
+                            or evq.startswith(("inherited", "absent"))):
+                    iv_ev[q["interval"]][q["sample"]] = evq
         n_st = collections.Counter(v for d in iv_states.values()
                                    for v in d.values())
         t = sum(n_st.values()) or 1
@@ -963,8 +1078,8 @@ def main():
                 f"PANELCARRIERS={r.get('n_ref_carriers','0')}"]
         if str(r.get("is6110_prox", "0")) == "1":
             info.append("IS6110PROX")
-        cell = "\t".join(f'{STATE_GT.get(st.get(s, ""), ".")}:{st.get(s, "") or "NA"}'
-                          for s in order)
+        evs = iv_ev.get(r["interval"], {})
+        cell = "\t".join(vcf_cell(st.get(s, ""), evs.get(s, "")) for s in order)
         # `start` is the first DELETED base (sv_intervals.py), and a symbolic
         # VCF deletion is anchored on the base BEFORE it, with END the last
         # deleted base. Writing POS=start put every deletion one base late and,
@@ -1125,7 +1240,8 @@ def main():
             st = r.get(s, "")
             if st != "ALT" and measured.get(s):
                 st = measured[s]
-            cell.append(f'{STATE_GT.get(st, ".")}:{st or "NA"}')
+            st, ev = inherited_cell(r, s, st)
+            cell.append(vcf_cell(st, ev))
         if svtype == "DEL" and str(r.get("svlen") or "").lstrip("-").isdigit():
             info.append(f"END={int(p) + abs(int(r['svlen']))}")
         add((a.h37rv_contig, int(p), r["key"], h37_base(int(p)),
@@ -1134,6 +1250,8 @@ def main():
     if ivs:
         print(f"  {n_uncat:,} caller deletions no catalogue interval covers, "
               f"kept presence-only (UNCATALOGUED)")
+    for why, n in sorted(n_inh.items()):
+        print(f"  {why}: {n:,} cells")
     for why, n in sorted(n_dup.items()):
         print(f"  {n:,} caller insertions dropped as the same event as {why}")
 

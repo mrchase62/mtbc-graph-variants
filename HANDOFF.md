@@ -539,6 +539,36 @@ What to change:
 5. **Tests:** the ctpV cases and the 120 calibration regions as regression
    tests. Then rerun P5 onward for scale200_fix; P1 to P4 stay valid.
 
+**ABS-1 implemented 2026-10-14 (not yet run on a cohort).**
+- Code: `bin/inherited_check.py`, `bin/p5_states.py` (`--no-absent-check` opts
+  out), the new P0 step `panel_diffs` (`bin/panel_differences.py`),
+  FORMAT/EV in the merged VCF (`states.ev.u8.npy`), and
+  `p5/reference_only.tsv` (`bin/p5_reference_only.py`, with `ref_deeper`).
+  Tests: `tests/test_audit_absent_check.py` (122 calibration regions, ctpV).
+- **Mask rule: the site's span, OR either end of R's deletion within
+  150 bp.** Masked small-variant ABSENT sites stay NOCALL "masked", and an SV
+  interval absent from R is checked the same way.
+  - The user first dropped the end part (2026-10-14: "yes, accept all three
+    and merge"), on my figure that it NOCALLed 620 truly deleted cells for 3
+    wrong ones.
+  - The user then restored it the same day ("yes, restore the end rule and
+    merge"), after the measurement below.
+- Measured on ctrl25_p200 against the 25 assemblies (5 samples with real
+  P5 states, before the span-only change): 665 R-explained ABSENT cells,
+  512 right / 130 wrong before; after, 170 right / 0 wrong, 495 NOCALL
+  (453 masked).
+- **Why the end rule was restored.** The "620 for 3" figure assumed those
+  cells would stay ABSENT, but unmasked they go through the junction check.
+  - Span only, all 25 samples (approximate candidate set): 523 right / 187
+    wrong. With the end rule: 472 / 11.
+  - Span only, the 5 samples with real P5 states: 172 / 31. All 31 wrong
+    cells are mar_02_R1896's phiRv1 locus (R deletion 1,779,267-1,788,513):
+    about 100 reads bridge both ends, but the assembly lacks phiRv1 there,
+    so they were called REF.
+- Before running: `bash bin/p0_prepare.sh --step panel_diffs` and
+  `--step manifest` on the build; P1 H37Rv BAMs must exist (now archived,
+  not dropped).
+
 **ABS-2: absorbed (inherited) SVs are reported without, or with only one,
 read check** (added 2026-10-13, user: "Make sure the details on the absorbed
 SV are detailed so once we start working of the pipeline we address and
@@ -654,6 +684,31 @@ covers the SV block.
    graph VCF whose records sit a few bp from the current one's (and whose
    svlen differs by 1 at some). P4b and P5 must read the same build's
    `graph_collapsed.vcf.gz`, recorded in provenance.
+
+**ABS-2 implemented 2026-10-14 (not yet run on a cohort).**
+- Code: `bin/p5_inherited_sv.py` (matched frame, run by `p5_svgt.sh
+  --states`; `--merge` writes `p5/inherited_sv_states.tsv`),
+  `bin/p5_sv_genotype.py` (two-frame rule, `--no-inherited-check` opts out),
+  `bin/p4b_place_sv.py` (same-type, within-50% suppression; `callable` on
+  inherited rows), `p5/sv_matrix.members.tsv`, and the merge writing
+  inherited insertions as measured. The panel table carries the graph VCF's
+  sha256; P5 refuses P4b rows from another build. P4b must be rerun.
+- Validated on ctrl25_p200 (25 finished assemblies, flanks assumed covered)
+  in place of truth7 (step 5). Inside the mask, deletions: H37Rv frame alone
+  384 right / 124 wrong, matched frame alone 621 / 31, combined 432 / 16.
+  Insertions: matched frame 157 / 32.
+- **Decided (user, 2026-10-14: "yes, accept all three and merge"):**
+  1. Inherited DELETIONS inside the repeat mask are genotyped with the
+     combined two-frame rule (evidence ends `_inmask`), not NOCALL.
+     Masked inherited INSERTIONS stay NOCALL "masked".
+  2. Insertion "lacks" is NOCALL "ins_lacks_unvalidated", not REF: it was
+     wrong at 11 of 12 cells on ctrl25_p200.
+  3. Masked uses ABS-1's rule: span, or either end within 150 bp. A
+     span-only rule was decided, then reversed the same day ("yes, restore
+     the end rule and merge"; see ABS-1).
+- Unmasked results on ctrl25_p200 before these decisions: deletions 99
+  right / 1 wrong before, 107 / 0 after; non-tandem insertions 270 / 24
+  before, 114 / 16 after (164 NOCALL).
 
 **In plain terms (SPLIT-1; added 2026-10-14).** SPLIT = one structural
 event split across several VCF records. When copies of an insertion differ by
