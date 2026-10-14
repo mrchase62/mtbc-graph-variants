@@ -75,6 +75,26 @@ THE METHOD, step by step.
      `method` is `ingroup` where the ancestral node's upward set alone
      decided it, `outgroups` where only the downward pass did. TIED and
      NODATA keys are left out, so they stay unpolarised in the event writer.
+  7. How far to trust it (fix list AA-1, user 2026-10-08). Both tables also
+     carry, per key:
+       changes  Fitch's change count (the fewest gains plus losses that
+                explain the leaves) over the panel's GRAPH genomes: H37Rv,
+                every VCF sample, the in-graph outgroups. Kit genomes are left
+                out of the count (set to "either", which is the same as
+                pruning them): their rows are direct-alignment calls, not
+                graph genotypes, and the canettii branch's changes are not
+                MTBC homoplasy. They still take part in the reconstruction.
+       flag     a comma-separated list (the merged VCF's AA_FLAG):
+                TIED:<bases> (ancestral.tsv; TIED is implied in
+                panel_polarity.tsv, which leaves tied keys out) or NODATA as
+                before; OUTGROUP where method is `outgroups`, i.e. the
+                ingroup's own upward set was a tie and the outgroups decided
+                it; HOMOPLASTIC where changes >= --homoplastic-min (default 2,
+                confirmed by the user 2026-10-14). HOMOPLASTIC combines with
+                any of the others.
+     ancestral.tsv also gains `method` (ingroup, outgroups, tied, nodata).
+     New columns are appended, so readers by column name are unaffected.
+     The probabilistic reconstruction (AA-1 point 4) is not done.
 
 WHAT IS NOT CHANGED. The event writer still consults panel_polarity.tsv only
 where AA did not resolve (they agree at SNPs now, being one reconstruction),
@@ -232,6 +252,49 @@ def fitch_at(children, root, path, leaf_bits, nkey):
         m = fin & up[node]
         fin = np.where(m != 0, m, up[node]).astype(np.uint8)
     return up[path[-1]], fin
+
+
+def fitch_changes(children, root, leaf_bits, nkey, skip=()):
+    """Fitch's change count per key: the fewest state changes on the tree that
+    explain the leaves (one per node whose children's sets do not meet).
+    Leaves in `skip`, and leaves with no data, are the set {REF, ALT}, which
+    never meets a child set emptily, so they add nothing: the count is the
+    count over the remaining leaves, as if the skipped ones were pruned."""
+    up, cost = {}, np.zeros(nkey, dtype=np.int32)
+    for node in postorder(children, root):
+        kids = children.get(node)
+        if not kids:
+            up[node] = (np.full(nkey, ANY, np.uint8) if node in skip else
+                        leaf_bits.get(node, np.full(nkey, ANY, np.uint8)))
+            continue
+        cur = up[kids[0]]
+        for k in kids[1:]:          # a multifurcation, resolved pairwise
+            inter = cur & up[k]
+            cost += inter == 0
+            cur = np.where(inter != 0, inter, cur | up[k]).astype(np.uint8)
+        up[node] = cur
+    return cost
+
+
+def aa_flags(how, changes, homoplastic_min, tied_bases=""):
+    """AA-1's flag list for one key, comma-joined (a VCF Number=. list):
+      TIED:<bases> / TIED  the ancestral node's final set is both alleles
+      NODATA               no genome had a call
+      OUTGROUP             resolved, but only by the downward pass: the
+                           ingroup's own upward set was a tie and the
+                           outgroups decided it (method `outgroups`)
+      HOMOPLASTIC          the panel needs `homoplastic_min` or more changes
+    HOMOPLASTIC combines with any of the others."""
+    f = []
+    if how == "tied":
+        f.append("TIED:" + tied_bases if tied_bases else "TIED")
+    elif how == "nodata":
+        f.append("NODATA")
+    elif how == "outgroups":
+        f.append("OUTGROUP")
+    if changes >= homoplastic_min:
+        f.append("HOMOPLASTIC")
+    return ",".join(f)
 
 
 # --------------------------------------------------------------------------
@@ -482,7 +545,17 @@ def main():
                     help="<build>/assets/ancestral.tsv (SNP AA table)")
     ap.add_argument("--out-polarity", required=True,
                     help="<build>/assets/panel_polarity.tsv (all classes)")
+    # AA-1. The user confirmed 2 (2026-10-14: "use 2 changes as the
+    # homoplastic threshold"); a parameter so a check run can vary it.
+    ap.add_argument("--homoplastic-min", type=int, default=2,
+                    help="flag a key HOMOPLASTIC when its Fitch change count "
+                         "over the panel's graph genomes is at least this "
+                         "(default 2: the allele arose, or was lost, more "
+                         "than once on the panel tree)")
     a = ap.parse_args()
+    if a.homoplastic_min < 1:
+        sys.exit(f"FATAL: --homoplastic-min must be >= 1, not "
+                 f"{a.homoplastic_min} (0 would flag every key)")
 
     # ---- tree, outgroups, ancestral node
     children, root, leaves = parse_newick(open(a.tree).read())
@@ -651,6 +724,13 @@ def main():
 
     # ---- Fitch
     up_anc, fin = fitch_at(children, root, path, leaf_bits, nkey)
+    # AA-1: the change count over the PANEL. Kit genomes (outside the graph)
+    # are left out: their states are direct-alignment SNP calls and route A
+    # event calls, not graph genotypes, and the canettii branch's changes lie
+    # outside the MTBC (AA-1's fix1 measurement counted them, overstating
+    # homoplasy). H37Rv and the in-graph outgroups (L5.1, L6.1) are panel
+    # genomes and count.
+    changes = fitch_changes(children, root, leaf_bits, nkey, skip=set(kit))
     anydata = np.zeros(nkey, dtype=bool)
     for b in leaf_bits.values():
         anydata |= b != ANY
@@ -671,38 +751,45 @@ def main():
     snp_set = set(snp_ix.tolist())
     tmp_a, tmp_p = a.out_ancestral + ".tmp", a.out_polarity + ".tmp"
     with open(tmp_a, "w") as fa, open(tmp_p, "w") as fp:
-        fa.write("chrom\tpos\tref\talt\tAA\tflag\tpolarity\n")
+        fa.write("chrom\tpos\tref\talt\tAA\tflag\tpolarity\tchanges\tmethod\n")
         fp.write("chrom\tpos\tref\talt\toutgroup_gt\tancestral\tpanel_af"
-                 "\tn_records\tmethod\n")
+                 "\tn_records\tmethod\tchanges\tflag\n")
         for j in order:
             chrom, pos, ref, alt = keys[j]
             g, how = state(j)
+            nch = int(changes[j])
+            homo = nch >= a.homoplastic_min
             tally[(kinds[j], how)] += 1
+            tally[(kinds[j], "homoplastic")] += homo
             if g == 1:
                 tally[(kinds[j], "alt_ancestral")] += 1
             if j in snp_set:
                 if g is None:
-                    aa = "."
-                    flag = "NODATA" if how == "nodata" else \
-                        "TIED:" + "".join(sorted({ref, alt}))
-                    pol = "unknown"
+                    aa, pol = ".", "unknown"
                 else:
-                    aa, flag = (alt if g else ref), ""
+                    aa = alt if g else ref
                     pol = "alt_ancestral" if g else "ref_ancestral"
-                fa.write(f"{chrom}\t{pos}\t{ref}\t{alt}\t{aa}\t{flag}\t{pol}\n")
+                flag = aa_flags(how, nch, a.homoplastic_min,
+                                "".join(sorted({ref, alt})))
+                fa.write(f"{chrom}\t{pos}\t{ref}\t{alt}\t{aa}\t{flag}\t{pol}"
+                         f"\t{nch}\t{how}\n")
             if g is None:
                 continue
             af = panel_af[j]
             fp.write(f"{chrom}\t{pos}\t{ref}\t{alt}\t{g}\t"
                      f"{'ALT' if g else 'REF'}\t{af:.4f}\t{len(copies[j])}"
-                     f"\t{how}\n")
+                     f"\t{how}\t{nch}\t{aa_flags(how, nch, a.homoplastic_min)}\n")
     os.replace(tmp_a, a.out_ancestral)
     os.replace(tmp_p, a.out_polarity)
 
     print(f"  {n_sib:,} SNP cells set to no call: a sibling allele changes "
           f"the same base")
     print("\n  ancestral state at the ancestral node, by class")
-    hdr = ["ingroup", "outgroups", "tied", "nodata", "alt_ancestral"]
+    print(f"    (outgroups: flagged OUTGROUP; homoplastic: flagged HOMOPLASTIC, "
+          f">= {a.homoplastic_min} Fitch changes over the graph genomes, "
+          f"kit genomes left out; any state)")
+    hdr = ["ingroup", "outgroups", "tied", "nodata", "alt_ancestral",
+           "homoplastic"]
     print("    class  " + "".join(f"{h:>14}" for h in hdr))
     for k in ("SNP", "MNP", "indel", "SV"):
         if any(tally[(k, h)] for h in hdr):

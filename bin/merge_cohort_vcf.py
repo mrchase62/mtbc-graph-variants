@@ -185,17 +185,33 @@ def _header_body(w):
     w('##INFO=<ID=FRAME,Number=1,Type=String,Description="h37rv or node. A '
       'node-frame record sits on sequence the H37Rv path does not carry and is '
       'emitted on its own node_<id> contig rather than dropped">\n')
-    w('##INFO=<ID=AA,Number=1,Type=String,Description="Ancestral allele, '
-      'reconstructed by Fitch parsimony over the panel tree rooted on the '
-      'canettii outgroup: the state of the MTBC ancestor, the most recent '
-      'common ancestor of every non-canettii genome, with the canettii '
-      'resolving a tie there, nearest first. A property of the panel rather '
-      'than of this cohort. `.` where the MTBC ancestor is still tied; see '
-      'AA_FLAG">\n')
-    w('##INFO=<ID=AA_FLAG,Number=1,Type=String,Description="TIED:<bases> '
-      'where parsimony does not resolve the MTBC ancestor\'s state, NODATA '
-      'where the site had none. Tied sites are NOT resolved by a coin '
-      'toss">\n')
+    w('##INFO=<ID=AA,Number=1,Type=String,Description="Ancestral allele at '
+      'SNP sites, reconstructed by Fitch parsimony over the panel tree '
+      '(bin/panel_ancestral.py): the state of the ancestral node, the most '
+      'recent common ancestor of every non-outgroup panel genome, a tie there '
+      'resolved by the downward pass over all outgroups together. A property '
+      'of the panel rather than of this cohort. `.` where that node is still '
+      'tied; see AA_FLAG. Indels, MNPs and SVs carry AA_STATE instead">\n')
+    w('##INFO=<ID=AA_FLAG,Number=.,Type=String,Description="How far to '
+      'trust the ancestral state (fix AA-1). TIED:<bases> where parsimony '
+      'does not resolve it (never a coin toss); NODATA where the site had '
+      'none; OUTGROUP where the ingroup alone was tied and the outgroups '
+      'decided it; HOMOPLASTIC where the panel tree needs at least the build\'s '
+      'threshold of changes (bin/panel_ancestral.py --homoplastic-min, '
+      'default 2). HOMOPLASTIC combines with the others">\n')
+    w('##INFO=<ID=AA_CHANGES,Number=1,Type=Integer,Description="Fitch '
+      'change count of this key on the panel tree, over the graph genomes '
+      '(outgroup kit genomes left out)">\n')
+    w('##INFO=<ID=AA_STATE,Number=1,Type=String,Description="REF or ALT: '
+      'the allele the panel reconstruction puts at the ancestral node, for a '
+      'record with no AA tag (indel, MNP, SV) whose key the build\'s '
+      'panel_polarity.tsv resolves. The event writer takes an ALT-ancestral '
+      'state only where the panel carries the ALT at >= its --min-panel-af">\n')
+    w('##INFO=<ID=AA_SOURCE,Number=1,Type=String,Description="On every '
+      'record. reconstructed: the ancestral state comes from the panel '
+      'reconstruction (AA or AA_STATE). assumed: no reconstructed state, so '
+      'downstream polarity takes the ALT (presence) as derived by '
+      'assumption">\n')
     w('##INFO=<ID=AA_INVERTED,Number=0,Type=Flag,Description="The REFERENCE '
       'carries the DERIVED allele at this site, so GT=0 is derived and GT=1 '
       'is ancestral, which is why AA is annotated rather than REF being '
@@ -348,6 +364,84 @@ def assemble(a):
     return 0
 
 
+def load_panel_polarity(path):
+    """{(pos, REF, ALT): (state, changes, flag)} from the build's
+    panel_polarity.tsv (bin/panel_ancestral.py), H37Rv keys only; {} for no
+    path. Rows whose `ancestral` is not REF or ALT are skipped."""
+    if not path:
+        return {}
+    if not os.path.exists(path):
+        sys.exit(f"FATAL: no panel polarity table at {path}")
+    out = {}
+    with open(path, newline="") as fh:
+        rd = csv.DictReader(fh, delimiter="\t")
+        need = {"pos", "ref", "alt", "ancestral"}
+        if not need <= set(rd.fieldnames or []):
+            sys.exit(f"FATAL: {path} lacks columns "
+                     f"{sorted(need - set(rd.fieldnames or []))}; rebuild it "
+                     f"with bin/panel_ancestral.py (P0 step ancestral)")
+        for r in rd:
+            if r["ancestral"] not in ("REF", "ALT"):
+                continue
+            out[(int(r["pos"]), r["ref"].upper(), r["alt"].upper())] = (
+                r["ancestral"], r.get("changes", ""), r.get("flag", ""))
+    return out
+
+
+def annotate_aa_source(recs, contig, pol):
+    """AA_SOURCE on every record (fix AA-1, point 3), so a polarity that is
+    an assumption is visible in the VCF rather than only in the event
+    writer's summary.
+
+      reconstructed  the record has a resolved AA (SNPs: ancestral.tsv), or
+                     its key is a resolved row of panel_polarity.tsv: an
+                     indel, MNP or sequence-resolved SV by its own (pos, REF,
+                     ALT); a symbolic SV by its SMALLALLELE key(s), all of
+                     which must resolve and agree. Such a record also gets
+                     AA_STATE (REF or ALT), AA_CHANGES and the row's AA_FLAG.
+      assumed        anything else: tied or no-data SNPs, IS6110 and
+                     accessory records, catalogued intervals and caller rows
+                     without a small allele, node-frame records.
+
+    Returns (records, Counter of AA_SOURCE values)."""
+    n = collections.Counter()
+    out = []
+    for rec in recs:
+        chrom, pos, ident, ref, alts, info = rec[:6]
+        info = list(info)
+        tags = {x.split("=", 1)[0]: x.split("=", 1)[1] for x in info if "=" in x}
+        src = "assumed"
+        if tags.get("AA", ".") not in (".", ""):
+            src = "reconstructed"
+        elif pol and chrom == contig and "AA" not in tags:
+            real = [x for x in alts if x != "*"]
+            keys = []
+            if len(real) == 1 and not real[0].startswith("<"):
+                keys = [(pos, ref.upper(), real[0].upper())]
+            elif tags.get("SMALLALLELE"):
+                for k in tags["SMALLALLELE"].split(","):
+                    f = k.split(":")
+                    if len(f) == 3 and f[0] == "h37rv" and ">" in f[2]:
+                        r_, x_ = f[2].split(">", 1)
+                        keys.append((int(f[1]), r_.upper(), x_.upper()))
+                    else:
+                        keys = []          # a key this cannot read: no claim
+                        break
+            hits = [pol.get(k) for k in keys]
+            if hits and all(hits) and len({h[0] for h in hits}) == 1:
+                src = "reconstructed"
+                info.append(f"AA_STATE={hits[0][0]}")
+                if len(hits) == 1:
+                    if hits[0][1] != "":
+                        info.append(f"AA_CHANGES={hits[0][1]}")
+                    if hits[0][2]:
+                        info.append(f"AA_FLAG={hits[0][2]}")
+        info.append(f"AA_SOURCE={src}")
+        n[src] += 1
+        out.append(rec[:5] + (info,) + tuple(rec[6:]))
+    return out, n
+
+
 def _load_sv_intervals():
     """bin/sv_intervals.py, for its same-event rule; one definition, not two."""
     import importlib.util
@@ -425,6 +519,13 @@ def main():
     ap.add_argument("--ancestral", default="",
                     help="per-site ancestral allele from bin/panel_ancestral.py (<build>/assets/ancestral.tsv); "
                          "absent means no AA is emitted")
+    ap.add_argument("--panel-polarity", default="",
+                    help="<build>/assets/panel_polarity.tsv, from the same "
+                         "reconstruction: AA_STATE, AA_CHANGES and AA_FLAG for "
+                         "records with no AA (indels, MNPs, sequence-resolved "
+                         "SVs, symbolic SVs through their SMALLALLELE key), so "
+                         "AA_SOURCE says reconstructed there. Without it every "
+                         "such record is AA_SOURCE=assumed")
     ap.add_argument("--is6110-gff", default="",
                     help="H37Rv IS6110 copies (<build>/assets/is6110_elements.gff), "
                          "for the copy-loss rule of the harmonization pass")
@@ -473,7 +574,9 @@ def main():
         sys.exit(f"FATAL: no ancestral allele table at {a.ancestral}")
     if a.ancestral:
         for r in csv.DictReader(open(a.ancestral), delimiter="\t"):
-            anc[(int(r["pos"]), r["ref"], r["alt"])] = (r["AA"], r["flag"])
+            anc[(int(r["pos"]), r["ref"], r["alt"])] = (
+                r["AA"], r["flag"], r.get("changes", ""))
+    pol = load_panel_polarity(a.panel_polarity)
 
     if not (a.matrix or a.states_dir or a.states_array):
         sys.exit("FATAL: give --states-array, --states-dir or --matrix")
@@ -731,11 +834,15 @@ def main():
                 f"REGION={r.get('region','')}", f"FRAME={r.get('frame','')}"]
         hit = anc.get((pos, ref, alt)) if chrom == a.h37rv_contig else None
         if hit:
-            aa, flag = hit
+            aa, flag, nch = hit
             info.append(f"AA={aa}")
             if flag:
                 info.append(f"AA_FLAG={flag}")
-            elif aa == alt:
+            if nch != "":
+                info.append(f"AA_CHANGES={nch}")
+            # not `elif` on the flag: since AA-1 a resolved site can carry
+            # OUTGROUP or HOMOPLASTIC, and its inversion must still be marked
+            if aa == alt:
                 # The reference carries the DERIVED allele here, so GT=0 means
                 # derived and GT=1 means ancestral -- inverted relative to the
                 # naive reading. True of 8.9% of panel SNP sites.
@@ -1082,6 +1189,11 @@ def main():
         recs, n_harm = _harm.harmonize(recs, a.h37rv_contig, copies)
         for why, k in sorted(n_harm.items()):
             print(f"  harmonize: {why}: {k:,}")
+    # AA-1: AA_SOURCE on every record (after harmonization, which relabels
+    # >= 50 bp small alleles as CLASS=sv)
+    recs, n_src = annotate_aa_source(recs, a.h37rv_contig, pol)
+    print("  ancestral state source: " + ", ".join(
+        f"{k} {v:,}" for k, v in sorted(n_src.items())))
     recs.sort(key=lambda x: (x[0] != a.h37rv_contig, x[0], x[1]))
 
     # ---- write -------------------------------------------------------------
