@@ -17,3 +17,30 @@ analysis/panel_checks/states; indels/MNPs/SVs from outgoup kit route A,
   739 -> 680 (all), 175 -> 165 (outside the mask); 599 of the 3,082 SV
   records with no discordant cell still change >= 2 times. So genotype
   errors do not explain the homoplasy.
+
+## QC-1 and the split loci (2026-10-14)
+
+- **QC-1 was our bug, not the graph's.** `analysis/panel_checks/genomes.tsv`
+  pointed QC-1 at QC-10.fna.gz and mada_1-1 at mada_1-10.fna.gz (prefix
+  match). Fixed; their states regenerated (old ones in
+  `analysis/panel_checks/states_old/`). Re-scored: QC-1 now ordinary; SNP
+  discordance outside the mask 0.004% (was 0.014%).
+- **Panel impact:** QC-1 was selected (rank 117) on QC-10's sequence.
+  Re-run with corrected states (`analysis/panel_select/out_pool_fixed/`): the
+  top 200 would swap one genome (QC-6 out, GCF_977011625 in); median
+  distance 147 and 11.95% over 300 are identical. No rebuild needed.
+- **Split loci** (`split_loci.py` -> `out/split_loci.tsv`; 419 loci with
+  disjoint carriers):
+
+  | class | outside mask | inside mask |
+  |---|---:|---:|
+  | copy-number series (VNTR repeats, the 1,674 bp Rv1318c-Rv1320c duplication) | 10 | 72 |
+  | IS6110 at one site, copies differing | 58 | 28 |
+  | one event, alleles within 5% length (internal SNPs/indels) | 20 | 40 |
+  | other (mostly one large insertion with a few length outliers) | 12 | 179 |
+
+  Examples outside the mask: a ~5 kb insertion at 2,268,721 written as 57
+  records (5,000 or 6,358 bp); 4.5 kb at 2,219,417 as 23 records. Each
+  record carries a scattered subset of genomes, so per-record homoplasy is
+  inflated. A large insertion whose copies differ by a base becomes several
+  records; the graph cannot merge them.
