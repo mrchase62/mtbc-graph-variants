@@ -33,8 +33,21 @@ polarity tables, from one Fitch reconstruction over the panel tree (user,
 
 | table | keys | read by |
 |---|---|---|
-| `$B/assets/ancestral.tsv` | every SNP key of the graph VCF: `chrom pos ref alt AA flag polarity`, flag `TIED:<bases>` or `NODATA` | `bin/p5_finish.sh` → the merged VCF's `AA` tag |
-| `$B/assets/panel_polarity.tsv` | every key, every class (SNP, MNP, indel, SV, IS6110, accessory records), with a resolved state: `chrom pos ref alt outgroup_gt ancestral panel_af n_records method` | `assoc/bin/write_event_matrix.py --panel-polarity`, where `AA` did not resolve |
+| `$B/assets/ancestral.tsv` | every SNP key of the graph VCF: `chrom pos ref alt AA flag polarity changes method` | `bin/p5_finish.sh` → the merged VCF's `AA`, `AA_FLAG`, `AA_CHANGES` tags |
+| `$B/assets/panel_polarity.tsv` | every key, every class (SNP, MNP, indel, SV, IS6110, accessory records), with a resolved state: `chrom pos ref alt outgroup_gt ancestral panel_af n_records method changes flag` | `assoc/bin/write_event_matrix.py --panel-polarity`, where `AA` did not resolve, and for every SV event (SPLIT-1); `bin/p5_finish.sh` → `AA_STATE` / `AA_SOURCE` for indels and SVs |
+
+**How far to trust each state (fix AA-1).** `changes` is Fitch's change
+count over the panel's graph genomes (H37Rv, every VCF sample, the in-graph
+outgroups); the kit genomes are left out of the count (set to "either",
+which equals pruning them), as their rows are not graph genotypes and the
+canettii branch's changes are not MTBC homoplasy. `flag` is a comma list:
+`TIED:<bases>` / `NODATA` as before, `OUTGROUP` where the ingroup's own
+upward set was tied and only the outgroups decided (`method` `outgroups`),
+`HOMOPLASTIC` where `changes` >= `--homoplastic-min` (default 2; user,
+2026-10-14: "use 2 changes as the homoplastic threshold"). `HOMOPLASTIC`
+combines with the others. The merged VCF writes `AA_SOURCE=reconstructed`
+or `assumed` on every record. On P200 (3893a3762ed1): SNP 1,305 keys
+HOMOPLASTIC, 690 OUTGROUP; MNP 158 / 14; indel 887 / 80; SV 739 / 43.
 
 It replaces `bin/ancestral_alleles.py` (SNP alignment only; a tie at the
 ancestral node broken by the nearest outgroup) and `bin/panel_polarity.py`

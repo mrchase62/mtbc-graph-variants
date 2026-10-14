@@ -319,8 +319,14 @@ fi
 ANCESTRAL="${ANCESTRAL:-${BUILD}/assets/ancestral.tsv}"
 [[ -s "$ANCESTRAL" ]] || { echo "FATAL: no ancestral allele table at ${ANCESTRAL};" \
     "run bin/p0_prepare.sh --step ancestral" >&2; exit 1; }
+# Same reconstruction, every class: AA_STATE / AA_SOURCE for indels and SVs
+# (fix AA-1). Written by the same step, so a build without it is incomplete.
+PANEL_POLARITY="${PANEL_POLARITY:-${BUILD}/assets/panel_polarity.tsv}"
+[[ -s "$PANEL_POLARITY" ]] || { echo "FATAL: no panel polarity table at" \
+    "${PANEL_POLARITY}; run bin/p0_prepare.sh --step ancestral" >&2; exit 1; }
 MERGE=("$MTB_PY" bin/merge_cohort_vcf.py "${SMALL[@]}" \
     --sv-matrix "${OUTDIR}/sv_matrix.tsv" --ancestral "$ANCESTRAL" \
+    --panel-polarity "$PANEL_POLARITY" \
     --h37rv-fasta "$H37RV_FASTA" --build-id "$BUILD_ID" \
     --is6110-gff "${BUILD}/assets/is6110_elements.gff" \
     ${IS6110_KEYS:+--is6110-keys "$IS6110_KEYS"} \

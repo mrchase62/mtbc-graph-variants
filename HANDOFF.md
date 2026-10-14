@@ -654,6 +654,24 @@ covers the SV block.
   parsimony rows; members that disagree -> unpolarised, flagged.
 - **Tests:** the two loci above collapse to one event each; a VNTR series
   stays separate; the tatC-helY element unchanged.
+- **Implemented 2026-10-14** (`write_event_matrix.py` `merge_split_svs`;
+  `--no-merge-split-sv` turns it off). Locus = CLASS=sv INS or DEL records
+  chained by starts within 50 bp; event = records within 5% of the event's
+  shortest net length and not a copy-number step (length difference >= 90%
+  of the allele's repeat period). Genotype: 1 if any member 1, else 0 if any
+  called 0, else 2, else no call. Polarity from members' `panel_polarity`
+  rows: one member ALT-ancestral -> event ALT-ancestral (the others are
+  derived variants of it, as at tatC-helY); two or more ALT-ancestral ->
+  unpolarised, `SPLIT_CONFLICT`; all with a row REF -> REF-ancestral,
+  `SPLIT_PARTIAL` if some member had none; no rows -> presence_is_derived.
+  Singletons follow the same rule, so SVs are now polarised by parsimony too
+  (before, every CLASS=sv record was presence_is_derived). Members in
+  `events/sv_merged.tsv`; `variants.tsv` gains `sv_members`,
+  `sv_member_ids`, `split_flag`. On scale200_fix (old CX333 build, with its
+  old table): 881 SV records merged into 552 events (7,372 -> 6,491 SV
+  variants); SV gains 7,836 -> 7,657; SV variants with >= 2 gains 833 -> 796.
+  The length outliers at the two P200 loci (6,358 bp = the 5 kb plus an
+  IS6110; 752; 3,417) stay separate events under the 5% rule.
 
 **NAME-1: rename the pipeline's `refbias/` working folders** (added
 2026-10-08). The user: "refbias doesn't make sense". The name dates from the
@@ -690,7 +708,9 @@ What to change, in `bin/ancestral_alleles.py`, `assets/ancestral.tsv` and the
 merged VCF:
 1. **`AA_CHANGES`:** the Fitch change count on the panel tree.
 2. **`AA_FLAG` values:**
-   - `HOMOPLASTIC` when changes >= 2 (threshold to confirm with the user);
+   - `HOMOPLASTIC` when changes >= 2 (threshold confirmed, user
+     2026-10-14: "use 2 changes as the homoplastic threshold";
+     `bin/panel_ancestral.py --homoplastic-min`, default 2);
    - `OUTGROUP` when canettii decided the MTBC ancestor's state;
    - the two can combine with TIED.
 3. **`AA_SOURCE`:** reconstructed, or assumed (ALT = derived), on every
@@ -702,6 +722,20 @@ merged VCF:
 The counting code used for the numbers above is a modified copy of
 `ancestral_alleles.py` in the 2026-10-08 session scratchpad. Rebuild it in
 the repository.
+
+- **Implemented 2026-10-14 (points 1-3; 4 not done), in the new code:**
+  `bin/panel_ancestral.py` writes `changes` and a `flag` list into both
+  tables (`ancestral.tsv` also `method`). The count is over the graph
+  genomes only (kit genomes L8 and canettii left out). `OUTGROUP` = method
+  `outgroups` (the ingroup alone tied). `bin/merge_cohort_vcf.py` (via
+  `p5_finish.sh`, now also passed `panel_polarity.tsv`) writes `AA_FLAG`
+  (Number=.), `AA_CHANGES`, `AA_STATE` (indels/SVs) and `AA_SOURCE` on every
+  record; `AA_INVERTED` is now kept on a flagged site. The event writer
+  copies `aa_changes` and `aa_source` into `variants.tsv`. P200
+  (3893a3762ed1), keys flagged HOMOPLASTIC / OUTGROUP: SNP 1,305 / 690,
+  MNP 158 / 14, indel 887 / 80, SV 739 / 43; 3,089 of 45,914 keys
+  homoplastic. Tests: `tests/test_audit_split_aa.py`. Needs a rerun of P0
+  step `ancestral` on the build to take effect.
 
 **OUT-1: canettii pseudo-isolate for event-state polarity** (added
 2026-10-08, user).

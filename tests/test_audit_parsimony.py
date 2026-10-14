@@ -313,8 +313,10 @@ class TieOnlyOutgroupsSolve(_Base):
         r, anc, pol = ancestral(self.d, self.TREE, vcf, ref, self.OG)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(pol, [])
+        # the A clade and L5.1 carry C apart: 2 changes, so HOMOPLASTIC as
+        # well (AA-1: the flags combine)
         self.assertEqual((anc[0]["AA"], anc[0]["flag"], anc[0]["polarity"]),
-                         (".", "TIED:CT", "unknown"))
+                         (".", "TIED:CT,HOMOPLASTIC", "unknown"))
 
 
 # ==========================================================================
@@ -330,15 +332,18 @@ class TableFormats(_Base):
         r, anc, pol = ancestral(self.d, f"(O,(X,(Y,{H37})));\n", vcf, ref, ["O"])
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(open(f"{self.d}/anc.tsv").readline().rstrip("\n").split("\t"),
-                         ["chrom", "pos", "ref", "alt", "AA", "flag", "polarity"])
+                         ["chrom", "pos", "ref", "alt", "AA", "flag", "polarity",
+                          "changes", "method"])
         self.assertEqual(open(f"{self.d}/pol.tsv").readline().rstrip("\n").split("\t"),
                          ["chrom", "pos", "ref", "alt", "outgroup_gt", "ancestral",
-                          "panel_af", "n_records", "method"])
+                          "panel_af", "n_records", "method", "changes", "flag"])
         self.assertEqual([(x["chrom"], x["pos"], x["ref"], x["alt"]) for x in anc],
                          [(PANSN, "100", "C", "T")])
-        # merge_cohort_vcf.py's join: (pos, ref, alt) -> (AA, flag)
-        j = {(int(x["pos"]), x["ref"], x["alt"]): (x["AA"], x["flag"]) for x in anc}
-        self.assertEqual(j[(100, "C", "T")], ("T", ""))
+        # merge_cohort_vcf.py's join: (pos, ref, alt) -> (AA, flag, changes).
+        # The ingroup (X,(Y,H37)) ties and O decides: OUTGROUP (AA-1), 1 change
+        j = {(int(x["pos"]), x["ref"], x["alt"]): (x["AA"], x["flag"], x["changes"])
+             for x in anc}
+        self.assertEqual(j[(100, "C", "T")], ("T", "OUTGROUP", "1"))
         x = by_pos(pol)[(100, "C", "T")]
         self.assertEqual((x["outgroup_gt"], x["ancestral"], x["panel_af"], x["n_records"]),
                          ("1", "ALT", "0.6667", "1"))

@@ -83,5 +83,6 @@ p5svgt	post	sample	yes	${OUTROOT}/p5/twoframe/${S}.2frame.tsv	the H37Rv-frame se
 p5svgt	post	cohort	yes	${OUTROOT}/p5/svgt_iv_states.tsv	interval-mode deletion states
 p5vcf	pre	cohort	yes	${OUTROOT}/p5/states.u8.npy	the small-variant states array
 p5vcf	pre	build	yes	${BUILD}/assets/ancestral.tsv	ancestral alleles (p0_prepare.sh --step ancestral)
+p5vcf	pre	build	yes	${BUILD}/assets/panel_polarity.tsv	ancestral states of every class, AA_STATE / AA_SOURCE (p0_prepare.sh --step ancestral)
 p5vcf	pre	cohort	yes	${OUTROOT}/p5/sv_matrix.tsv	the SV table
 p5vcf	post	cohort	yes	${OUTROOT}/p5/merged.vcf.gz	the cohort-level deliverable

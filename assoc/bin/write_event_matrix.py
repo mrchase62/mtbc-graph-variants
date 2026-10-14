@@ -15,6 +15,7 @@ events, and writes both matrices in the format the library reads.
     <out>/labelled.nwk  the tree with unique internal labels -- USE THIS ONE
     <out>/variants.tsv  row key -> the pipeline's own key, class, polarity
     <out>/nodes.tsv     label, parent, edge length, discarded support value
+    <out>/sv_merged.tsv every member record of each merged SV event (SPLIT-1)
     <out>/summary.txt
 
 The two encodings are not arbitrary. `mtbvartools.trees.getVariantDistance`
@@ -33,6 +34,15 @@ is6110 and sv record, since those are not panel SNP sites -- are polarised
 ALT-as-derived, which for an insertion is a definition rather than a guess:
 presence is the derived state. For a CLASS=small record with a tied or absent
 AA it IS an assumption, and summary.txt counts those separately.
+
+SV EVENTS (fix SPLIT-1, 2026-10-14). CLASS=sv records that are one event
+written as several (same type, starts within 50 bp, net lengths within 5%,
+not a copy-number step) are merged into one presence/absence event, a sample
+carrying it if it carries any member; and every SV event, merged or single,
+takes its polarity from its members' rows in panel_polarity.tsv (the panel
+Fitch reconstruction) where they have any, else stays presence_is_derived.
+The rules are in merge_split_svs(); members are listed in sv_merged.tsv.
+--no-merge-split-sv restores the old behaviour.
 
 THE RECONSTRUCTION is Fitch: an upward pass for state sets, then a downward
 pass assigning each node the parent's state where that is consistent with its
@@ -228,7 +238,14 @@ def read_vcf(path, want_class=None, want_frame=None):
                 aa_flag=info.get("AA_FLAG", ""), polarity=polarity,
                 derived=derived, region=info.get("REGION", ""),
                 evidence=info.get("EVIDENCE", ""),
-                siteclass=info.get("SITECLASS", "")))
+                siteclass=info.get("SITECLASS", ""),
+                # AA-1 tags (absent in a VCF older than the fix: blank)
+                aa_changes=info.get("AA_CHANGES", ""),
+                aa_source=info.get("AA_SOURCE", ""),
+                # SPLIT-1 reads these
+                svtype=info.get("SVTYPE", ""), svlen=info.get("SVLEN", ""),
+                smallallele=info.get("SMALLALLELE", ""),
+                acclocus=acc))
             gt_rows.append(np.frombuffer(
                 "".join([s[0] for s in f[9:]]).encode(), dtype=np.uint8))
     return samples, variants, gt_rows, n_skipped
@@ -253,6 +270,236 @@ def ref_tip_gt(v):
     if v["frame"] not in ("h37rv", "") and v["cls"] not in REF_BY_CONSTRUCTION:
         return ord(".")
     return ord("0")
+
+
+# --------------------------------------------------------------------------
+# SPLIT-1: one SV event written as several records
+# --------------------------------------------------------------------------
+SPLIT_POS_TOL = 50      # bp between consecutive starts of one locus
+SPLIT_LEN_FRAC = 0.05   # longest / shortest net length of one event - 1
+
+
+def sv_net_len(v):
+    """Net length of an SV record: |SVLEN|, else the allele length change."""
+    try:
+        return abs(int(v["svlen"]))
+    except (KeyError, ValueError):
+        return abs(len(primary_alt(v["alt"])) - len(v["ref"]))
+
+
+def sv_allele_seq(v):
+    """The inserted or deleted sequence of a sequence-resolved record, ''
+    for a symbolic one."""
+    alt = primary_alt(v["alt"])
+    if alt.startswith("<") or "," in alt:
+        return ""
+    r, x = v["ref"].upper(), alt.upper()
+    return x[len(r):] if len(x) > len(r) else r[len(x):]
+
+
+def period_of(s, max_p=200, frac=0.9):
+    """The shortest period p (<= max_p, <= len/2) at which s matches itself
+    shifted by p at >= frac of positions; 0 if none. A VNTR array or tandem
+    copies have one; one insertion does not."""
+    n = len(s)
+    for p in range(1, min(max_p, n // 2) + 1):
+        if sum(s[i] == s[i - p] for i in range(p, n)) >= frac * (n - p):
+            return p
+    return 0
+
+
+def copy_number_step(a, b, la, lb):
+    """True when two records of one locus differ by whole copies of a repeat
+    unit, so they are different copy numbers (counts), not one event: the
+    length difference is at least 90% of the period of either allele's
+    sequence. Symbolic records have no sequence and are never called a step
+    here; at those the 5% length rule alone separates the counts."""
+    d = abs(la - lb)
+    if d == 0:
+        return False
+    for s in (sv_allele_seq(a), sv_allele_seq(b)):
+        p = period_of(s) if s else 0
+        if p and d >= 0.9 * p:
+            return True
+    return False
+
+
+def member_keys(v):
+    """The panel-polarity keys (chrom, pos, REF, ALT) a record stands for:
+    its own allele if sequence-resolved, else its SMALLALLELE key(s)."""
+    alt = primary_alt(v["alt"])
+    if not alt.startswith("<") and "," not in alt:
+        return [(v["chrom"], v["pos"], v["ref"].upper(), alt.upper())]
+    out = []
+    for k in (v.get("smallallele") or "").split(","):
+        f = k.split(":")
+        if len(f) == 3 and f[0] == "h37rv" and ">" in f[2]:
+            r, x = f[2].split(">", 1)
+            out.append((v["chrom"], int(f[1]), r.upper(), x.upper()))
+    return out
+
+
+def member_state(v, pol_tab, min_panel_af):
+    """REF, ALT or '' (no usable row) for one record, from the panel
+    reconstruction. An ALT-ancestral row below min_panel_af is not trusted
+    (the event writer's existing guard) and counts as no row. A record with
+    several SMALLALLELE keys takes their common state, '' if they differ."""
+    st = set()
+    for k in member_keys(v):
+        hit = pol_tab.get(k)
+        if hit is None:
+            st.add("")
+            continue
+        anc, af = hit
+        if anc == "ALT":
+            try:
+                ok = float(af) >= min_panel_af
+            except ValueError:
+                ok = False
+            st.add("ALT" if ok else "")
+        else:
+            st.add("REF")
+    return st.pop() if len(st) == 1 else ""
+
+
+def split_sv_groups(variants):
+    """Groups of record indices that are one SV event (SPLIT-1).
+
+    Candidates: CLASS=sv records on the H37Rv contig of SVTYPE INS or DEL
+    (not node-frame, not accessory loci; IS6110 and accessory records are
+    other classes). A LOCUS is a chain of one type whose consecutive starts
+    are within SPLIT_POS_TOL. Inside a locus, records are taken shortest
+    first; an EVENT collects every record whose net length is within
+    SPLIT_LEN_FRAC of the event's shortest and is not a copy-number step from
+    any member (copy_number_step). So alleles of one insertion that differ by
+    a few internal bases are one event, while 54 / 108 / 162 bp VNTR copies,
+    or the 1,674 and 3,348 bp copies of a duplication, stay separate counts.
+    Returns a list of index lists, every candidate in exactly one, singletons
+    included."""
+    by = collections.defaultdict(list)
+    for i, v in enumerate(variants):
+        if v["cls"] != "sv" or v["svtype"] not in ("INS", "DEL") \
+                or str(v["key"][0]).startswith("node:") \
+                or v["chrom"].startswith("node_") or v.get("acclocus"):
+            continue
+        by[(v["chrom"], v["svtype"])].append(i)
+    groups = []
+    for idxs in by.values():
+        idxs.sort(key=lambda i: variants[i]["pos"])
+        loci, cur = [], []
+        for i in idxs:
+            if cur and variants[i]["pos"] - variants[cur[-1]]["pos"] > SPLIT_POS_TOL:
+                loci.append(cur)
+                cur = []
+            cur.append(i)
+        if cur:
+            loci.append(cur)
+        for loc in loci:
+            ln = {i: sv_net_len(variants[i]) for i in loc}
+            left = sorted(loc, key=lambda i: (ln[i], variants[i]["pos"], i))
+            while left:
+                ev = [left[0]]
+                lo = max(ln[left[0]], 1)
+                for i in left[1:]:
+                    if ln[i] > lo * (1 + SPLIT_LEN_FRAC):
+                        break
+                    if any(copy_number_step(variants[i], variants[j], ln[i], ln[j])
+                           for j in ev):
+                        continue
+                    ev.append(i)
+                groups.append(ev)
+                done = set(ev)
+                left = [i for i in left if i not in done]
+    return groups
+
+
+def merged_gt(rows):
+    """One genotype row from several members' GT characters: 1 if any member
+    is 1 (carrier = any member present); else 0 if any member is a called 0;
+    else 2 (deleted region) if any member is 2; else no call. The same
+    precedence as the ladder collapse (ALT wins, a call beats a no-call)."""
+    m = np.stack(rows)
+    out = np.full(m.shape[1], ord("."), dtype=np.uint8)
+    for ch in (ord("2"), ord("0"), ord("1")):          # later wins
+        out = np.where((m == ch).any(axis=0), ch, out).astype(np.uint8)
+    return out
+
+
+def merge_split_svs(variants, gt_rows, pol_tab, min_panel_af):
+    """SPLIT-1: merge the records of one SV event, and polarise every SV
+    event from its members' panel-parsimony rows.
+
+    POLARITY. Each member's state at the ancestral node, from
+    panel_polarity.tsv (member_state): REF, ALT, or none. The event is
+    "carries any member", so:
+      - exactly one member ALT-ancestral: the ancestor carried that allele,
+        hence the event; alt_ancestral_outgroup (derived = REF). The other
+        members being REF-ancestral is NOT a disagreement: they are derived
+        variants of the ancestral sequence (the tatC-helY element's main
+        allele is ALT-ancestral, its rare one-base variants REF);
+      - two or more members ALT-ancestral: the ancestor cannot carry two
+        alleles at once, so the rows disagree; unpolarised, flagged
+        SPLIT_CONFLICT;
+      - all members with a row REF-ancestral: ref_ancestral_outgroup (derived
+        = ALT); flagged SPLIT_PARTIAL if some member had no row (tied, no
+        data, a rare ALT-ancestral row, or a symbolic record with no small
+        allele);
+      - no member with a row: the record's own polarity is kept
+        (presence_is_derived for CLASS=sv).
+    A singleton event follows the same rule, so an unmerged SV is now
+    polarised by its own parsimony row as well (before SPLIT-1 every
+    CLASS=sv record was presence_is_derived whatever the panel said).
+
+    Merged events keep the representative's row key (the member with most
+    carriers) and record their members in `sv_member_ids` and `_members`
+    (written to sv_merged.tsv). Returns (variants, gt_rows, counts)."""
+    groups = split_sv_groups(variants)
+    n = collections.Counter()
+    drop, members = set(), {}
+    for g in groups:
+        ones = [int((gt_rows[i] == ord("1")).sum()) for i in g]
+        rep = g[max(range(len(g)), key=lambda k: (ones[k], -k))]
+        v = variants[rep]
+        st = [member_state(variants[i], pol_tab, min_panel_af) if pol_tab else ""
+              for i in g]
+        for i, s in zip(g, st):
+            variants[i]["member_state"] = s
+        n_alt, n_ref, n_none = st.count("ALT"), st.count("REF"), st.count("")
+        flag = ""
+        if n_alt >= 2:
+            v["polarity"], v["derived"], flag = "unpolarised", "ALT", "SPLIT_CONFLICT"
+        elif n_alt == 1:
+            v["polarity"], v["derived"] = "alt_ancestral_outgroup", "REF"
+            if n_none:
+                flag = "SPLIT_PARTIAL"
+        elif n_ref:
+            v["polarity"], v["derived"] = "ref_ancestral_outgroup", "ALT"
+            if n_none:
+                flag = "SPLIT_PARTIAL"
+        n[f"SV events polarised: {v['polarity']}"] += 1
+        if flag:
+            n[f"SV events flagged {flag}"] += 1
+        v["split_flag"] = flag
+        if len(g) < 2:
+            continue
+        n["SV events merged from >= 2 records"] += 1
+        n["SV records merged away"] += len(g) - 1
+        gt_rows[rep] = merged_gt([gt_rows[i] for i in g])
+        members[rep] = [variants[i] for i in sorted(g, key=lambda i: variants[i]["pos"])]
+        v["sv_members"] = len(g)
+        v["sv_member_ids"] = ",".join(m["id"] for m in members[rep])
+        v["_members"] = [dict(id=m["id"], pos=m["pos"], ref=m["ref"],
+                              alt=m["alt"], svtype=m["svtype"],
+                              net_len=sv_net_len(m), state=m["member_state"],
+                              n_alt=int((gt_rows[i] == ord("1")).sum()) if i != rep
+                              else ones[g.index(rep)])
+                         for m, i in ((variants[i], i) for i in
+                                      sorted(g, key=lambda i: variants[i]["pos"]))]
+        drop.update(i for i in g if i != rep)
+    keep = [i for i in range(len(variants)) if i not in drop]
+    variants = [variants[i] for i in keep]
+    gt_rows = [gt_rows[i] for i in keep]
+    return variants, gt_rows, n
 
 
 def leaf_bits(gt_chars, derived_is_ref, absent):
@@ -395,6 +642,15 @@ def main():
                          "position are one insertion read to N depths, and "
                          "treating them as independent manufactures convergence."
                          " See assoc/IDSB_ON_GWAS1000.md.")
+    ap.add_argument("--no-merge-split-sv", action="store_true",
+                    help="keep every record of a split SV event (SPLIT-1) as "
+                         "its own variant. Off by default: one insertion whose "
+                         "copies differ by a base becomes several records, "
+                         "each with a scattered subset of the carriers, which "
+                         "inflates homoplasy and splits the association "
+                         "signal (analysis/graph_gt_check/README.md). With "
+                         "this flag, SV records are also not polarised from "
+                         "panel_polarity.tsv (presence_is_derived, as before)")
     ap.add_argument("--dedupe", choices=("fail", "first", "drop", "suffix"),
                     default="fail",
                     help="what to do when two records share a row key. A "
@@ -558,8 +814,8 @@ def main():
         sys.exit(f"FATAL: --panel-polarity {a.panel_polarity} does not exist. "
                  f"Build it with P0 step ancestral (bin/panel_ancestral.py), or pass "
                  f"--panel-polarity '' to run without outgroup polarity")
+    pol_tab = {}
     if a.panel_polarity:
-        pol_tab = {}
         with open(a.panel_polarity, newline="") as fh:
             rd = csv.DictReader(fh, delimiter="\t")
             if "chrom" not in (rd.fieldnames or []):
@@ -676,6 +932,29 @@ def main():
             gt_rows = [gt_rows[i] for i in keep_i]
             eprint(f"  collapsed {ladders:,} insertion ladders, merging "
                    f"{merged:,} rungs into their longest allele")
+
+    # ---- SPLIT-1: MERGE SPLIT SV RECORDS ----------------------------------
+    # The ladder collapse's sibling for CLASS=sv (fix list SPLIT-1, user
+    # 2026-10-14). The graph writes one insertion whose copies differ by a
+    # base as several records at one locus, each carried by a scattered
+    # subset of genomes: on the P200 build 2,268,721 (~5 kb) is 57 records
+    # and 2,219,417 (4.5 kb) 23, and 419 loci have >= 2 records of one type
+    # within 50 bp with disjoint carriers (analysis/graph_gt_check). Each
+    # record then scores its own gains -- manufactured homoplasy, and the
+    # carriers' signal split across records. Records of one type within
+    # 50 bp whose net lengths are within 5% are one presence/absence event
+    # (split_sv_groups); copy-number series (VNTR units, the 1,674 bp
+    # Rv1318c-Rv1320c duplication's one and two copies) differ by whole
+    # units and stay separate counts. Polarity: merge_split_svs.
+    n_split = collections.Counter()
+    if not a.no_merge_split_sv and variants:
+        variants, gt_rows, n_split = merge_split_svs(
+            variants, gt_rows, pol_tab, a.min_panel_af)
+        if n_split:
+            eprint("  SV events (SPLIT-1), polarity from the members' "
+                   "panel rows:")
+            for k in sorted(n_split):
+                eprint(f"    {k:<48}{n_split[k]:>8,}")
 
     eprint(f"  vcf: {len(samples)} samples, {len(variants)} records kept")
     for k, v in sorted(skipped.items()):
@@ -1104,7 +1383,8 @@ def main():
                  "aa\taa_flag\tpolarity\tderived\tpanel_af\tevidence\t"
                  "siteclass\tacc_locus\tn_applicable\tn_inapplicable\t"
                  "root_state\tn_gain\tn_loss\tn_undet\tn_derived_leaves\t"
-                 "acc_locus_unmeasured\n")
+                 "acc_locus_unmeasured\taa_changes\taa_source\tsv_members\t"
+                 "sv_member_ids\tsplit_flag\n")
         leaf_rows = np.asarray([i for i in range(n_n) if is_leaf[i]])
         branch_rows = np.asarray([i for i in range(n_n) if i != root_i])
         for j, v in enumerate(variants):
@@ -1122,7 +1402,24 @@ def main():
                 int((ev == EV_GAIN).sum()), int((ev == EV_LOSS).sum()),
                 int((ev == EV_UNDET).sum()),
                 int((states[leaf_rows, j] == ST_DER).sum()),
-                v.get("acc_locus_unmeasured", ""))) + "\n")
+                v.get("acc_locus_unmeasured", ""),
+                # a merged event's panel change count is not any one
+                # member's: left blank (members in sv_merged.tsv)
+                "" if v.get("sv_members") else v.get("aa_changes", ""),
+                v.get("aa_source", ""), v.get("sv_members", 1)
+                if v["cls"] == "sv" else "", v.get("sv_member_ids", ""),
+                v.get("split_flag", ""))) + "\n")
+    # SPLIT-1: every member of every merged SV event, traceable to its VCF ID
+    with open(os.path.join(a.out, "sv_merged.tsv"), "w") as fh:
+        fh.write("row_key\tevent_id\tmember_id\tpos\tsvtype\tnet_len\t"
+                 "n_alt\tmember_state\tevent_polarity\tsplit_flag\n")
+        for v in variants:
+            for m in v.get("_members", []):
+                fh.write("\t".join(str(x) for x in (
+                    "|".join(str(p) for p in v["key"]), v["id"], m["id"],
+                    m["pos"], m["svtype"], m["net_len"], m["n_alt"],
+                    m["state"] or ".", v["polarity"],
+                    v.get("split_flag", ""))) + "\n")
     with open(os.path.join(a.out, "nodes.tsv"), "w") as fh:
         fh.write("label\tparent\tedge_length\tis_leaf\tsupport\tn_leaves\n")
         n_leaves_under = [0] * n_n
@@ -1186,6 +1483,19 @@ def main():
         lines.append(f"  NOTE {pol['root_inferred']:,} had that assumption "
                      f"CONTRADICTED by the reconstruction -- the assumed-derived "
                      f"allele sat at the root -- and were flipped and rebuilt")
+    src = collections.Counter(v.get("aa_source") or "(not in VCF)"
+                              for v in variants)
+    lines.append("AA_SOURCE in the VCF (AA-1)  " + ", ".join(
+        f"{k} {n:,}" for k, n in sorted(src.items())))
+    if a.no_merge_split_sv:
+        lines.append("split SV records  kept separate (--no-merge-split-sv)")
+    else:
+        lines.append(f"split SV records  {n_split['SV records merged away']:,} "
+                     f"merged into {n_split['SV events merged from >= 2 records']:,} "
+                     f"events (SPLIT-1; members in sv_merged.tsv)")
+        for k in sorted(n_split):
+            if k.startswith("SV events polarised") or k.startswith("SV events flagged"):
+                lines.append(f"  {k:<46s}{n_split[k]:>9,}")
     if mtbc_i is not None:
         lines.append(f"MTBC node {labels[mtbc_i]} pinned to AA where resolved: "
                      f"{len(pinned):,} variants changed from parsimony "
