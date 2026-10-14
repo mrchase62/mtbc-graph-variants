@@ -635,6 +635,26 @@ covers the SV block.
    svlen differs by 1 at some). P4b and P5 must read the same build's
    `graph_collapsed.vcf.gz`, recorded in provenance.
 
+**SPLIT-1: merge split SV records into one event** (added 2026-10-14, user:
+"yes, add the merge to the fix list"). Before P5 on new1k_p200.
+
+- **Evidence:** `analysis/graph_gt_check/README.md` (P200 build): 419 loci
+  where >= 2 SV records of one type lie within 50 bp with disjoint carriers.
+  A large insertion whose copies differ by one base becomes several records
+  (2,268,721: one ~5 kb insertion as 57 records; 2,219,417: 4.5 kb as 23).
+  Each record carries a scattered subset of genomes, inflating homoplasy and
+  splitting association signal.
+- **Fix:** in the event writer (`assoc/bin/write_event_matrix.py`, beside
+  the existing insertion-ladder collapse), merge same-locus SV records of one
+  type with net lengths within ~5% into one presence/absence event (carrier =
+  any member). Keep copy-number series (lengths whole multiples of a unit:
+  VNTRs, the 1,674 bp Rv1318c-Rv1320c duplication) separate, as counts.
+  IS6110 copies at one site merge as one insertion event.
+- **Polarity:** the merged event's ancestral state from its members'
+  parsimony rows; members that disagree -> unpolarised, flagged.
+- **Tests:** the two loci above collapse to one event each; a VNTR series
+  stays separate; the tatC-helY element unchanged.
+
 **NAME-1: rename the pipeline's `refbias/` working folders** (added
 2026-10-08). The user: "refbias doesn't make sense". The name dates from the
 project's start as a reference-bias study, and the folders hold every
