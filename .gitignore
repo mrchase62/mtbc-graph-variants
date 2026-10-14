@@ -47,3 +47,6 @@ analysis/foldback_mixed/out/mixed_calls.tsv.gz
 analysis/foldback_mixed/controls_user/*.vcf.gz*
 analysis/foldback_mixed/controls_user/*.log
 analysis/foldback_mixed/controls_user/lift/
+analysis/foldback_mixed/controls_grid/*.vcf.gz*
+analysis/foldback_mixed/controls_grid/*.log
+analysis/foldback_mixed/controls_grid/truth/
