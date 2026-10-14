@@ -666,6 +666,12 @@ similar length into one presence/absence event; keep copy-number series
 
 **SPLIT-1: merge split SV records into one event** (added 2026-10-14, user:
 "yes, add the merge to the fix list"). Before P5 on new1k_p200.
+- **Merged 2026-10-14 (with AA-1).** User decisions 2026-10-14: SV events take
+  polarity from parsimony, not "presence is derived" ("accept 1 and 2");
+  SPLIT_PARTIAL events polarised REF; the 6,358 bp alleles at 2,268,721 (the
+  5 kb insertion, which carries a DEAD/DEAH-box helicase gene, plus an IS6110
+  copy) stay a separate event ("keep them separate"). Takes effect when P0
+  step `ancestral` is rerun on the build.
 
 - **Evidence:** `analysis/graph_gt_check/README.md` (P200 build): 419 loci
   where >= 2 SV records of one type lie within 50 bp with disjoint carriers.
