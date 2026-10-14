@@ -190,16 +190,20 @@ mtb_require_cram_root() {
 : "${MTB_H37RV:=${MTB_REFDIR}/H37Rv.fasta}"
 
 # --- Outgroup ---------------------------------------------------------------
-# THE PANEL GENOME THAT ROOTS EVERY TREE AND POLARISES EVERY VARIANT, named in
-# one place. It was GCF_035581225 (M. canettii) written into P0, the
-# association tail's tree and event steps, add_outgroup.py, panel_polarity.py
-# and build_snp_tree.sh separately, so a graph without that genome could not
+# THE PANEL GENOME THAT ROOTS EVERY COHORT TREE, named in one place. It was
+# GCF_035581225 (M. canettii) written into P0, the association tail's tree
+# and event steps, add_outgroup.py, the old panel_polarity.py and
+# build_snp_tree.sh separately, so a graph without that genome could not
 # be run without editing five files. P0 records the value it used in the
 # build's build_info.tsv (key `outgroup`), and the association tail reads it
-# from there, so a cohort is always rooted on its own build's outgroup.
-# Set it EMPTY for a graph with no outgroup (P0 then makes no polarity table).
-# The panel tree's own outgroup leaves for the AA tag are separate: P0 step
-# ancestral, ANC_OUTGROUPS (decision D44).
+# from there, so a cohort is always rooted on its own build's outgroup. It
+# must be in the graph (the tail reads its row from the panel VCF).
+# Set it EMPTY for a graph with no outgroup (the association tail then
+# refuses the build).
+# The panel's polarity (AA and panel_polarity.tsv) is no longer this one
+# genome's read: P0 step ancestral reconstructs it by parsimony over the
+# panel tree with all its outgroup leaves, ANC_OUTGROUPS (decision D44;
+# 2026-10-13), and requires this genome to be one of them.
 #
 # Leaves of a cohort tree that are outside the MTBC besides the outgroup: the
 # panel's second canettii and the read-based canettii isolate. The

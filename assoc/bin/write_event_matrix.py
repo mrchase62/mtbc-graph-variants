@@ -60,7 +60,7 @@ the cohort onto the rooted panel tree, so the root state is resolved by data.
 THE MTBC NODE IS PINNED, NOT THE ROOT (the user's decision on review 2's
 R2-TREES-6, 2026-10-07). The cohort tree is rooted on the outgroup, so it
 DOES contain the MTBC ancestor, and that is exactly the node the panel's AA
-describes (bin/ancestral_alleles.py: the MRCA of every leaf that is not an
+describes (bin/panel_ancestral.py: the MRCA of every leaf that is not an
 outgroup). The warning above is about pinning a node the AA does not
 describe; this one it does. Left to the cohort's own parsimony that node was
 derived at 80 AA-polarised variants on scale200, against about 35,000
@@ -364,19 +364,21 @@ def main():
     ap.add_argument("--chunk", type=int, default=20000,
                     help="variants per Fitch block")
     # NO DEFAULT. It was refbias/assets/panel_polarity.tsv, CX333's hand-made
-    # table; the chain passes the build's (P0 step panel_polarity).
+    # table; the chain passes the build's (P0 step ancestral).
     ap.add_argument("--panel-polarity", required=True,
                     help="<build>/assets/panel_polarity.tsv: "
-                         "ancestral allele read off the outgroup's own "
-                         "genotype in the panel VCF, from bin/panel_polarity.py. "
-                         "Consumed ONLY where AA did not resolve, because Fitch "
-                         "over 333 genomes and a tree is the stronger "
-                         "inference. It is what polarises indels at all: the AA "
-                         "table comes from a SNP alignment, so every indel is "
-                         "unpolarised without it and defaults to ALT-as-derived "
-                         "-- backwards wherever the reference is the odd genome "
-                         "out. A missing table is FATAL; pass "
-                         "--panel-polarity '' to run without one on purpose")
+                         "ancestral allele of every panel variant class by "
+                         "Fitch parsimony over the panel tree, from "
+                         "bin/panel_ancestral.py (P0 step ancestral). "
+                         "Consumed ONLY where AA did not resolve; at SNPs the "
+                         "two are one reconstruction. It is what polarises "
+                         "indels and SVs at all: AA is SNP-only, so every "
+                         "indel is unpolarised without it and defaults to "
+                         "ALT-as-derived -- backwards wherever the reference "
+                         "is the odd genome out. Rows whose `ancestral` is "
+                         "not REF or ALT are ignored. A missing table is "
+                         "FATAL; pass --panel-polarity '' to run without one "
+                         "on purpose")
     ap.add_argument("--min-panel-af", type=float, default=0.05,
                     help="the outgroup's allele is only taken as ANCESTRAL "
                          "against the reference when the panel also carries it "
@@ -548,13 +550,13 @@ def main():
     samples, variants, gt_rows, skipped = read_vcf(
         a.vcf, want_class or None, want_frame or None)
 
-    # ---- polarity from the outgroup, where AA left the record unpolarised
+    # ---- polarity from the panel tree, where AA left the record unpolarised
     # A table that was asked for (or defaulted) and is not there is an error,
     # not a skip: run from another directory, the relative default silently
     # left every indel unpolarised (audit TP-9).
     if a.panel_polarity and not os.path.exists(a.panel_polarity):
         sys.exit(f"FATAL: --panel-polarity {a.panel_polarity} does not exist. "
-                 f"Build it with bin/panel_polarity.py, or pass "
+                 f"Build it with P0 step ancestral (bin/panel_ancestral.py), or pass "
                  f"--panel-polarity '' to run without outgroup polarity")
     if a.panel_polarity:
         pol_tab = {}
@@ -563,14 +565,18 @@ def main():
             if "chrom" not in (rd.fieldnames or []):
                 sys.exit(f"FATAL: {a.panel_polarity} has no chrom column; it "
                          f"predates the one-row-per-key table. Rebuild it with "
-                         f"bin/panel_polarity.py")
+                         f"bin/panel_ancestral.py")
             for r in rd:
                 # the panel names the contig PanSN-style, the cohort VCF bare
                 k = (r["chrom"].split("#")[-1], int(r["pos"]),
                      r["ref"].upper(), r["alt"].upper())
                 if k in pol_tab:
                     sys.exit(f"FATAL: {a.panel_polarity} repeats the key {k}; "
-                             f"rebuild it with bin/panel_polarity.py")
+                             f"rebuild it with bin/panel_ancestral.py")
+                # only REF or ALT polarises; anything else (a tied key, were
+                # one ever written) must stay unpolarised, not read as REF
+                if r["ancestral"] not in ("REF", "ALT"):
+                    continue
                 pol_tab[k] = (r["ancestral"], r["panel_af"])
         n_fix = collections.Counter()
         for v in variants:

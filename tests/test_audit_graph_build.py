@@ -197,7 +197,7 @@ class PggbSettings(unittest.TestCase):
 class ReadersTakeCollapsed(unittest.TestCase):
     """PGB-9: every production reader defaulted to the decomposed VCF."""
 
-    TEXT_DEFAULTS = ["assoc/bin/add_outgroup.py", "bin/panel_polarity.py",
+    TEXT_DEFAULTS = ["assoc/bin/add_outgroup.py", "bin/panel_ancestral.py",
                      "bin/sv_intervals.py", "insgt/bin/insertion_contigs.py",
                      "accessory/bin/merge_catalogues.py"]
 

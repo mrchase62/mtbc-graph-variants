@@ -76,12 +76,12 @@ else
 fi
 PANEL_SNPS="${PANEL_SNPS:-${GRAPH_DIR}/snps.vcf.gz}"
 # The graph's collapsed variant file (bin/vcf_decompose.sh's product), the
-# source of panel allele frequencies (P5) and the outgroup's alleles
-# (panel_polarity). Copied into the build like every other asset.
+# source of panel allele frequencies (P5) and every panel genome's alleles
+# (step ancestral). Copied into the build like every other asset.
 GRAPH_VCF="${GRAPH_VCF:-${GRAPH_DIR}/all_variants.collapsed.vcf.gz}"
 # The outgroup: config/project_env.sh's MTB_OUTGROUP unless OUTGROUP is set
 # (empty: the graph has none). Recorded in build_info.tsv by step stamp, and
-# step panel_polarity refuses a different one, so the polarity table and the
+# step ancestral refuses a different one, so the polarity tables and the
 # association tail's tree root are always the same genome.
 OUTGROUP="${OUTGROUP-${MTB_OUTGROUP-}}"
 # The IS6110-clean builds whose crossmaps give P1's tie-break its interval
@@ -200,7 +200,7 @@ if [[ "$LIST" == 1 ]]; then
     echo "build id : $BUILD_ID"
     echo "build dir: $BUILD"
     for s in stamp paths accessions gff refs frames assets catalogue nodes is6110_intervals \
-             panel_polarity ancestral manifest; do
+             ancestral manifest; do
         if [[ -s "${BUILD}/logs/$s.done" ]]; then
             printf "  %-16s done   %s\n" "$s" "$(head -1 "${BUILD}/logs/$s.done")"
         else printf "  %-16s MISSING\n" "$s"; fi
@@ -613,97 +613,174 @@ step_is6110_intervals() {
     _mark is6110_intervals
 }
 
-# --- step: panel_polarity ----------------------------------------------------
-# The outgroup's allele at every graph variant, which the association chain's
-# event writer reads for polarity. It was refbias/assets/panel_polarity.tsv,
-# made by hand from whichever VCF; it is a property of this graph, so it is
-# made here from the build's own collapsed VCF. OUTGROUP= (empty) records that
-# the graph has no outgroup, and the step writes nothing.
+# --- step: panel_polarity (merged into step ancestral) ------------------------
+# The polarity table used to be the outgroup's own genotype at every graph
+# variant (bin/panel_polarity.py), made here without a tree. It is now one
+# Fitch reconstruction with ancestral.tsv (decision 2026-10-13: "use
+# parsimony over all outgroups for every variant class"), so step ancestral
+# writes both. Asked for by name, this step says so rather than doing nothing.
 step_panel_polarity() {
-    # keys are left-aligned against the build's own H37Rv, exactly as the
-    # cohort VCF's are (review 2, R2-INT-1), so that sequence is an input too
+    echo "FATAL: step 'panel_polarity' is now part of step 'ancestral', which writes" >&2
+    echo "       assets/panel_polarity.tsv and assets/ancestral.tsv from the panel tree" >&2
+    echo "       (bin/panel_ancestral.py; docs/PANEL_TREE.md section 1)" >&2
+    return 1
+}
+
+# --- step: ancestral ---------------------------------------------------------
+# The ancestral allele of every panel variant, by Fitch parsimony over the
+# panel tree (bin/panel_ancestral.py), written as the build's two polarity
+# tables:
+#   assets/ancestral.tsv       SNP keys; the merged VCF's AA tag (p5_finish.sh
+#                              refuses a build without it)
+#   assets/panel_polarity.tsv  every class with a resolved state; the event
+#                              writer's --panel-polarity (cohort_assoc_tail.sh)
+# A property of the panel and its tree, not of any cohort, so every cohort
+# joins the same tables. Seconds to compute.
+#
+# ONE RECONSTRUCTION FOR EVERY CLASS (user, 2026-10-13). This step used to
+# run ancestral_alleles.py (SNP alignment only; a tie at the ancestral node
+# broken by the nearest outgroup) and step panel_polarity ran
+# panel_polarity.py (one outgroup genome's own genotype, every class). Both
+# are replaced: each panel genome's graph-VCF genotype at every key, Fitch's
+# upward pass, then the downward pass over the whole tree to the ancestral
+# node, all outgroups together, their order never used.
+#
+# INPUTS, none with a default:
+#   ANC_TREE       the rooted panel tree (docs/PANEL_TREE.md section 1). Its
+#                  leaves are the build's genomes plus any kit genomes; the
+#                  check is p0_check.py tree-taxa.
+#   ANC_OUTGROUPS  every outgroup leaf, in-graph and kit. The ancestral node
+#                  is the MRCA of all other leaves (for the P200 panel, of
+#                  lineages 1-4 and 7), and the run stops if an outgroup is
+#                  beneath it (audit fault B).
+#   ANC_KIT        acc=states.npz,... : the outgroup kit's genomes, outside
+#                  the graph, with their direct-alignment SNP states
+#                  (analysis/panel_checks/bin/genome_states.py). Empty: none.
+#   ANC_KIT_EVENTS acc=prefix,... : route A event states of kit genomes
+#                  (bin/outgroup_kit.py: prefix.var and prefix.sv.tsv, e.g.
+#                  analysis/outgroup_kit/out/<acc>), for indel, MNP and SV
+#                  keys (user, 2026-10-14, option A; OUT-1 may replace
+#                  them). Each must also be in ANC_KIT. Empty: the kit
+#                  constrains SNP keys only.
+# The build's own collapsed VCF and H37Rv (keys left-aligned against it as
+# the cohort VCF's are, review 2 R2-INT-1) are inputs too. The tree and kit
+# files are copied into assets/ancestral_inputs/ and every input's checksum,
+# with the code's, goes in the marker (audit TP-4).
+#
+# THE STAMPED OUTGROUP. build_info.tsv's `outgroup` (MTB_OUTGROUP) roots the
+# association tail's cohort trees, which read its row from the panel VCF. The
+# step refuses a run whose OUTGROUP differs from the stamp, as step
+# panel_polarity did, and an OUTGROUP that is not one of ANC_OUTGROUPS or is
+# a kit genome (it must be in the graph). OUTGROUP empty: the tables are made
+# all the same (the tree's outgroups polarise them), but the association
+# tail has no root and refuses the build.
+step_ancestral() {
+    local t="${ANC_TREE:-}" ogs="${ANC_OUTGROUPS:-}" kitspec="${ANC_KIT:-}"
+    if [[ -z "$t" || -z "$ogs" ]]; then
+        echo "FATAL: step 'ancestral' needs ANC_TREE and ANC_OUTGROUPS: this build's rooted" >&2
+        echo "       panel tree and its outgroup leaves; ANC_KIT for outgroups outside the" >&2
+        echo "       graph (docs/PANEL_TREE.md section 1)" >&2
+        return 1
+    fi
+    if [[ -n "${ANC_ALN:-}${ANC_SITES:-}" ]]; then
+        _say "ancestral: note: ANC_ALN/ANC_SITES are no longer read (the states come from the graph VCF)"
+    fi
+    mtb_require_file "$t"
     local h37fa="${BUILD}/refs/${H37RV_ACC}.fasta"
-    _inputs graph_vcf_sha256 "${BUILD}/assets/graph_collapsed.vcf.gz" \
-            h37rv_sha256 "$h37fa" \
-            code_sha256 bin/panel_polarity.py \
-            norm_code_sha256 bin/mtb_norm.py
-    _STEP_KEYS+=("outgroup	${OUTGROUP:-none}")
-    _done panel_polarity && { _say "panel_polarity: already done"; return 0; }
-    _have assets || { echo "FATAL: step 'panel_polarity' needs step 'assets' done first" >&2; return 1; }
+    local -a in_args=(tree_sha256 "$t"
+                      graph_vcf_sha256 "${BUILD}/assets/graph_collapsed.vcf.gz"
+                      h37rv_sha256 "$h37fa"
+                      code_sha256 bin/panel_ancestral.py
+                      norm_code_sha256 bin/mtb_norm.py)
+    local -a kit_acc=() kit_path=()
+    local item acc path
+    local -a _kits; IFS="," read -r -a _kits <<< "$kitspec"
+    for item in "${_kits[@]}"; do
+        [[ -n "$item" ]] || continue
+        acc="${item%%=*}"; path="${item#*=}"
+        if [[ "$item" != *=* || -z "$acc" || -z "$path" ]]; then
+            echo "FATAL: ANC_KIT takes acc=states.npz[,acc=states.npz], not '${item}'" >&2
+            return 1
+        fi
+        mtb_require_file "$path"
+        kit_acc+=("$acc"); kit_path+=("$path")
+        in_args+=("kit_${acc}_sha256" "$path")
+    done
+    local -a ev_acc=() ev_pre=() _evs
+    IFS="," read -r -a _evs <<< "${ANC_KIT_EVENTS:-}"
+    for item in "${_evs[@]}"; do
+        [[ -n "$item" ]] || continue
+        acc="${item%%=*}"; path="${item#*=}"
+        if [[ "$item" != *=* || -z "$acc" || -z "$path" ]]; then
+            echo "FATAL: ANC_KIT_EVENTS takes acc=prefix[,acc=prefix], not '${item}'" >&2
+            return 1
+        fi
+        if [[ " ${kit_acc[*]} " != *" ${acc} "* ]]; then
+            echo "FATAL: ANC_KIT_EVENTS genome ${acc} is not in ANC_KIT" >&2
+            return 1
+        fi
+        mtb_require_file "${path}.var"; mtb_require_file "${path}.sv.tsv"
+        ev_acc+=("$acc"); ev_pre+=("$path")
+        in_args+=("kit_${acc}_var_sha256" "${path}.var"
+                  "kit_${acc}_sv_sha256" "${path}.sv.tsv")
+    done
+    _inputs "${in_args[@]}"
+    _STEP_KEYS+=("outgroups	${ogs}" "outgroup	${OUTGROUP:-none}")
+    _done ancestral && { _say "ancestral: already done"; return 0; }
+    local s
+    for s in accessions assets refs; do
+        _have "$s" || { echo "FATAL: step 'ancestral' needs step '${s}' done first" >&2; return 1; }
+    done
     # the outgroup the build was stamped with is the one the association tail
-    # roots its trees on; a table made with another would disagree with it
+    # roots its trees on; it must be one of this tree's in-graph outgroups
     local rec; rec="$(mtb_kv "${BUILD}/build_info.tsv" outgroup)"
     if [[ -n "$rec" && "$rec" != "${OUTGROUP:-none}" ]]; then
         echo "FATAL: build ${BUILD_ID} was stamped with outgroup ${rec}, not '${OUTGROUP:-none}'" >&2
         return 1
     fi
-    if [[ -z "$OUTGROUP" ]]; then
-        _say "panel_polarity: OUTGROUP is empty; no table (the event writer needs --panel-polarity '')"
-        _mark panel_polarity; return 0
+    if [[ -n "$OUTGROUP" && "$OUTGROUP" != none ]]; then
+        if [[ ",${ogs}," != *",${OUTGROUP},"* ]]; then
+            echo "FATAL: the build's outgroup ${OUTGROUP} is not one of ANC_OUTGROUPS (${ogs})" >&2
+            return 1
+        fi
+        for acc in "${kit_acc[@]}"; do
+            [[ "$acc" != "$OUTGROUP" ]] || {
+                echo "FATAL: the build's outgroup ${OUTGROUP} is a kit genome; it must be in the graph" >&2
+                return 1; }
+        done
     fi
-    _have refs || { echo "FATAL: step 'panel_polarity' needs step 'refs' done first (it left-aligns against ${h37fa})" >&2; return 1; }
-    local out="${BUILD}/assets/panel_polarity.tsv"
-    "$MTB_PY" bin/panel_polarity.py --panel-vcf "${BUILD}/assets/graph_collapsed.vcf.gz" \
-        --h37rv "$h37fa" --h37rv-contig "${H37RV_PATH##*#}" \
-        --outgroup "$OUTGROUP" --bcftools "$MTB_BCFTOOLS" --out "${out}.tmp" \
-        || { rm -f "${out}.tmp"; return 1; }
-    mv -f "${out}.tmp" "$out"
-    _mark panel_polarity
-}
-
-# --- step: ancestral ---------------------------------------------------------
-# The ancestral allele at every panel SNP site, for the merged VCF's AA tag. A
-# property of the panel and its tree, not of any cohort, so it is a build asset
-# and every cohort's VCF joins the same table. It used to be a file in
-# data/trees that nothing regenerated; p5_finish.sh now reads it from here and
-# refuses a build without it. Seconds to compute.
-#
-# Its inputs are a tree and alignment made outside P0 by the panel-tree step
-# (docs/PANEL_TREE.md: vcf_to_alignment.py on this build's
-# assets/graph_collapsed.vcf.gz, then build_snp_tree.sh), so they are checked
-# against the panel -- the alignment's taxa must be exactly the build's
-# genomes -- copied into the build, and recorded in the marker with the
-# code's checksum (audit TP-4: after the polarity fixes the old marker kept
-# the faulty table).
-#
-# THERE ARE NO DEFAULT INPUTS. They were data/trees/cx333.*, CX333's tree,
-# which the taxa check refuses on any other panel but which a rebuild of a
-# panel with the same genomes would have taken silently. ANC_TREE, ANC_ALN
-# and ANC_SITES must name this build's panel-tree products.
-step_ancestral() {
-    local t="${ANC_TREE:-}" al="${ANC_ALN:-}" st="${ANC_SITES:-}"
-    if [[ -z "$t" || -z "$al" || -z "$st" ]]; then
-        echo "FATAL: step 'ancestral' needs ANC_TREE, ANC_ALN and ANC_SITES: this build's" >&2
-        echo "       panel tree, alignment and sites table (docs/PANEL_TREE.md)" >&2
-        return 1
-    fi
-    mtb_require_file "$t"; mtb_require_file "$al"; mtb_require_file "$st"
-    _inputs tree_sha256 "$t" alignment_sha256 "$al" sites_sha256 "$st" \
-            code_sha256 bin/ancestral_alleles.py
-    # the tree's outgroup leaves; unset, ancestral_alleles.py's default (the
-    # two CX333 canettii), which it refuses if they are not leaves of the tree
-    local -a og_args=()
-    if [[ -n "${ANC_OUTGROUPS:-}" ]]; then
-        og_args=(--outgroups "$ANC_OUTGROUPS")
-        _STEP_KEYS+=("outgroups	${ANC_OUTGROUPS}")
-    fi
-    _done ancestral && { _say "ancestral: already done"; return 0; }
-    _have accessions || { echo "FATAL: step 'ancestral' needs step 'accessions' done first" >&2; return 1; }
-    "$MTB_PY" bin/p0_check.py taxa --fasta "$al" \
+    local kitnames; kitnames="$(IFS=,; echo "${kit_acc[*]}")"
+    "$MTB_PY" bin/p0_check.py tree-taxa --tree "$t" --kit "$kitnames" \
         --accessions "${BUILD}/assets/accessions.txt" || return 1
-    mkdir -p "${BUILD}/assets/ancestral_inputs"
-    _copy "$t"  "${BUILD}/assets/ancestral_inputs/tree.nwk"
-    _copy "$al" "${BUILD}/assets/ancestral_inputs/alignment.fasta"
-    _copy "$st" "${BUILD}/assets/ancestral_inputs/sites.tsv"
-    local out="${BUILD}/assets/ancestral.tsv"
-    "$MTB_PY" bin/ancestral_alleles.py --tree "${BUILD}/assets/ancestral_inputs/tree.nwk" \
-        --alignment "${BUILD}/assets/ancestral_inputs/alignment.fasta" \
-        --sites "${BUILD}/assets/ancestral_inputs/sites.tsv" "${og_args[@]}" \
-        --out "${out}.tmp"
-    mv -f "${out}.tmp" "$out"
-    _say "ancestral: $(( $(wc -l < "$out") - 1 )) sites -> ${out}"
+    local d="${BUILD}/assets/ancestral_inputs"
+    mkdir -p "${d}/kit"
+    _copy "$t" "${d}/tree.nwk"
+    local -a kit_args=()
+    local i
+    for i in "${!kit_acc[@]}"; do
+        _copy "${kit_path[$i]}" "${d}/kit/${kit_acc[$i]}.npz"
+        kit_args+=(--kit "${kit_acc[$i]}=${d}/kit/${kit_acc[$i]}.npz")
+    done
+    for i in "${!ev_acc[@]}"; do
+        _copy "${ev_pre[$i]}.var" "${d}/kit/${ev_acc[$i]}.var"
+        _copy "${ev_pre[$i]}.sv.tsv" "${d}/kit/${ev_acc[$i]}.sv.tsv"
+        kit_args+=(--kit-events "${ev_acc[$i]}=${d}/kit/${ev_acc[$i]}")
+    done
+    local anc="${BUILD}/assets/ancestral.tsv" pol="${BUILD}/assets/panel_polarity.tsv"
+    "$MTB_PY" bin/panel_ancestral.py --tree "${d}/tree.nwk" \
+        --panel-vcf "${BUILD}/assets/graph_collapsed.vcf.gz" \
+        --h37rv "$h37fa" --h37rv-contig "${H37RV_PATH##*#}" \
+        --ref-sample "$H37RV_ACC" --outgroups "$ogs" "${kit_args[@]}" \
+        --accessions "${BUILD}/assets/accessions.txt" --bcftools "$MTB_BCFTOOLS" \
+        --out-ancestral "${anc}.new" --out-polarity "${pol}.new" \
+        || { rm -f "${anc}.new" "${pol}.new"; return 1; }
+    mv -f "${pol}.new" "$pol"
+    mv -f "${anc}.new" "$anc"
+    _say "ancestral: $(( $(wc -l < "$anc") - 1 )) SNP keys -> ${anc}"
+    _say "ancestral: $(( $(wc -l < "$pol") - 1 )) polarised keys -> ${pol}"
     _mark ancestral
 }
+
 
 # --- step: manifest ----------------------------------------------------------
 # Every file under assets/ and annotation/, plus build_info.tsv. The proj
@@ -742,7 +819,7 @@ step_manifest() {
     # ancestral too (review 2, R2-BUILD-2): without it the build was marked
     # complete and the chain failed only at its last pass, p5vcf
     for s2 in stamp paths accessions gff refs frames assets catalogue nodes \
-              is6110_intervals panel_polarity ancestral; do
+              is6110_intervals ancestral; do
         _have "$s2" || incomplete="${incomplete} ${s2}"
     done
     if [[ -n "$incomplete" ]]; then
@@ -762,7 +839,7 @@ _run() { _STEP_KEYS=(); "step_$1"; }
 if [[ -n "$STEP" ]]; then
     _run "$STEP"
 else
-    _run stamp; _run paths; _run accessions; _run assets; _run catalogue; _run nodes; _run panel_polarity
+    _run stamp; _run paths; _run accessions; _run assets; _run catalogue; _run nodes
     _say "cheap steps complete. Remaining, run explicitly:"
     _say "  bash bin/p0_prepare.sh --step gff"
     _say "  sbatch --array=1-\$(wc -l < ${BUILD}/assets/accessions.txt) bin/p0_prepare.sh --step refs"
@@ -770,6 +847,6 @@ else
     _say "  bash bin/p0_prepare.sh --step is6110_intervals   # crossmaps for every panel genome first:"
     _say "      MTB_BUILD_DIR=${BUILD} bash is6110/bin/p1i_discover_matched.sh"
     _say "      MTB_BUILD_DIR=${BUILD} bash is6110/bin/p1i_build_matched.sh"
-    _say "  ANC_TREE=.. ANC_ALN=.. ANC_SITES=.. bash bin/p0_prepare.sh --step ancestral   # docs/PANEL_TREE.md"
+    _say "  ANC_TREE=.. ANC_OUTGROUPS=.. [ANC_KIT=.. ANC_KIT_EVENTS=..] bash bin/p0_prepare.sh --step ancestral   # docs/PANEL_TREE.md"
     _say "  bash bin/p0_prepare.sh --step manifest"
 fi

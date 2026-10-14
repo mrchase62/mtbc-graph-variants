@@ -67,7 +67,7 @@ def env(**kw):
     e.update(MTB_SITE_FILE="/dev/null", MTB_PY=sys.executable)
     for k in ("MTB_BUILD_DIR", "OG", "GRAPH_DIR", "BUILD_ID", "SLURM_ARRAY_TASK_ID",
               "REFMAP", "MTB_GRAPH_FRAMES", "ACC_CATALOGUE", "ANC_TREE", "ANC_ALN",
-              "ANC_SITES", "ANC_OUTGROUPS"):
+              "ANC_SITES", "ANC_OUTGROUPS", "ANC_KIT", "ANC_KIT_EVENTS"):
         e.pop(k, None)
     e.update({k: str(v) for k, v in kw.items()})
     return e
@@ -846,7 +846,7 @@ class P0AncestralAndCatalogue(unittest.TestCase):
             write(f"{self.d}/data/trees/{f}", "x\n")
         r = self.p0("--step", "ancestral")
         self.assertNotEqual(r.returncode, 0)
-        self.assertIn("needs ANC_TREE, ANC_ALN and ANC_SITES", r.stderr)
+        self.assertIn("needs ANC_TREE and ANC_OUTGROUPS", r.stderr)
         self.assertNotIn("cx333", code("bin/p0_prepare.sh"))
 
     def test_catalogue_made_from_the_builds_files(self):

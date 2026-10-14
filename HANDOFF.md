@@ -210,6 +210,13 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
     tie inside L1-4 only the outgroups resolve.
   - Expect indels and SVs now "unpolarised, ALT derived" to get a measured
     direction, some flipped. Recheck association survivors and DR controls.
+  - **Option A chosen (user, 2026-10-14: "yes, go with option A"):** L8 and
+    canettii indel/SV states come from outgroup kit route A
+    (`bin/outgroup_kit.py`, `analysis/outgroup_kit/out/`) until OUT-1 (route
+    B) replaces them. Without them the tatC-helY element ties on P200 (L5.1
+    and L6.1 disagree). Implemented, uncommitted: `bin/panel_ancestral.py
+    --kit-events`, P0 `ANC_KIT_EVENTS`; rules and CX333 validation in
+    `docs/PANEL_TREE.md` section 1 and `analysis/parsimony_check/`.
 - **Sparse mapping checked:** graphs B and D (`-x auto`) agree at all but
   0.2% of calls outside masked repeats and representation shifts
   (`analysis/graph_tests/RESULTS.md`). Usable for the rebuild.
