@@ -5,7 +5,7 @@ from the graph that may provide key ancestry for specific loci.") Report
 only. Run from the repository root with $MTB_PY.
 
 Inputs (build 7713a8d71d8e-fix1, CX333): the panel tree
-(assets/ancestral_inputs/tree.nwk, the tree production's AA uses) and the
+(assets/ancestral_inputs/tree.nwk, the tree production's AA used) and the
 graph VCF (assets/graph_collapsed.vcf.gz: every panel genome's genotype at
 every SNP, indel and SV record against H37Rv).
 
@@ -41,7 +41,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, "bin")
-from ancestral_alleles import parse_newick  # noqa: E402
+from panel_ancestral import parse_newick  # noqa: E402
 
 B = "runroot/refbias/build/7713a8d71d8e-fix1"
 O = "analysis/ancestry_need/out"

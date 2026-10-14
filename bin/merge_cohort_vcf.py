@@ -423,7 +423,7 @@ def main():
                          "non-carrier's own element-free alignment whether it "
                          "looked and found nothing, and earns REF or ABSENT.")
     ap.add_argument("--ancestral", default="",
-                    help="per-site ancestral allele from bin/ancestral_alleles.py; "
+                    help="per-site ancestral allele from bin/panel_ancestral.py (<build>/assets/ancestral.tsv); "
                          "absent means no AA is emitted")
     ap.add_argument("--is6110-gff", default="",
                     help="H37Rv IS6110 copies (<build>/assets/is6110_elements.gff), "

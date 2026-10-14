@@ -1,0 +1,111 @@
+CX333 tree: 333 leaves; lineage 1-4,7 (with H37Rv): 289; outside: 44
+B vs B2 (outgroup list reversed): outputs identical: True
+
+== A (same node as production AA: MTBC ancestor, canettii outgroups) vs build assets
+SNP AA: old table 73,256 sites, new 77,044 SNP keys
+  same AA                                    73,239
+  same AA (both unresolved)                      17
+  new SNP keys not in old table               3,788
+    of which resolved                         3,763
+
+every key, direction the event writer would read (old: AA else canettii's genotype; new: run A)
+  class                    same     gains a direction        flips REF->ALT        flips ALT->REF  loses it (new: tied)
+  SNP                    75,916                   866                     9                   223                     8
+  MNP                     1,632                   211                     4                   586                     0
+  indel                   8,462                   157                    22                   429                     0
+  SV                      4,346                    19                    18                   212                     0
+
+derived allele the event writer ends with (AA first, then the table with the 5% guard, else ALT): build vs A
+  class               unchanged    now measured, same     now default, same      derived ALT->REF      derived REF->ALT
+  SNP                    75,948                 1,071                     8                    21                     8
+  MNP                     1,632                   791                     1                     3                     6
+  indel                   8,462                   544                     2                    23                    39
+  SV                      4,346                   217                     0                    18                    14
+
+== C (full CX333, node = MRCA of L1-4,7) vs build assets
+every key: old effective direction vs C
+  class                    same     gains a direction        flips REF->ALT        flips ALT->REF  loses it (new: tied)
+  SNP                    75,842                   897                    16                   295                     3
+  MNP                     1,635                   219                     1                   586                     0
+  indel                   8,465                   160                    21                   427                     0
+  SV                      4,339                    19                    24                   213                     0
+derived allele the event writer ends with: build vs C
+  class               unchanged    now measured, same     now default, same      derived ALT->REF      derived REF->ALT
+  SNP                    75,844                 1,099                     3                    31                    79
+  MNP                     1,635                   799                     0                     1                     6
+  indel                   8,465                   546                     0                    26                    36
+  SV                      4,339                   218                     0                    24                    14
+
+== B (P200 design emulated: L1-4,7 + L5.1 + L6.1, kit L8 + ET1291 SNP rows)
+    tree: 293 leaves; ancestral node = MRCA of the 289 non-outgroup leaves, 3 nodes below the root
+    outgroups in the graph: GCF_022870265, GCF_000253355; kit (SNP states only): GCF_012923765, GCF_035581225
+    panel: 93,165 records (0 multiallelic skipped), 93,165 keys; 0 changed by left-alignment
+    kit GCF_012923765: called at 75,156 of 77,044 SNP keys
+    kit GCF_035581225: called at 74,660 of 77,044 SNP keys
+    7,501 SNP cells set to no call: a sibling allele changes the same base
+    ancestral state at the ancestral node, by class
+      class         ingroup     outgroups          tied        nodata alt_ancestral
+      SNP            76,371           681             4             0         1,143
+      MNP             2,428            11             2             0            13
+      indel           8,994            72             7             0           143
+      SV              4,553            36             6             0            35
+    -> /tmp/claude-12043/-n-boslfs02-LABS-sfortune-lab-Lab-mchase-mtbc-graph-variants/638200f7-3b9c-423e-8137-3e35ac76f202/scratchpad/pc_work/B/ancestral.tsv  (77,044 SNP keys)
+    -> /tmp/claude-12043/-n-boslfs02-LABS-sfortune-lab-Lab-mchase-mtbc-graph-variants/638200f7-3b9c-423e-8137-3e35ac76f202/scratchpad/pc_work/B/panel_polarity.tsv  (resolved keys of every class; tied and no-data keys are left out and stay unpolarised)
+
+B vs C (reduced panel vs full panel, same node)
+  class                                   agree                                differ                       B only (C tied)  C only (B tied or key absent from B)
+  SNP                                    77,042                                     8                                     2                                     0
+  MNP                                     2,439                                     0                                     0                                     2
+  indel                                   9,066                                     0                                     0                                     7
+  SV                                      4,589                                     0                                     0                                     6
+
+B vs the old single-outgroup read of MTB_OUTGROUP=GCF_022870265 on the same panel (what panel_polarity.py would have written)
+  class                    same     gains a direction        flips REF->ALT        flips ALT->REF  loses it (new: tied)      both unpolarised
+  SNP                    75,046                   854                    33                 1,119                     3                     1
+  MNP                     2,316                   115                     0                     8                     0                     2
+  indel                   8,831                    42                    10                   183                     7                     0
+  SV                      4,493                     3                     7                    86                     6                     0
+
+derived allele the event writer ends with, P200 emulation, non-SNP keys: old = L5.1 read (AA as new, SNPs not compared) vs B
+  class               unchanged    now measured, same     now default, same      derived ALT->REF      derived REF->ALT
+  SNP                    77,051                     2                     3                     0                     0
+  MNP                     2,316                   117                     0                     2                     4
+  indel                   8,831                   192                     4                    11                    35
+  SV                      4,493                    73                     2                     7                    20
+
+B SNP AA resolved: 77,040 of 77,044; agree with C at 77,030
+
+== option A: L8 and ET1291 indel/SV states from outgroup kit route A
+kit state (route A) vs the same genome's graph genotype, CX333, non-SNP keys
+  genome         class      keys  kit called  both called   agree  kit1/graph0  kit0/graph1  concordance
+  GCF_012923765  MNP       2,441       2,102        2,083   2,083            0            0       1.0000
+  GCF_012923765  indel     9,073       8,049        8,033   8,020            1           12       0.9984
+  GCF_012923765  SV        4,595       2,495        2,494   2,489            4            1       0.9980
+  GCF_035581225  MNP       2,441       1,250        1,238   1,238            0            0       1.0000
+  GCF_035581225  indel     9,073       7,169        7,158   7,145            2           11       0.9982
+  GCF_035581225  SV        4,595       2,312        2,308   2,301            3            4       0.9970
+
+BE (B + kit events) vs BE2 (outgroup list reversed): identical: True
+    outgroups in the graph: GCF_022870265, GCF_000253355; kit (SNP states only): GCF_012923765, GCF_035581225
+    kit GCF_012923765: called at 75,156 of 77,044 SNP keys
+    kit GCF_012923765 events: MNP 0 ALT / 2,102 REF / 339 no call; indel 255 ALT / 7,794 REF / 1,024 no call; SV 99 ALT / 2,396 REF / 2,100 no call
+    kit GCF_035581225: called at 74,660 of 77,044 SNP keys
+    kit GCF_035581225 events: MNP 0 ALT / 1,250 REF / 1,191 no call; indel 357 ALT / 6,812 REF / 1,904 no call; SV 126 ALT / 2,186 REF / 2,283 no call
+      class         ingroup     outgroups          tied        nodata alt_ancestral
+      SNP            76,371           681             4             0         1,143
+      MNP             2,428            12             1             0            13
+      indel           8,994            76             3             0           144
+      SV              4,553            40             2             0            38
+
+BE vs B (without events) and vs C (full CX333 panel)
+  SNP   tied in B, resolved in BE 0; of which = C 0; of which != C (or C tied) 0; resolved in B, tied in BE 0; B and BE differ 0; BE agrees with C 77,042; BE differs from C 8; C resolved, BE tied 0
+  MNP   tied in B, resolved in BE 1; of which = C 1; of which != C (or C tied) 0; resolved in B, tied in BE 0; B and BE differ 0; BE agrees with C 2,440; BE differs from C 0; C resolved, BE tied 1
+  indel tied in B, resolved in BE 4; of which = C 2; of which != C (or C tied) 2; resolved in B, tied in BE 0; B and BE differ 0; BE agrees with C 9,068; BE differs from C 2; C resolved, BE tied 3
+  SV    tied in B, resolved in BE 4; of which = C 3; of which != C (or C tied) 1; resolved in B, tied in BE 0; B and BE differ 0; BE agrees with C 4,592; BE differs from C 1; C resolved, BE tied 2
+
+tatC-helY element (68 bp insertion at 2,352,065)
+  run A: ancestral=ALT (ingroup)
+  run C: ancestral=ALT (outgroups)
+  run B: TIED/absent
+  run BE: ancestral=ALT (outgroups)
+  build panel_polarity.tsv (canettii read): ['ALT']

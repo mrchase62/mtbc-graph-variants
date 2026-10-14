@@ -16,20 +16,75 @@ with an error. It does not fall back to `graphs/CX333.*`, `data/trees/cx333.*`,
 
 **The outgroup** is set in one place, `MTB_OUTGROUP` in
 `config/project_env.sh` (default `GCF_035581225`, CX333's canettii; empty for
-a graph with none). P0 writes it into `$B/build_info.tsv` as `outgroup`, step
-`panel_polarity` polarises the panel with it (and refuses another), and
+a graph with none; `GCF_022870265`, the L5.1.1 genome, for the P200 panel).
+P0 writes it into `$B/build_info.tsv` as `outgroup`, and
 `assoc/bin/cohort_assoc_tail.sh` roots each cohort tree and names the event
-writer's outgroup from that record. The panel tree's own outgroup leaves for
-step `ancestral` are `ANC_OUTGROUPS` (below; decision D44).
+writer's outgroup from that record. It must be a genome in the graph. The
+panel's polarity is no longer that one genome's read: step `ancestral`
+reconstructs it by parsimony over the panel tree with all the tree's outgroup
+leaves, `ANC_OUTGROUPS` (section 1; decision D44 and the user's decision of
+2026-10-13), and refuses a stamped outgroup that is not one of them.
 
 ## 1. The panel tree, for step `ancestral`
 
-Step `ancestral` writes `$B/assets/ancestral.tsv`, the ancestral allele at
-every panel SNP site, which every cohort VCF's `AA` tag joins. Its inputs are
-the panel's SNP alignment, the alignment's sites table and a rooted tree
-built from that alignment. CX333's were `data/trees/cx333.{snps.fasta,
-sites.tsv,rooted.nwk}`, made on 2026-09-24 the same way as below. Those files
-are not inputs for any other graph.
+Step `ancestral` runs `bin/panel_ancestral.py` and writes the build's two
+polarity tables, from one Fitch reconstruction over the panel tree (user,
+2026-10-13: "yes, use parsimony over all outgroups for every variant class"):
+
+| table | keys | read by |
+|---|---|---|
+| `$B/assets/ancestral.tsv` | every SNP key of the graph VCF: `chrom pos ref alt AA flag polarity`, flag `TIED:<bases>` or `NODATA` | `bin/p5_finish.sh` → the merged VCF's `AA` tag |
+| `$B/assets/panel_polarity.tsv` | every key, every class (SNP, MNP, indel, SV, IS6110, accessory records), with a resolved state: `chrom pos ref alt outgroup_gt ancestral panel_af n_records method` | `assoc/bin/write_event_matrix.py --panel-polarity`, where `AA` did not resolve |
+
+It replaces `bin/ancestral_alleles.py` (SNP alignment only; a tie at the
+ancestral node broken by the nearest outgroup) and `bin/panel_polarity.py`
+(one outgroup genome's genotype; step `panel_polarity`, which now refuses with
+a pointer here). The method, step by step:
+
+1. **Keys.** Every biallelic record of `$B/assets/graph_collapsed.vcf.gz`,
+   left-aligned against the build's H37Rv with `bin/mtb_norm.py` exactly as
+   the cohort VCF's keys are; copies of one key pooled.
+2. **Leaf states per key.** 1 if the genome's GT is 1 in any copy, 0 if 0 in
+   some copy and 1 in none, else no call. At a SNP key, GT 0 while carrying a
+   sibling allele that changes the same base is no call (TP-7). H37Rv is 0 at
+   every key. **Kit genomes** (outside the graph) take SNP states from their
+   direct alignment (`analysis/panel_checks/bin/genome_states.py`), and
+   indel, MNP and SV states from outgroup kit route A (`bin/outgroup_kit.py`:
+   the assembly aligned straight to H37Rv; user, 2026-10-14, option A, until
+   OUT-1's pseudo-isolates replace it). Route A's rules, any ambiguity being
+   no call:
+   - **indel or MNP (< 50 bp):** 1 if the kit has the same normalised allele
+     (its `.var` V lines go through `mtb_norm` too; an MNP is never 1, as
+     paftools writes single bases); 0 if the key's span, anchor and one
+     flanking base included, lies in ONE callable interval (an `.var` R
+     line: H37Rv covered by exactly one alignment) and no kit variant
+     touches it; else no call.
+   - **SV (>= 50 bp):** each kit SV (`.var` indels of >= 50 bp, with their
+     sequence; `.sv.tsv` DEL/INS rows between alignments, without) is
+     matched to graph SV keys of its type with the start within 50 bp and
+     the net length within 20% (the rule of
+     `analysis/inherited_matched_check/compare_h37rv.py`). The kit's exact
+     allele wins and the other candidates are no call; without one, a
+     single candidate is 1 and several are all no call. An unmatched SV key
+     is 0 if its span lies in one callable interval with no kit SV, and no
+     kit indel of 10 bp or more, within 50 bp; else no call. REPL, INV and
+     REARR rows only block a 0.
+   Without route A files, a kit genome is no call at every non-SNP key.
+3. **Fitch upward pass** over the whole tree.
+4. **The ancestral node** is the MRCA of every leaf not in `ANC_OUTGROUPS`:
+   for the P200 panel, of the lineage 1-4 and 7 genomes. If an outgroup is
+   beneath it the step stops (audit fault B).
+5. **Fitch downward pass** from the root to that node: all outgroups at once,
+   their order never read; no nearest-first step. One state: that is the
+   ancestral allele (`method` `ingroup` if the node's own upward set decided
+   it, `outgroups` if only the downward pass did). Both states: `TIED`. Tied
+   keys are not written to `panel_polarity.tsv`, so the event writer leaves
+   them unpolarised; `ancestral.tsv` keeps them as `AA=.`, `TIED:..`.
+6. Unchanged downstream: the event writer's 5% panel-AF guard on an
+   ALT-ancestral row (`--min-panel-af`), "presence is derived" for accessory
+   sequence absent from H37Rv, and `AA` before the table.
+   `outgroup_gt` is now the ancestral node's state (0/1); `panel_af` is as
+   before (carriers over genomes called, each genome once).
 
 **a. Alignment and sites, from the build's collapsed graph VCF** (seconds):
 
@@ -41,53 +96,112 @@ mkdir -p data/trees
 ```
 
 - `--ref-sample GCF_000195955` adds H37Rv, the VCF's reference, as an all-REF
-  row. Without it H37Rv is missing from its own panel tree, and step
-  `ancestral`'s taxa check, which needs exactly the build's genomes, refuses
-  the alignment.
+  row. Without it H37Rv is missing from its own panel tree, and the step's
+  taxa check, which needs exactly the build's genomes, refuses the tree.
 - Only biallelic SNP records become columns. A `X,*` record is the SNP REF>X,
   with the `*` samples written N. Use the build's copy of the VCF so that the
   tree and every other asset come from the same file.
+- The alignment is used for the tree only. The reconstruction reads the
+  graph VCF's genotypes directly, so the `--max-missing` filter does not
+  limit which keys get an ancestral allele.
 
-**b. Tree** (a cluster job, about 15 minutes on 24 cores for 333 genomes):
+**b. The kit genomes' rows** (seconds). The P200 panel keeps lineage 8
+(`GCF_012923765`) and canettii ET1291 (`GCF_035581225`) out of the graph, as
+the outgroup kit, but they belong on the tree: canettii roots it, and both
+take part in the reconstruction at SNP keys. Their rows come from their
+direct-alignment states:
 
 ```bash
-sbatch bin/build_snp_tree.sh data/trees/<panel>.snps.fasta <outgroup> data/trees/<panel>
+S=analysis/panel_checks/states
+"$MTB_PY" bin/append_kit_rows.py --alignment data/trees/<panel>.snps.fasta \
+    --sites data/trees/<panel>.sites.tsv \
+    --kit GCF_012923765=$S/GCF_012923765.npz --kit GCF_035581225=$S/GCF_035581225.npz \
+    --out data/trees/<panel>.kit.snps.fasta
+```
+
+Each kit cell is the genome's base if it is the column's REF or ALT, else N.
+The columns are the panel's variable sites, so the kit genomes' private SNPs
+are missing and their terminal branches are short; the topology and the root
+are what the reconstruction uses. On CX333, the kit rows made this way agree
+with the same genomes' graph rows at all but 6 of 72,643 (L8) and 76 of
+71,226 (ET1291) cells called by both.
+
+**c. Tree** (a cluster job, about 15 minutes on 24 cores for 333 genomes):
+
+```bash
+sbatch bin/build_snp_tree.sh data/trees/<panel>.kit.snps.fasta GCF_035581225 data/trees/<panel>
 ```
 
 This runs IQ-TREE with GTR+F+ASC+G4. `+ASC` is needed because the alignment
 holds only variable sites. The script writes `data/trees/<panel>.rooted.nwk`,
-rooted on `<outgroup>`.
+rooted on canettii.
 
-**Choosing the outgroup** (HANDOFF 0j and 0k):
+**Choosing the outgroups** (HANDOFF 0j and 0k; decided 2026-10-13):
 
-- **Use a genome that is in the graph,** so that it has a row in the
-  alignment.
-- **For a lineage 1-4 (+7) graph:** the recommended in-graph outgroup is one
-  or two clean lineage 5/6 genomes. They are the sister clade and add about
-  3% of SNP sites.
-- **Canettii and lineage 8:** keep them out of the graph. They belong to the
-  outgroup kit, for questions about the root of the whole complex.
-- **Do not reuse CX333's default** `GCF_035581225` (canettii ET1291) unless
-  the graph contains it.
+- **In the graph:** one or two clean lineage 5/6 genomes, the sister clade of
+  lineages 1-4,7. For P200: `GCF_022870265` (L5.1.1, carries the tatC-helY
+  element) and `GCF_000253355` (L6.1.1). One of them is `MTB_OUTGROUP`.
+- **The kit, outside the graph:** lineage 8 `GCF_012923765` and canettii
+  `GCF_035581225`.
 - **Cross-check:** lineage 1 must be the first split inside the lineage 1-4,7
-  clade.
+  clade, and nothing else may lie under that clade's MRCA (the step refuses
+  it).
 
-**c. The step:**
+**d. The step:**
 
 ```bash
-ANC_TREE=data/trees/<panel>.rooted.nwk ANC_ALN=data/trees/<panel>.snps.fasta \
-ANC_SITES=data/trees/<panel>.sites.tsv ANC_OUTGROUPS=<outgroup>[,<second>] \
-    bash bin/p0_prepare.sh --step ancestral
+S=analysis/panel_checks/states
+MTB_OUTGROUP=GCF_022870265 \
+ANC_TREE=data/trees/<panel>.rooted.nwk \
+ANC_OUTGROUPS=GCF_022870265,GCF_000253355,GCF_012923765,GCF_035581225 \
+ANC_KIT=GCF_012923765=$S/GCF_012923765.npz,GCF_035581225=$S/GCF_035581225.npz \
+ANC_KIT_EVENTS=GCF_012923765=analysis/outgroup_kit/out/GCF_012923765,GCF_035581225=analysis/outgroup_kit/out/GCF_035581225 \
+    OG=<graph.og> bash bin/p0_prepare.sh --step ancestral
 ```
 
-- **`ANC_OUTGROUPS`:** the tree's outgroup leaves. The ancestral node is the
-  MRCA of every other leaf (audit fault B), and the outgroups break ties
-  there, nearest first.
-- **Unset:** `bin/ancestral_alleles.py` falls back to the two CX333 canettii,
-  and refuses to run if they are not leaves of the tree.
-- **Copies:** the step copies all three inputs into
-  `$B/assets/ancestral_inputs/` and records their checksums. If any input
-  changes later, the step refuses to run again.
+- **`ANC_OUTGROUPS`** (required, no default): every outgroup leaf, in-graph
+  and kit. Their order does not matter.
+- **`ANC_KIT`** (optional): `acc=states.npz` for each kit genome. Each must
+  be in `ANC_OUTGROUPS`, and the tree's leaves less these must be exactly the
+  build's genomes (`bin/p0_check.py tree-taxa`).
+- **`ANC_KIT_EVENTS`** (optional): `acc=prefix` for each kit genome with
+  route A files `prefix.var` and `prefix.sv.tsv` (`bin/outgroup_kit.py`,
+  `analysis/outgroup_kit/README.md`). Each must be in `ANC_KIT`. Both files
+  are copied and checksummed like the rest.
+- **The stamped outgroup** (`MTB_OUTGROUP`, in `build_info.tsv`) must be one
+  of `ANC_OUTGROUPS` and not a kit genome.
+- **Needs** steps `accessions`, `assets` and `refs`.
+- **Copies:** the tree and kit files go into `$B/assets/ancestral_inputs/`,
+  and the marker records their checksums with the VCF's, H37Rv's and the
+  code's. If any changes later, the step refuses to run again.
+- `ANC_ALN` and `ANC_SITES` are no longer read.
+
+**Why the kit's event rows matter: the tatC-helY element.** L5.1
+(`GCF_022870265`) carries the element and L6.1 (`GCF_000253355`) does not;
+they join the lineage 1-4,7 clade at one node, and that clade ties on it.
+Without the kit's SV rows the reconstruction calls it TIED, and the event
+writer would leave it unpolarised, defaulting to the insertion as derived --
+the inverted reading the old single-outgroup table had fixed. L8 and ET1291
+both carry it by route A (the exact 68 bp allele), so with `ANC_KIT_EVENTS`
+it is ancestral-present under every outgroup order.
+
+**Validation on CX333** (`analysis/parsimony_check/compare.py`, report in
+`out/report.txt`):
+- At production's ancestral node (the MTBC ancestor, canettii outgroups),
+  the new AA equals the build's `ancestral.tsv` at all 73,256 of its sites,
+  and adds 3,763 resolved SNP keys the alignment had dropped.
+- Route A's event states against the same genomes' graph genotypes (both
+  are in CX333's graph), where both are called: L8 indels 99.84% (8,033),
+  SVs 99.80% (2,494), MNPs 100% (2,083); ET1291 indels 99.82% (7,158), SVs
+  99.70% (2,308), MNPs 100% (1,238). Route A calls about 88% / 79% of indel
+  keys and 54% / 50% of SV keys.
+- Emulating P200 (lineages 1-4,7 + L5.1 + L6.1 in the graph, L8 and ET1291
+  as kit rows with route A events) against the full CX333 panel at the same
+  node: SNPs agree at 77,042 keys and differ at 8; indels agree at 9,068 and
+  differ at 2, SVs 4,592 and 1; 3 indels, 2 SVs and 1 MNP stay tied that the
+  full panel resolves. The events resolve 4 indel, 4 SV and 1 MNP keys that
+  were tied without them, the element among them, and change no key that
+  was resolved.
 
 ## 2. The accessory catalogue: step `catalogue` (in P0, no action needed)
 

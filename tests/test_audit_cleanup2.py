@@ -65,7 +65,7 @@ def env(**kw):
     e.update(MTB_SITE_FILE="/dev/null", MTB_PY=sys.executable)
     for k in ("MTB_BUILD_DIR", "OG", "GRAPH_DIR", "BUILD_ID", "SLURM_ARRAY_TASK_ID",
               "REFMAP", "MTB_GRAPH_FRAMES", "ACC_CATALOGUE", "ANC_TREE", "ANC_ALN",
-              "ANC_SITES", "ANC_OUTGROUPS", "ACCESSORY_DIR", "OUTGROUP",
+              "ANC_SITES", "ANC_OUTGROUPS", "ANC_KIT", "ANC_KIT_EVENTS", "ACCESSORY_DIR", "OUTGROUP",
               "MTB_OUTGROUP", "IS6110_LOCI", "IS6110_ANCHORS", "BUILD_ROOT",
               "SAMPLES", "QUERY", "OUT", "ACCPRES", "LINTAB", "REFS"):
         e.pop(k, None)
@@ -247,12 +247,12 @@ class OutgroupConfig(unittest.TestCase):
         self.assertNotIn("GCF_035581225", code("bin/build_snp_tree.sh"))
         self.assertIn("MTB_OUTGROUP", code("bin/build_snp_tree.sh"))
         self.assertNotIn("GCF_035581225", code("bin/p0_prepare.sh"))
-        for p in ("assoc/bin/add_outgroup.py", "bin/panel_polarity.py"):
+        for p in ("assoc/bin/add_outgroup.py", "bin/panel_ancestral.py"):
             self.assertNotRegex(text(p), r'default="GCF_035581225"', p)
-        r = run([sys.executable, "bin/panel_polarity.py", "--panel-vcf", "x",
-                 "--out", "o"])
+        r = run([sys.executable, "bin/panel_ancestral.py", "--panel-vcf", "x",
+                 "--out-polarity", "o"])
         self.assertEqual(r.returncode, 2)
-        self.assertIn("--outgroup", r.stderr)
+        self.assertIn("--outgroups", r.stderr)
 
 
 # ==========================================================================
@@ -301,7 +301,11 @@ class P0Inputs(unittest.TestCase):
         with open(f"{self.b}/build_info.tsv", "a") as fh:
             fh.write("outgroup\tGCF_Q\n")
         write(f"{self.b}/logs/assets.done", "2026-10-06\n")
-        r = self.p0("--step", "panel_polarity", OG=self.og, OUTGROUP="GCF_Z")
+        write(f"{self.b}/logs/refs.done", "2026-10-06\n")
+        t = write(f"{self.d}/t.nwk", f"(GCF_Z,(A1,(A2,{H37})));\n")
+        # the polarity tables are made by step ancestral now
+        r = self.p0("--step", "ancestral", OG=self.og, OUTGROUP="GCF_Z",
+                    ANC_TREE=t, ANC_OUTGROUPS="GCF_Z")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("stamped with outgroup GCF_Q", r.stderr)
 
@@ -551,7 +555,7 @@ PRODUCTION_PY = [
     "accessory/bin/locus_presence.py", "bin/merge_cohort_vcf.py",
     "bin/sv_intervals.py", "bin/t8_select_reference.py",
     "graphframe/bin/graph_frame_offsets.py", "graphframe/bin/frame_detect.py",
-    "graphframe/bin/graph_frame.py", "bin/panel_polarity.py",
+    "graphframe/bin/graph_frame.py", "bin/panel_ancestral.py",
     "assoc/bin/add_outgroup.py", "bin/retier_intervals.py",
     "refbias/bin/io_contract.py", "bin/build_accessory_panel.py",
     "bin/t2_extract_candidates.py", "bin/t2_summary.py"]

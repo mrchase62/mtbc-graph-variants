@@ -12,6 +12,7 @@ refuses to mark the step done.
     p0_check.py vcf-samples   --vcf V --accessions A [--ref-acc H37RV]
     p0_check.py fasta-names   --fasta F --paths P
     p0_check.py taxa          --fasta F --accessions A
+    p0_check.py tree-taxa     --tree T --accessions A [--kit ACC,ACC]
     p0_check.py catalogue     --tsv T --accessions A
     p0_check.py accessory-panel --dir D --accessions A [--ref-acc H37RV]
     p0_check.py is6110-intervals --isclean-dir D --refs R --accessions A
@@ -84,6 +85,22 @@ def cmd_taxa(a):
     if a.ref_acc:
         have.add(a.ref_acc)
     return report_sets(f"taxa of {a.fasta}", have, want)
+
+
+def cmd_tree_taxa(a):
+    """The panel tree's leaves, less the outgroup kit's genomes (outside the
+    graph by design), must be exactly the build's genomes (P0 step
+    ancestral)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from panel_ancestral import parse_newick
+    _, _, leaves = parse_newick(open(a.tree).read())
+    kit = {x for x in a.kit.split(",") if x}
+    if kit - leaves:
+        print(f"FATAL: kit genomes not leaves of {a.tree}: {sorted(kit - leaves)}",
+              file=sys.stderr)
+        return 1
+    return report_sets(f"taxa of {a.tree} (less the kit)", leaves - kit,
+                       set(lines(a.accessions)))
 
 
 def cmd_catalogue(a):
@@ -236,6 +253,11 @@ def main():
     p.add_argument("--fasta", required=True)
     p.add_argument("--accessions", required=True)
     p.add_argument("--ref-acc", default="")
+    p = sp.add_parser("tree-taxa")
+    p.add_argument("--tree", required=True)
+    p.add_argument("--accessions", required=True)
+    p.add_argument("--kit", default="",
+                   help="comma-separated kit genomes: leaves outside the graph")
     p = sp.add_parser("catalogue")
     p.add_argument("--tsv", required=True)
     p.add_argument("--accessions", required=True)
@@ -253,7 +275,8 @@ def main():
     p.add_argument("--build", required=True)
     a = ap.parse_args()
     return {"vcf-samples": cmd_vcf_samples, "fasta-names": cmd_fasta_names,
-            "taxa": cmd_taxa, "catalogue": cmd_catalogue,
+            "taxa": cmd_taxa, "tree-taxa": cmd_tree_taxa,
+            "catalogue": cmd_catalogue,
             "accessory-panel": cmd_accessory_panel,
             "is6110-intervals": cmd_is6110_intervals,
             "verify": cmd_verify}[a.cmd](a)

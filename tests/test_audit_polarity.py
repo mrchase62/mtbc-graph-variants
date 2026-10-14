@@ -184,111 +184,15 @@ class AlignmentStarAndSiblings(unittest.TestCase):
         self.assertEqual(seqs["S1"], "AA")
 
 
-class AncestralFaultB(unittest.TestCase):
-    """Fault B: bin/ancestral_alleles.py's ingroup is the MRCA of every
-    non-outgroup leaf, not the root's other child."""
-
-    def aa(self, tree, fasta, sites, *extra):
-        with tempfile.TemporaryDirectory() as d:
-            write(f"{d}/t.nwk", tree)
-            write(f"{d}/a.fa", fasta)
-            write(f"{d}/s.tsv", "chrom\tpos\tref\talt\n" + sites)
-            r = run([sys.executable, "bin/ancestral_alleles.py", "--tree",
-                     f"{d}/t.nwk", "--alignment", f"{d}/a.fa", "--sites",
-                     f"{d}/s.tsv", "--out", f"{d}/o.tsv", *extra])
-            return r, (rows_of(f"{d}/o.tsv") if r.returncode == 0 else None)
-
-    def test_second_outgroup_inside_roots_child(self):
-        # The panel tree's shape, with its leaf names and the default
-        # outgroups: GCF_035581225 roots it, and GCF_000253375 sits in the
-        # root's other child. The MTBC (A, B, C) is all C at site 1, so its
-        # ancestor is C; the old ingroup (GCF_000253375 + MTBC) tied and the
-        # root outgroup made it T. Site 2: the MTBC ties {C, T}; the nearer
-        # outgroup says C, the further one T.
-        r, rows = self.aa("(GCF_035581225,(GCF_000253375,(A,(B,C))));\n",
-                          ">GCF_035581225\nTT\n>GCF_000253375\nTC\n"
-                          ">A\nCC\n>B\nCT\n>C\nCT\n",
-                          "c\t1\tC\tT\nc\t2\tC\tT\n")
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual([(x["AA"], x["polarity"]) for x in rows],
-                         [("C", "ref_ancestral"), ("C", "ref_ancestral")])
-
-    def test_mrca_containing_an_outgroup_is_fatal(self):
-        r, _ = self.aa("((O1,A),(O2,(B,C)));\n",
-                       ">O1\nT\n>O2\nT\n>A\nC\n>B\nC\n>C\nC\n",
-                       "c\t1\tC\tT\n", "--outgroups", "O2,O1")
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("MRCA", r.stdout + r.stderr)
-
-
-class PanelPolarityTable(unittest.TestCase):
-    """GRAPHVCF-3 / TP-8: bin/panel_polarity.py pools duplicate records."""
-
-    def setUp(self):
-        if not bcftools():
-            self.skipTest("MTB_BCFTOOLS not set; source config/project_env.sh")
-
-    def test_duplicates_pooled(self):
-        with tempfile.TemporaryDirectory() as d:
-            vcf = panel_vcf(d, """
-                100 . G C . . AC=1;AN=4 GT 1 0 0 .
-                100 . G C . . AC=1;AN=4 GT 0 1 0 0
-                200 . A T . . AC=1;AN=4 GT 0 1 0 0
-                """, samples=("O", "X", "Y", "Z"))
-            r = run([sys.executable, "bin/panel_polarity.py", "--panel-vcf",
-                     vcf, "--outgroup", "O", "--bcftools", bcftools(),
-                     "--h37rv", self.h37rv(d, "T" * 10000),
-                     "--out", f"{d}/p.tsv"])
-            self.assertEqual(r.returncode, 0, r.stderr)
-            got = [(x["chrom"], x["pos"], x["ancestral"], x["panel_af"])
-                   for x in rows_of(f"{d}/p.tsv")]
-        # 100: the outgroup is ALT in one copy (the last copy said REF);
-        # carriers O and X of the four genomes, Z called in the second copy
-        self.assertEqual(got, [(PANSN, "100", "ALT", "0.5000"),
-                               (PANSN, "200", "REF", "0.2500")])
-
-    @staticmethod
-    def h37rv(d, seq):
-        return write(os.path.join(d, "h37rv.fasta"), f">NC_000962.3\n{seq}\n")
-
-    def test_keys_left_aligned_like_the_cohort_vcf(self):
-        """Review 2, R2-INT-1. The collapsed VCF trims but does not left-align;
-        the cohort VCF's keys go through mtb_norm.normalise. An insertion in a
-        homopolymer written at the run's right end must be keyed where the
-        cohort VCF keys it, and two right-shifted copies of the one event must
-        pool into a single row (the outgroup is ALT in the second copy)."""
-        sys.path.insert(0, os.path.join(ROOT, "bin"))
-        import mtb_norm
-        # 1-based: 299 C, 300-305 AAAAAA, 306 G, T elsewhere
-        seq = list("T" * 1000)
-        seq[298] = "C"
-        for i in range(299, 305):
-            seq[i] = "A"
-        seq[305] = "G"
-        seq = "".join(seq)
-        with tempfile.TemporaryDirectory() as d:
-            vcf = panel_vcf(d, """
-                302 . A AA . . AC=1;AN=4 GT 0 1 0 0
-                305 . A AA . . AC=1;AN=4 GT 1 0 1 0
-                """, samples=("O", "X", "Y", "Z"))
-            r = run([sys.executable, "bin/panel_polarity.py", "--panel-vcf",
-                     vcf, "--outgroup", "O", "--bcftools", bcftools(),
-                     "--h37rv", self.h37rv(d, seq), "--out", f"{d}/p.tsv"])
-            self.assertEqual(r.returncode, 0, r.stderr)
-            got = rows_of(f"{d}/p.tsv")
-        cohort_key = mtb_norm.normalise(seq, 305, "A", "AA")
-        self.assertEqual(cohort_key, (299, "C", "CA"))
-        self.assertEqual(len(got), 1, got)
-        x = got[0]
-        self.assertEqual((int(x["pos"]), x["ref"], x["alt"]), cohort_key)
-        self.assertEqual((x["ancestral"], x["n_records"], x["panel_af"]),
-                         ("ALT", "2", "0.7500"))
-
-    def test_h37rv_required(self):
-        r = run([sys.executable, "bin/panel_polarity.py", "--panel-vcf", "x",
-                 "--outgroup", "O", "--out", "o"])
-        self.assertEqual(r.returncode, 2)
-        self.assertIn("--h37rv", r.stderr)
+# Fault B (the ancestral node is the MRCA of every non-outgroup leaf) and
+# GRAPHVCF-3 / TP-8 / R2-INT-1 (the polarity table pools duplicate records
+# and left-aligns its keys) were tested here on bin/ancestral_alleles.py and
+# bin/panel_polarity.py. Both are replaced by bin/panel_ancestral.py (user,
+# 2026-10-13: one parsimony reconstruction for every variant class), and the
+# same cases are in tests/test_audit_parsimony.py: FaultB,
+# TableFormats.test_duplicates_pooled,
+# TableFormats.test_keys_left_aligned_like_the_cohort_vcf and
+# Refusals.test_required_arguments.
 
 
 _VT = []

@@ -437,9 +437,10 @@ class BuildManifestCompleteness(unittest.TestCase):
 
     def test_step_after_manifest_clears_it(self):
         self.mark("manifest", "assets")
-        r = self.p0("--step", "panel_polarity", OUTGROUP="")
+        # any step that runs; it was panel_polarity, now part of ancestral
+        r = self.p0("--step", "stamp", OUTGROUP="")
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
-        self.assertTrue(os.path.exists(os.path.join(self.b, "logs", "panel_polarity.done")))
+        self.assertTrue(os.path.exists(os.path.join(self.b, "logs", "stamp.done")))
         self.assertFalse(os.path.exists(os.path.join(self.b, "logs", "manifest.done")))
 
     def test_verify_checks_build_info(self):

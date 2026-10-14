@@ -685,24 +685,10 @@ class Is6110SeamAndKeys(unittest.TestCase):
         self.assertEqual(w.cluster_keys(obs, 0)[("D", 1)], 106)
 
 
-class AncestralAtIngroup(unittest.TestCase):
-    """Review 3.7: AA is the MTBC ancestor's state, the outgroup breaking a
-    tie there; a site the root already resolved keeps its allele."""
-
-    def test_ingroup_state(self):
-        with tempfile.TemporaryDirectory() as d:
-            write(f"{d}/t.nwk", "(O,(A,(B,C)));\n")
-            # site 1: root ties {C,T}, ingroup is C. site 2: root resolves A.
-            # site 3: ingroup ties {A,G} and the outgroup (T) cannot break it.
-            write(f"{d}/a.fa", ">O\nTAT\n>A\nCAA\n>B\nCGG\n>C\nCGG\n")
-            write(f"{d}/s.tsv", "chrom\tpos\tref\talt\nc\t1\tC\tT\nc\t2\tA\tG\nc\t3\tA\tG\n")
-            r = subprocess.run([sys.executable, "bin/ancestral_alleles.py", "--tree",
-                                f"{d}/t.nwk", "--alignment", f"{d}/a.fa", "--sites",
-                                f"{d}/s.tsv", "--out", f"{d}/o.tsv", "--outgroup", "O"],
-                               capture_output=True, text=True)
-            self.assertEqual(r.returncode, 0, r.stderr)
-            got = [(x["AA"], x["flag"]) for x in rows_of(f"{d}/o.tsv")]
-            self.assertEqual(got, [("C", ""), ("A", ""), (".", "TIED:AG")])
+# Review 3.7 (AA is the ingroup ancestor's state, not the root's) was tested
+# here on bin/ancestral_alleles.py. That script is replaced by
+# bin/panel_ancestral.py; the case is in tests/test_audit_parsimony.py
+# (TableFormats.test_ancestral_inside_an_ingroup_tie_from_the_ingroup_alone).
 
 
 def rows_of(p):

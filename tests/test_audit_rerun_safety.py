@@ -359,21 +359,19 @@ class P0(unittest.TestCase):
         self.assertIn("is not in GRAPH_DIR", r.stderr)
 
     def test_ancestral_date_only_marker_refused(self):
-        al = write(os.path.join(self.d, "aln.fasta"), f">A1\nA\n>A2\nA\n>{H37}\nA\n")
-        t = write(os.path.join(self.d, "t.nwk"), "(A1,A2,GCF_000195955);\n")
-        st = write(os.path.join(self.d, "sites.tsv"), "column\tchrom\tpos\tref\talt\n")
+        t = write(os.path.join(self.d, "t.nwk"), "(A1,(A2,GCF_000195955));\n")
         write(os.path.join(self.b, "logs", "ancestral.done"), "2026-10-01T12:40:52\n")
-        r = self.p0("--step", "ancestral", OG=self.og, ANC_TREE=t, ANC_ALN=al,
-                    ANC_SITES=st)
+        r = self.p0("--step", "ancestral", OG=self.og, ANC_TREE=t, ANC_OUTGROUPS="A1")
         self.assertNotEqual(r.returncode, 0, r.stdout)
         self.assertIn("step 'ancestral' was done with", r.stderr)
 
-    def test_ancestral_alignment_from_other_panel_refused(self):
-        al = write(os.path.join(self.d, "aln.fasta"), ">X9\nA\n>A2\nA\n")
+    def test_ancestral_tree_from_other_panel_refused(self):
+        # the tree's taxa (less any kit genomes) must be the build's
         t = write(os.path.join(self.d, "t.nwk"), "(X9,A2);\n")
-        st = write(os.path.join(self.d, "sites.tsv"), "column\tchrom\tpos\tref\talt\n")
-        r = self.p0("--step", "ancestral", OG=self.og, ANC_TREE=t, ANC_ALN=al,
-                    ANC_SITES=st)
+        for s in ("assets", "refs"):
+            write(os.path.join(self.b, "logs", f"{s}.done"), "2026-10-01\n")
+        r = self.p0("--step", "ancestral", OG=self.og, ANC_TREE=t, ANC_OUTGROUPS="X9",
+                    OUTGROUP="X9")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("taxa of", r.stderr)
 
