@@ -482,6 +482,25 @@ on boslogin06, which is not durable).
 
 ### Fix list for the next rerun (added 2026-10-08)
 
+**In plain terms (ABS-1, ABS-2; added 2026-10-14 at the user's request).**
+Each isolate's reads are aligned to its matched reference R, the closest
+panel genome. Wherever R differs from H37Rv, the isolate is assumed to share
+the difference, because its reads cannot show it against R. These inherited
+calls are mostly unchecked today.
+- **ABS-1, inherited absences (small variants):** where R lacks H37Rv
+  sequence, P5 calls the isolate ABSENT without reading it. On scale200,
+  10,247 such calls had normal H37Rv-frame read depth; about 2,400 in core
+  sequence were wrong (e.g. SAMEA2297133's intact ctpV called deleted). Fix:
+  check every inherited ABSENT against the isolate's own H37Rv reads; keep it
+  only if reads join across the deletion, use the isolate's own call if reads
+  span it intact, else NOCALL with a reason ("masked" in repeats).
+- **ABS-2, inherited SVs:** inherited deletions get only an indirect check;
+  inherited insertions are never checked, so each is reported present in
+  every isolate matched to R. Fix: test R's junction directly in the
+  matched-reference alignment, add a read check for insertions, and record
+  each call's evidence in the VCF. On the truth set the junction test got
+  95% of carried deletions right, against 87% unchecked.
+
 **ABS-1: inherited ABSENT is not checked against the sample's reads.** User
 approved adding it, with masked sites as NOCALL with a reason.
 
