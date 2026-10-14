@@ -144,6 +144,13 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
 
 ### Rebuild topics (2026-10-13)
 
+- **P0 done on P200 (2026-10-14): build `runroot/refbias/build/3893a3762ed1`.**
+  Graph 200 genomes, 603 CPU-h. Build env overrides: MTB_DATA, MTB_FASTAS,
+  MTB_GRAPHS -> `runroot/panel/P200`; MTB_OUTGROUP=GCF_022870265;
+  ASM_DIR, ACCESSORY_DIR, PANEL_FASTA under `runroot/panel/P200`. Parsimony
+  polarity (option A) applied; tatC-helY ancestral-present. 6 GenBank GFFs
+  from Prokka (`analysis/panel_select/prokka`). Next: validation reruns
+  (scale200, then new1k; P1 must rerun on this build).
 - **Graph build P200 submitted (2026-10-13, job 52768357).** Panel chosen by
   demand on the 33,364 fold-back-passing L1-4 isolates (Mutect2 calls,
   validated 99% vs P1 on new1k), top 200 after QC
