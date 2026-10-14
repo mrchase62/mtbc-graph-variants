@@ -1,0 +1,96 @@
+ISOLATES: 45,223 lineage 1-4 standard-pass isolates with Mutect2 calls and a fold-back rate; 11,859 above 2.5; TB-Profiler mixed-lineage flag on 0
+
+2. MIXED CALLS PER ISOLATE (PASS, unmasked, 0.1 <= AF < 0.9): median / p90 / p99 / max
+  snv   lineage1: 80 / 108 / 341.36 / 1602
+  snv   lineage2: 43 / 65 / 251 / 1162
+  snv   lineage3: 63 / 96 / 235.48 / 994
+  snv   lineage4: 45 / 79 / 222 / 1636
+  indel lineage1: 32 / 60 / 239.6 / 3522
+  indel lineage2: 18 / 36 / 260.24 / 2466
+  indel lineage3: 23 / 60 / 202.74 / 1726
+  indel lineage4: 16 / 37 / 236 / 2896
+  trace (AF < 0.1, reported only): SNV median 65, p90 604; indel median 12
+
+3. DOSE-RESPONSE: mean (median) mixed SNV / mixed indel per isolate by fold-back bin
+  lineage1
+    [0.0, 0.25)    n= 1,387  SNV   82.1 (80)  indel   36.6 (30)
+    [0.25, 0.5)    n=   285  SNV   81.0 (78)  indel   37.8 (31)
+    [0.5, 1.0)     n=   199  SNV   81.9 (79)  indel   36.6 (32)
+    [1.0, 1.5)     n=   142  SNV   77.1 (71.5)  indel   33.3 (30)
+    [1.5, 2.0)     n=   113  SNV   73.1 (70)  indel   32.3 (30)
+    [2.0, 2.5)     n=    89  SNV   79.7 (72)  indel   34.0 (30)
+    [2.5, 5.0)     n=   244  SNV   90.5 (80.5)  indel   36.5 (33)
+    [5.0, 10.0)    n=   527  SNV   91.0 (84)  indel   40.1 (34)
+    [10.0, inf)    n=   259  SNV  156.8 (81)  indel  177.8 (42)
+  lineage2
+    [0.0, 0.25)    n= 6,759  SNV   45.0 (41)  indel   19.4 (17)
+    [0.25, 0.5)    n= 1,347  SNV   50.3 (43)  indel   21.0 (18)
+    [0.5, 1.0)     n=   420  SNV   49.4 (44)  indel   21.8 (19)
+    [1.0, 1.5)     n=   382  SNV   49.8 (46)  indel   23.7 (21)
+    [1.5, 2.0)     n=   368  SNV   52.2 (46)  indel   25.3 (22)
+    [2.0, 2.5)     n=   322  SNV   48.5 (46)  indel   22.0 (21)
+    [2.5, 5.0)     n= 1,308  SNV   51.9 (45)  indel   23.3 (20)
+    [5.0, 10.0)    n= 1,882  SNV   53.7 (45)  indel   27.1 (20)
+    [10.0, inf)    n=   789  SNV  127.0 (57)  indel  149.0 (38)
+  lineage3
+    [0.0, 0.25)    n= 2,483  SNV   60.5 (58)  indel   25.6 (20)
+    [0.25, 0.5)    n=   501  SNV   65.1 (62)  indel   27.2 (22)
+    [0.5, 1.0)     n=   324  SNV   71.6 (67)  indel   26.4 (23.5)
+    [1.0, 1.5)     n=   217  SNV   67.8 (66)  indel   25.6 (24)
+    [1.5, 2.0)     n=   147  SNV   68.7 (65)  indel   27.1 (24)
+    [2.0, 2.5)     n=   155  SNV   71.7 (63)  indel   28.8 (25)
+    [2.5, 5.0)     n=   422  SNV   75.2 (68)  indel   33.0 (29)
+    [5.0, 10.0)    n=   394  SNV   96.1 (85)  indel   53.8 (41)
+    [10.0, inf)    n=   184  SNV  164.4 (112.5)  indel  187.4 (108)
+  lineage4
+    [0.0, 0.25)    n=12,905  SNV   44.4 (42)  indel   15.3 (13)
+    [0.25, 0.5)    n= 2,072  SNV   49.3 (47)  indel   18.2 (16)
+    [0.5, 1.0)     n=   846  SNV   53.9 (47)  indel   23.3 (17)
+    [1.0, 1.5)     n=   673  SNV   51.1 (44)  indel   22.4 (17)
+    [1.5, 2.0)     n=   623  SNV   48.1 (43)  indel   20.9 (17)
+    [2.0, 2.5)     n=   604  SNV   47.8 (44)  indel   19.7 (18)
+    [2.5, 5.0)     n= 2,042  SNV   50.6 (46)  indel   23.9 (20)
+    [5.0, 10.0)    n= 2,216  SNV   55.9 (49)  indel   33.6 (23)
+    [10.0, inf)    n= 1,593  SNV  119.1 (65)  indel  150.5 (45)
+
+   Negative binomial, mixed count ~ log(1 + fold-back) + log depth + read length + error rate + duplicate rate + lineage + mixed-lineage flag
+  snv: n=45,223, alpha=0.342; per unit log(1+fold-back) the count changes x1.287 (95% CI 1.279-1.296); fold-back 0.25 -> 2.5 -> 10 predicts x1.30 and x1.73
+  indel: n=45,223, alpha=0.937; per unit log(1+fold-back) the count changes x1.729 (95% CI 1.711-1.748); fold-back 0.25 -> 2.5 -> 10 predicts x1.76 and x3.29
+
+4. CUTOFFS: isolates kept, and mean mixed SNV / indel per kept isolate above the clean baseline (< 0.5)
+  lineage1 (all 3,245; baseline n=1,672, SNV 81.9, indel 36.8)
+    <= 1.0: keep  1,871 (58%); excess SNV +0.00, indel -0.02
+    <= 1.5: keep  2,013 (62%); excess SNV -0.34, indel -0.26
+    <= 2.0: keep  2,126 (66%); excess SNV -0.79, indel -0.49
+    <= 2.5: keep  2,215 (68%); excess SNV -0.84, indel -0.59
+  lineage2 (all 13,577; baseline n=8,106, SNV 45.9, indel 19.7)
+    <= 1.0: keep  8,526 (63%); excess SNV +0.18, indel +0.10
+    <= 1.5: keep  8,908 (66%); excess SNV +0.34, indel +0.27
+    <= 2.0: keep  9,276 (68%); excess SNV +0.57, indel +0.48
+    <= 2.5: keep  9,598 (71%); excess SNV +0.64, indel +0.54
+  lineage3 (all 4,827; baseline n=2,984, SNV 61.3, indel 25.8)
+    <= 1.0: keep  3,310 (69%); excess SNV +1.02, indel +0.05
+    <= 1.5: keep  3,525 (73%); excess SNV +1.35, indel +0.04
+    <= 2.0: keep  3,672 (76%); excess SNV +1.59, indel +0.09
+    <= 2.5: keep  3,827 (79%); excess SNV +1.95, indel +0.20
+  lineage4 (all 23,574; baseline n=14,977, SNV 45.1, indel 15.7)
+    <= 1.0: keep 15,823 (67%); excess SNV +0.47, indel +0.41
+    <= 1.5: keep 16,497 (70%); excess SNV +0.70, indel +0.66
+    <= 2.0: keep 17,121 (73%); excess SNV +0.78, indel +0.83
+    <= 2.5: keep 17,724 (75%); excess SNV +0.85, indel +0.94
+
+5. SITES: 295,714 distinct mixed PASS calls; 9,994 recurrent (>= 20 isolates)
+  high (> 2.5) 11,859 isolates, clean (< 0.5) 27,739
+  artifact-like (enrichment >= 3, p < 1e-6): 6,472 sites; median AF 0.13; strand minor share 0.33; clustered 1.00; barcode 3; DR-gene 410; inverted-repeat 12-mers within 150 bp median 0
+  other recurrent: 3,522 sites; median AF 0.22; strand minor share 0.38; clustered 1.00; barcode 4; DR-gene 955; inverted-repeat 12-mers within 150 bp median 0
+
+   Mixed calls in DR genes per isolate by fold-back bin (expect flat if real):
+    [0.0, 0.25)    n=23,534  mean 2.051
+    [0.25, 0.5)    n= 4,205  mean 2.462
+    [0.5, 1.0)     n= 1,789  mean 5.513
+    [1.0, 1.5)     n= 1,414  mean 3.820
+    [1.5, 2.0)     n= 1,251  mean 7.276
+    [2.0, 2.5)     n= 1,170  mean 4.070
+    [2.5, 5.0)     n= 4,016  mean 4.437
+    [5.0, 10.0)    n= 5,019  mean 5.691
+    [10.0, inf)    n= 2,825  mean 11.002

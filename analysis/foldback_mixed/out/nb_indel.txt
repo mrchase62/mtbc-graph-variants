@@ -1,0 +1,25 @@
+                 Generalized Linear Model Regression Results                  
+==============================================================================
+Dep. Variable:              mix_indel   No. Observations:                45223
+Model:                            GLM   Df Residuals:                    45214
+Model Family:        NegativeBinomial   Df Model:                            8
+Link Function:                    Log   Scale:                          1.0000
+Method:                          IRLS   Log-Likelihood:            -1.8881e+05
+Date:                Tue, 13 Oct 2026   Deviance:                       18979.
+Time:                        21:31:10   Pearson chi2:                 3.57e+04
+No. Iterations:                    19   Pseudo R-squ. (CS):             0.3933
+Covariance Type:            nonrobust                                         
+==========================================================================================
+                             coef    std err          z      P>|z|      [0.025      0.975]
+------------------------------------------------------------------------------------------
+Intercept                  6.6091      0.186     35.438      0.000       6.244       6.975
+C(lineage)[T.lineage2]    -0.5423      0.019    -28.089      0.000      -0.580      -0.504
+C(lineage)[T.lineage3]    -0.2440      0.022    -10.889      0.000      -0.288      -0.200
+C(lineage)[T.lineage4]    -0.6491      0.018    -35.133      0.000      -0.685      -0.613
+lfb                        0.5478      0.005     99.751      0.000       0.537       0.559
+ldepth                    -0.5621      0.041    -13.595      0.000      -0.643      -0.481
+read_len                  -0.0058      0.000    -37.345      0.000      -0.006      -0.006
+error_rate                13.1045      2.740      4.783      0.000       7.734      18.475
+duplicate_rate            -0.7408      0.166     -4.458      0.000      -1.067      -0.415
+mixlin                          0          0        nan        nan           0           0
+==========================================================================================
