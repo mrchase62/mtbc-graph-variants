@@ -50,3 +50,5 @@ analysis/foldback_mixed/controls_user/lift/
 analysis/foldback_mixed/controls_grid/*.vcf.gz*
 analysis/foldback_mixed/controls_grid/*.log
 analysis/foldback_mixed/controls_grid/truth/
+analysis/graph_gt_check/kit/
+analysis/graph_gt_check/logs/

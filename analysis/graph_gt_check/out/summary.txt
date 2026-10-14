@@ -1,0 +1,36 @@
+CELL CONCORDANCE (cells called by both)
+class	region	cells	discordant	rate	graph_only	direct_only	records_with_any	records
+SNP	outside mask	6,241,525	859	0.014%	387	472	680	31,518
+SNP	inside mask	1,023,856	2,424	0.237%	961	1,463	379	5,512
+MNP	outside mask	43,907	8	0.018%	8	0	2	265
+MNP	inside mask	51,390	187	0.364%	187	0	6	355
+indel	outside mask	508,760	538	0.106%	531	7	46	2,738
+indel	inside mask	334,405	995	0.298%	799	196	90	2,138
+SV	outside mask	166,338	306	0.184%	163	143	61	1,091
+SV	inside mask	216,212	1,043	0.482%	543	500	245	2,297
+
+GENOMES WITH THE MOST DISCORDANCE (all classes)
+genome	discordant	called	rate	SV_disc	indel_disc
+QC-1	867	43509	1.993%	4	3
+GCF_014899985	47	43426	0.108%	15	15
+GCF_932530395	46	42924	0.107%	11	16
+GCF_037076315	45	43004	0.105%	9	15
+GCA_061390555	45	43304	0.104%	11	14
+GCA_061386095	44	42558	0.103%	8	14
+GCF_014899285	44	42933	0.102%	14	11
+GCF_014900075	44	43285	0.102%	6	24
+GCF_977011405	43	42810	0.100%	10	12
+TB2780	42	43291	0.097%	11	14
+GCF_033125685	42	43359	0.097%	13	14
+GCF_009730215	42	43366	0.097%	16	13
+GCA_061374485	42	43376	0.097%	10	9
+GCF_014899265	41	43267	0.095%	8	13
+TB2659	41	43286	0.095%	11	15
+median genome discordance 0.067%
+
+REPRESENTATION: 422 loci with >= 2 SV records of one type within 50 bp; 411 of them with disjoint carriers (one event possibly split)
+
+SV HOMOPLASY (>= 2 changes on the panel tree)
+set	SVs	graph genotypes	discordant cells removed	only records with no discordant cell
+all	3,388	739	680	599 of 3,082
+outside mask	1,091	175	165	140 of 1,030
