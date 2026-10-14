@@ -144,6 +144,21 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
 
 ### Rebuild topics (2026-10-13)
 
+- **Planned (user, 2026-10-14: "yes, plan the Minigraph-Cactus comparison"):
+  a reference-anchored (rGFA) graph vs pggb on the same 200 genomes.** Not
+  started. Trigger: the graph genotype check (`analysis/graph_gt_check/`)
+  shows pggb errors concentrated in repeats / split representations.
+  1. Get a pinned Cactus container (none usable locally; only
+     `containers/cactus_pull_cmd`, v2.6.13). Download needs the user's OK.
+  2. Build `cactus-pangenome` from the same dnaA-rotated FASTAs
+     (`runroot/panel/P200/data/rotated`), reference GCF_000195955, GFA + VCF
+     outputs; record cost.
+  3. Score both graphs with the same check: graph GT vs direct alignment by
+     class inside/outside the mask, representation splits, SV homoplasy,
+     graph size/complexity, build cost.
+  4. Adopt only if discordance and splits drop with no loss of variants.
+     Switching cost: P0 expects a pggb .og (small adapter; odgi/vg read
+     MC's GFA), then P0 and every cohort pass rerun on the new build.
 - **P0 done on P200 (2026-10-14): build `runroot/refbias/build/3893a3762ed1`.**
   Graph 200 genomes, 603 CPU-h. Build env overrides: MTB_DATA, MTB_FASTAS,
   MTB_GRAPHS -> `runroot/panel/P200`; MTB_OUTGROUP=GCF_022870265;
