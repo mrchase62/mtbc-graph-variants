@@ -34,7 +34,6 @@ p2	pre	cohort	yes	${REFMAP}	from p1
 p2	pre	build	yes	${BUILD}/logs/refs.done	P0 finished preparing the references
 p2	post	sample	yes	${OUTROOT}/p2/${S}.vcf.gz	small variants, matched-reference frame
 p2	post	sample	yes	${OUTROOT}/p2/${S}.g.vcf.gz	gVCF; the joint-call evidence for missing versus reference
-p2	post	sample	yes	${OUTROOT}/p2/${S}.delly.vcf	structural, caller one
 p2	post	sample	no	${OUTROOT}/p2/${S}.dysgu.vcf	structural, caller two
 p2	post	sample	yes	${WORKPFX}p2/${S}.bam	alignment, read by p3
 p3	pre	sample	yes	${WORKPFX}p2/${S}.bam	from p2
@@ -48,7 +47,6 @@ p4	pre	sample	yes	${OUTROOT}/p2/${S}.vcf.gz	from p2
 p4	pre	sample	yes	${WORKPFX}p1/${S}.h37rv.vcf.gz	from p1 -- the dependency that broke the pinned-reference arm
 p4	pre	build	yes	${BUILD}/assets/repeat_mask.bed	routes calls between the direct and composed arms
 p4	post	sample	yes	${OUTROOT}/p4/${S}.placed.tsv	graph-placed small variants
-p4b	pre	sample	yes	${OUTROOT}/p2/${S}.delly.vcf	from p2
 p4b	post	sample	yes	${OUTROOT}/p4b/${S}.sv_placed.tsv	graph-placed structural variants
 p5	pre	sample	yes	${OUTROOT}/p4/${S}.placed.tsv	from p4
 p5	pre	sample	yes	${OUTROOT}/p4b/${S}.sv_placed.tsv	from p4b
