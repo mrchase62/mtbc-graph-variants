@@ -754,6 +754,7 @@ similar length into one presence/absence event; keep copy-number series
   and adds 3 false carrier cells. Of TRUNC_POSSIBLE carrier cells callable
   in truth, 87 are the call's own length and 64 longer (truncated), so
   they cannot be placed by sequence alone.
+- **TRUNC_POSSIBLE left flagged (user, 2026-10-15: "leave them flagged").**
 
 - **Evidence:** `analysis/graph_gt_check/README.md` (P200 build): 419 loci
   where >= 2 SV records of one type lie within 50 bp with disjoint carriers.
