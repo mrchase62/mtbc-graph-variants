@@ -510,5 +510,191 @@ class SplitSvEndToEnd(unittest.TestCase):
                             for x in v0 if x["class"] == "sv"))
 
 
+# ==========================================================================
+# SPLIT-1 extension: truncated small-allele insertions -> the graph allele
+# ==========================================================================
+def call(pos, seq, rid, svsource="small_allele"):
+    v = ins(pos, seq, rid=rid)
+    v["svsource"] = svsource
+    return v
+
+
+def graph(pos, seq):
+    return dict(pos=pos, ref="C", alt="C" + seq, seq=seq, len=len(seq))
+
+
+def other(cls, pos, rid, length):
+    """An accessory_presence or IS6110 record as read_vcf builds it."""
+    v = ins(pos, "", rid=rid, cls=cls)
+    v.update(alt="<INS>", ref="C", key=(pos, "C", f"<INS:{cls}>"), svlen=str(length),
+             svtype="INS", acclen=str(length) if cls == "accessory_presence" else "",
+             acclocus=f"ACC_{pos}" if cls == "accessory_presence" else "",
+             polarity="presence_is_derived")
+    return v
+
+
+class SplitTruncated(unittest.TestCase):
+    """HaplotypeCaller's assembled insertion stops short of a long insertion
+    (ctrl25_p200: 130 of 136 right-site/wrong-length calls; 533 bp at
+    742,634 called as 60 and 74 bp)."""
+
+    def setUp(self):
+        self.rng = random.Random(742634)
+
+    def run_merge(self, vs, carriers, gal, pol=None, n=30):
+        rows = [gts(n, c) for c in carriers]
+        return WEM.merge_split_svs(list(vs), rows, pol or {}, 0.05, gal)
+
+    def test_742634_calls_join_the_accessory_event(self):
+        x = rseq(533, self.rng)
+        gal = [graph(742634, x)] + [graph(742634, mutate(x, 1, self.rng)) for _ in range(3)]
+        acc = other("accessory_presence", 742634, "acc:ACC_0742634", 533)
+        vs = [call(742634, x[:60], "c60"), call(742634, x[:74], "c74"), acc]
+        out, rows, n = self.run_merge(vs, [[0, 1], [1, 2], list(range(25))], gal)
+        self.assertEqual(len(out), 1)
+        ev = out[0]
+        self.assertEqual((ev["id"], ev["cls"], ev["polarity"]),
+                         ("acc:ACC_0742634", "accessory_presence", "presence_is_derived"))
+        self.assertEqual(int((rows[0] == ord("1")).sum()), 25)
+        why = {m["id"]: (m["reason"], m["graph_allele"]) for m in ev["_members"]}
+        self.assertEqual(why["c60"], ("truncated_to_graph_allele", "742634:533"))
+        self.assertEqual(why["c74"][0], "truncated_to_graph_allele")
+        self.assertEqual(why["acc:ACC_0742634"][0], "same_event")
+
+    def test_calls_alone_form_the_graph_allele_event(self):
+        # no cohort record of the 533 bp allele: the two calls become one
+        # event, polarised by the graph allele's own panel row
+        x = rseq(533, self.rng)
+        gal = [graph(742634, x)]
+        vs = [call(742634, x[:60], "c60"), call(742638, x[10:84], "c74")]
+        pol = {("NC_000962.3", 742634, "C", "C" + x): ("REF", "0.9")}
+        out, rows, n = self.run_merge(vs, [[0], [1]], gal, pol)
+        self.assertEqual(len(out), 1)
+        self.assertEqual((out[0]["sv_members"], out[0]["polarity"]),
+                         (2, "ref_ancestral_outgroup"))
+        self.assertEqual(n["truncated calls formed a graph-allele event"], 2)
+
+    def test_calls_join_a_full_length_sv_record(self):
+        x = rseq(400, self.rng)
+        gal = [graph(5000, x)]
+        full = call(5000, x, "full")
+        vs = [call(5000, x[:80], "short"), full]
+        out, rows, _ = self.run_merge(vs, [[0], [1, 2]], gal)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["id"], "full")             # full-length representative
+        self.assertEqual(int((rows[0] == ord("1")).sum()), 3)
+
+    def test_is6110_piece_joins_the_site(self):
+        x = rseq(1355, self.rng)
+        gal = [graph(34866, x)]
+        site = other("is6110", 34869, "h37rv:34869", 1355)
+        vs = [call(34869, x[:64], "piece"), site]
+        out, rows, _ = self.run_merge(vs, [[0], [0, 1]], gal)
+        self.assertEqual(len(out), 1)
+        self.assertEqual((out[0]["id"], out[0]["cls"]), ("h37rv:34869", "is6110"))
+
+    def test_802427_vntr_unit_call_left_and_flagged(self):
+        # a one-unit call: itself the 54 bp allele, and inside every longer
+        # copy number -- cannot be placed
+        u = rseq(54, self.rng)
+        gal = [graph(802427, u * k) for k in (1, 2, 3, 4)]
+        vs = [call(802427, u, "u1")]
+        out, _, n = self.run_merge(vs, [[0]], gal)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["split_flag"], "TRUNC_POSSIBLE")
+        self.assertEqual(out[0]["_members"][0]["reason"], "truncated_possible")
+        self.assertEqual(out[0]["sv_members"], 1)          # merged with nothing
+        self.assertEqual(n["truncated calls possible (TRUNC_POSSIBLE)"], 1)
+
+    def test_vntr_single_longer_candidate_joins(self):
+        # the graph has only the three-copy allele: one candidate, so the
+        # one-unit call is its truncated reading
+        u = rseq(54, self.rng)
+        gal = [graph(802427, u * 3)]
+        vs = [call(802427, u, "u1"), call(802427, u * 3, "u3")]
+        out, _, _ = self.run_merge(vs, [[0], [1]], gal)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["id"], "u3")
+
+    def test_two_longer_candidates_ambiguous(self):
+        s = rseq(60, self.rng)
+        gal = [graph(9000, s + rseq(200, self.rng)), graph(9010, rseq(300, self.rng) + s)]
+        vs = [call(9000, s, "c")]
+        out, _, n = self.run_merge(vs, [[0]], gal)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["split_flag"], "TRUNC_AMBIGUOUS")
+        self.assertEqual(n["truncated calls ambiguous (TRUNC_AMBIGUOUS)"], 1)
+
+    def test_not_contained_left_alone(self):
+        x = rseq(500, self.rng)
+        gal = [graph(9000, x)]
+        vs = [call(9000, rseq(70, self.rng), "novel")]
+        out, _, n = self.run_merge(vs, [[0]], gal)
+        self.assertEqual((len(out), out[0]["split_flag"]), (1, ""))
+        self.assertNotIn("_members", out[0])
+        # half contained (below 90%): also left alone
+        vs = [call(9000, x[:35] + rseq(35, self.rng), "half")]
+        out, _, _ = self.run_merge(vs, [[0]], gal)
+        self.assertNotIn("_members", out[0])
+
+    def test_far_or_caller_records_not_moved(self):
+        x = rseq(500, self.rng)
+        gal = [graph(9000, x)]
+        far = call(9100, x[:70], "far")                       # 100 bp away
+        hc = call(9000, x[:70], "caller", svsource="")        # not small_allele
+        out, _, _ = self.run_merge([far, hc], [[0], [1]], gal)
+        self.assertEqual(len(out), 2)
+        self.assertTrue(all("_members" not in v for v in out))
+
+    def test_containment(self):
+        x = rseq(300, self.rng)
+        self.assertEqual(WEM.contained_frac(x[100:180], x), 1.0)
+        self.assertLess(WEM.contained_frac(rseq(80, self.rng), x), 0.1)
+        self.assertEqual(WEM.contained_frac("ACGT", x), 0.0)    # shorter than k
+
+
+class SplitTruncatedEndToEnd(SplitSvEndToEnd):
+    """--graph-vcf on the writer: the truncated call joins and sv_merged.tsv
+    says why."""
+
+    def test_rows(self):
+        rng = random.Random(7)
+        x = rseq(300, rng)
+        with tempfile.TemporaryDirectory() as d:
+            TP.write(f"{d}/g.vcf", "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\t"
+                     "QUAL\tFILTER\tINFO\tFORMAT\tG1\n"
+                     f"{TP.PANSN}\t500\t.\tC\tC{x}\t.\t.\t.\tGT\t1\n")
+            TP.write(f"{d}/m.vcf", "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\t"
+                     "QUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\tS3\tS4\n"
+                     f"NC_000962.3\t500\th37rv:500:C>C{x}\tC\tC{x}\t.\tPASS\t"
+                     "CLASS=sv;SVTYPE=INS;SVLEN=300;SVSOURCE=small_allele;FRAME=h37rv\t"
+                     "GT\t1\t0\t0\t0\n"
+                     f"NC_000962.3\t500\th37rv:500:C>C{x[:70]}\tC\tC{x[:70]}\t.\tPASS\t"
+                     "CLASS=sv;SVTYPE=INS;SVLEN=70;SVSOURCE=small_allele;FRAME=h37rv\t"
+                     "GT\t0\t1\t0\t0\n")
+            TP.write(f"{d}/t.nwk", "(O:1,((S1:1,S2:1)x:1,(S3:1,S4:1)y:1)ing:1);\n")
+            TP.write(f"{d}/og.fa", ">O\nT\n")
+            TP.write(f"{d}/og.tsv", "column\tchrom\tpos\tref\talt\n0\tNC_000962.3\t1\tA\tT\n")
+            base = [self.py, "assoc/bin/write_event_matrix.py", "--vcf", f"{d}/m.vcf",
+                    "--tree", f"{d}/t.nwk", "--outgroup-name", "O",
+                    "--outgroup-fasta", f"{d}/og.fa", "--outgroup-sites", f"{d}/og.tsv",
+                    "--panel-polarity", ""]
+            r = TP.run(base + ["--out", f"{d}/ev", "--graph-vcf", f"{d}/g.vcf"])
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            v = rows_of(f"{d}/ev/variants.tsv")
+            m = rows_of(f"{d}/ev/sv_merged.tsv")
+            r0 = TP.run(base + ["--out", f"{d}/ev0"])
+            self.assertEqual(r0.returncode, 0, r0.stdout + r0.stderr)
+            v0 = rows_of(f"{d}/ev0/variants.tsv")
+            bad = TP.run(base + ["--out", f"{d}/ev1", "--graph-vcf", f"{d}/missing.vcf"])
+        self.assertEqual(len(v), 1)
+        self.assertEqual(v[0]["n_derived_leaves"], "2")
+        self.assertEqual({x["reason"] for x in m}, {"same_event", "truncated_to_graph_allele"})
+        self.assertEqual([x["graph_allele"] for x in m if x["reason"] != "same_event"],
+                         ["500:300"])
+        self.assertEqual(len(v0), 2)                 # without --graph-vcf: apart
+        self.assertNotEqual(bad.returncode, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -245,7 +245,8 @@ def read_vcf(path, want_class=None, want_frame=None):
                 # SPLIT-1 reads these
                 svtype=info.get("SVTYPE", ""), svlen=info.get("SVLEN", ""),
                 smallallele=info.get("SMALLALLELE", ""),
-                acclocus=acc))
+                acclocus=acc, svsource=info.get("SVSOURCE", ""),
+                acclen=info.get("ACCLEN", "")))
             gt_rows.append(np.frombuffer(
                 "".join([s[0] for s in f[9:]]).encode(), dtype=np.uint8))
     return samples, variants, gt_rows, n_skipped
@@ -425,7 +426,170 @@ def merged_gt(rows):
     return out
 
 
-def merge_split_svs(variants, gt_rows, pol_tab, min_panel_af):
+# --------------------------------------------------------------------------
+# SPLIT-1 extension: truncated small-allele insertions -> the graph allele
+# --------------------------------------------------------------------------
+TRUNC_K = 15            # k-mer size for containment
+TRUNC_MIN_FRAC = 0.90   # share of the call's k-mers the allele must contain
+
+
+def read_graph_ins(path, contig):
+    """Sequence-resolved insertions of >= 50 bp on the H37Rv path of the
+    build's graph VCF (assets/graph_collapsed.vcf.gz, left-aligned like the
+    cohort's keys): [{pos, ref, alt, seq, len}], one per distinct (pos, ALT).
+    Only simple insertions (ALT = REF + sequence) are kept."""
+    if not os.path.exists(path):
+        sys.exit(f"FATAL: --graph-vcf {path} does not exist")
+    op = gzip.open if path.endswith(".gz") else open
+    out, seen = [], set()
+    with op(path, "rt") as fh:
+        for line in fh:
+            if line.startswith("#"):
+                continue
+            f = line.split("\t", 6)
+            if len(f) < 5 or f[0].split("#")[-1] != contig:
+                continue
+            ref = f[3].upper()
+            for alt in f[4].upper().split(","):
+                if alt.startswith("<") or not alt.startswith(ref) \
+                        or len(alt) - len(ref) < 50:
+                    continue
+                k = (int(f[1]), ref, alt)
+                if k in seen:
+                    continue
+                seen.add(k)
+                out.append(dict(pos=k[0], ref=ref, alt=alt, seq=alt[len(ref):],
+                                len=len(alt) - len(ref)))
+    return out
+
+
+def graph_ins_events(gal):
+    """Each graph insertion's SPLIT-1 event id, by the same rule as the
+    cohort's records (split_sv_groups): one-base variants of one insertion
+    are one event, copy numbers are separate."""
+    pseudo = [dict(cls="sv", svtype="INS", key=(g["pos"], g["ref"], g["alt"]),
+                   chrom="H", pos=g["pos"], ref=g["ref"], alt=g["alt"],
+                   svlen=str(g["len"]), acclocus="") for g in gal]
+    ev = [0] * len(gal)
+    for e, grp in enumerate(split_sv_groups(pseudo)):
+        for i in grp:
+            ev[i] = e
+    return ev
+
+
+def kmer_set(s, k=TRUNC_K):
+    return {s[i:i + k] for i in range(len(s) - k + 1)}
+
+
+def contained_frac(call_seq, allele_seq, k=TRUNC_K):
+    """Share of the call's k-mers found in the allele (0 if the call is
+    shorter than k). The truncated end needs no special case: k-mers are
+    position-free, so a prefix, suffix or middle piece scores 1."""
+    km = kmer_set(call_seq, k)
+    if not km:
+        return 0.0
+    return len(km & kmer_set(allele_seq, k)) / len(km)
+
+
+def graph_matches(seq, pos, gal, min_len_frac=1 - SPLIT_LEN_FRAC):
+    """Indices of graph insertions within SPLIT_POS_TOL of pos that contain
+    >= TRUNC_MIN_FRAC of seq's k-mers and are at least min_len_frac of its
+    length (the call's own length class, or longer)."""
+    L = len(seq)
+    return [j for j, g in enumerate(gal)
+            if abs(g["pos"] - pos) <= SPLIT_POS_TOL and g["len"] >= min_len_frac * L
+            and contained_frac(seq, g["seq"]) >= TRUNC_MIN_FRAC]
+
+
+def same_length(a, b):
+    return max(a, b) <= max(min(a, b), 1) * (1 + SPLIT_LEN_FRAC)
+
+
+def truncated_assignments(variants, gal, gev):
+    """Which small-allele insertions are truncated readings of one graph
+    allele (user, 2026-10-14: "match them to the graph allele at the site").
+
+    HaplotypeCaller assembles a long insertion only part of the way, so at a
+    true insertion site the cohort's small_allele record is a piece of it (on
+    ctrl25_p200, 130 of 136 right-site/wrong-length insertion calls: median
+    24% of the length; 533 bp at 742,634 called as 60 and 74 bp). Such a call
+    never meets the 5% length rule.
+
+    For each CLASS=sv INS record with SVSOURCE=small_allele and its own
+    sequence: the graph insertions within SPLIT_POS_TOL that contain >= 90%
+    of its 15-mers and are at least its length class (graph_matches), taken
+    as their SPLIT-1 events (graph_ins_events). Then:
+      - exactly one event, longer than the call (not within 5%): the call is
+        truncated; it joins that event (reason truncated_to_graph_allele);
+      - exactly one event of the call's own length: a full-length call;
+        nothing to do;
+      - two or more events, one of them the call's own length: the call IS a
+        graph allele, but also fits inside a longer one, so it may be a
+        truncated reading of it (at a VNTR a one-unit call is contained in
+        every longer copy number; at 802,427 a 162 bp truth was called as the
+        54 bp allele). It cannot be placed: left as it is, flagged
+        TRUNC_POSSIBLE;
+      - two or more events, all longer: left as it is, flagged
+        TRUNC_AMBIGUOUS;
+      - none: left alone (a novel or rotated sequence; conservative).
+    Returns {variant index: ("event", e, graph index) | ("possible" |
+    "ambiguous", None, None)}."""
+    out = {}
+    for i, v in enumerate(variants):
+        if v["cls"] != "sv" or v["svtype"] != "INS" or v.get("svsource") != "small_allele" \
+                or v["chrom"].startswith("node_") or str(v["key"][0]).startswith("node:"):
+            continue
+        seq = sv_allele_seq(v)
+        if len(seq) < TRUNC_K:
+            continue
+        hits = graph_matches(seq, v["pos"], gal)
+        evs = {gev[j] for j in hits}
+        own = any(same_length(len(seq), gal[j]["len"]) for j in hits)
+        if len(evs) > 1:
+            out[i] = ("possible" if own else "ambiguous", None, None)
+        elif len(evs) == 1:
+            best = max(hits, key=lambda j: (contained_frac(seq, gal[j]["seq"]), -abs(gal[j]["pos"] - v["pos"])))
+            if not same_length(len(seq), gal[best]["len"]):
+                out[i] = ("event", evs.pop(), best)
+    return out
+
+
+def record_graph_event(v, gal, gev):
+    """The graph event a cohort record IS (full length, not truncated), or
+    None: a sequence-carrying INS record (own allele or SMALLALLELE) whose
+    sequence is >= 90% contained in a graph insertion of its own length within
+    SPLIT_POS_TOL; an accessory_presence record (ACCLEN) or an IS6110
+    insertion site (SVLEN, 1,355) whose length is within 5% of a graph
+    insertion's within SPLIT_POS_TOL. Must be one event."""
+    evs = set()
+    if v["cls"] in ("accessory_presence", "is6110"):
+        if v["cls"] == "is6110" and v["svtype"] != "INS":
+            return None                   # an H37Rv copy's loss, not an insertion
+        try:
+            L = abs(int(v.get("acclen") if v["cls"] == "accessory_presence"
+                        else v.get("svlen")))
+        except (KeyError, ValueError, TypeError):
+            return None
+        evs = {gev[j] for j, g in enumerate(gal)
+               if abs(g["pos"] - v["pos"]) <= SPLIT_POS_TOL and same_length(L, g["len"])}
+    elif v["cls"] == "sv" and v["svtype"] == "INS":
+        seqs = []
+        s = sv_allele_seq(v)
+        if s:
+            seqs.append((v["pos"], s))
+        for k in (v.get("smallallele") or "").split(","):
+            f = k.split(":")
+            if len(f) == 3 and ">" in f[2]:
+                r, x = f[2].split(">", 1)
+                if len(x) > len(r) and x.startswith(r):
+                    seqs.append((int(f[1]), x[len(r):].upper()))
+        for p, s in seqs:
+            evs |= {gev[j] for j in graph_matches(s, p, gal)
+                    if same_length(len(s), gal[j]["len"])}
+    return evs.pop() if len(evs) == 1 else None
+
+
+def merge_split_svs(variants, gt_rows, pol_tab, min_panel_af, gal=None):
     """SPLIT-1: merge the records of one SV event, and polarise every SV
     event from its members' panel-parsimony rows.
 
@@ -452,19 +616,109 @@ def merge_split_svs(variants, gt_rows, pol_tab, min_panel_af):
 
     Merged events keep the representative's row key (the member with most
     carriers) and record their members in `sv_member_ids` and `_members`
-    (written to sv_merged.tsv). Returns (variants, gt_rows, counts)."""
-    groups = split_sv_groups(variants)
+    (written to sv_merged.tsv).
+
+    TRUNCATED CALLS (`gal`, the build's graph insertions; the SPLIT-1
+    extension, user 2026-10-14). A small-allele insertion that is a truncated
+    reading of one graph allele (truncated_assignments) is moved into the
+    event that IS that allele in this cohort: the SV group holding a record
+    of it (record_graph_event; the one with most carriers if several), else
+    an accessory_presence record or IS6110 insertion site of its length at
+    the site (the nearest, if unique), else a new event of the truncated
+    calls alone. Its sv_merged.tsv reason is
+    truncated_to_graph_allele. A truncated member is a reading of the target
+    allele, not an allele of its own, so it takes no part in the polarity
+    vote and is never the representative while a full-length member exists;
+    an event of truncated calls alone takes its polarity from the graph
+    allele's own panel rows. An accessory_presence or IS6110 representative
+    keeps its own class and polarity. Calls that fit several graph events are left where they are
+    and their event is flagged TRUNC_POSSIBLE (the call is itself a graph
+    allele) or TRUNC_AMBIGUOUS (it is not).
+
+    Returns (variants, gt_rows, counts)."""
+    groups = [list(g) for g in split_sv_groups(variants)]
     n = collections.Counter()
     drop, members = set(), {}
+    trunc, ev_alleles = {}, collections.defaultdict(list)
+    if gal:
+        gev = graph_ins_events(gal)
+        for j, e in enumerate(gev):
+            ev_alleles[e].append(j)
+        assign = truncated_assignments(variants, gal, gev)
+        moved = collections.defaultdict(list)          # event -> calls
+        for i, (kind, e, j) in assign.items():
+            if kind == "ambiguous":
+                variants[i]["trunc"] = ("truncated_ambiguous", "")
+                n["truncated calls ambiguous (TRUNC_AMBIGUOUS)"] += 1
+            elif kind == "possible":
+                variants[i]["trunc"] = ("truncated_possible", "")
+                n["truncated calls possible (TRUNC_POSSIBLE)"] += 1
+            else:
+                g = gal[j]
+                variants[i]["trunc"] = ("truncated_to_graph_allele",
+                                        f"{g['pos']}:{g['len']}")
+                trunc[i] = e
+                moved[e].append(i)
+        if moved:
+            # take the moved calls out of their groups
+            groups = [[i for i in g if i not in trunc] for g in groups]
+            groups = [g for g in groups if g]
+            ones_of = lambda i: int((gt_rows[i] == ord("1")).sum())  # noqa: E731
+            near = {e: [gal[j]["pos"] for j in ev_alleles[e]] for e in moved}
+            for e, calls in moved.items():
+                lo_p, hi_p = min(near[e]) - SPLIT_POS_TOL, max(near[e]) + SPLIT_POS_TOL
+                hit = [gi for gi, g in enumerate(groups)
+                       if any(lo_p <= variants[i]["pos"] <= hi_p
+                              and record_graph_event(variants[i], gal, gev) == e
+                              for i in g)]
+                if hit:
+                    gi = max(hit, key=lambda gi: sum(ones_of(i) for i in groups[gi]))
+                    groups[gi].extend(calls)
+                    n["truncated calls joined an SV event of the cohort"] += len(calls)
+                    continue
+                # the event as another class's record: an accessory locus, or
+                # an IS6110 insertion site (truncated pieces of an IS6110
+                # copy are that site's insertion). The nearest one, if unique
+                acc = [i for i, v in enumerate(variants)
+                       if v["cls"] in ("accessory_presence", "is6110")
+                       and lo_p <= v["pos"] <= hi_p
+                       and record_graph_event(v, gal, gev) == e]
+                if acc:
+                    cpos = sorted(variants[c]["pos"] for c in calls)[len(calls) // 2]
+                    dist = sorted((abs(variants[i]["pos"] - cpos), i) for i in acc)
+                    acc = [dist[0][1]] if len(dist) == 1 or dist[0][0] < dist[1][0] else []
+                if len(acc) == 1:
+                    gi = next((gi for gi, g in enumerate(groups) if acc[0] in g), None)
+                    if gi is None:
+                        groups.append(acc + calls)
+                    else:                 # already the target of another event
+                        groups[gi].extend(calls)
+                    n[f"truncated calls joined a {variants[acc[0]]['cls']} record"] += len(calls)
+                else:
+                    groups.append(list(calls))
+                    n["truncated calls formed a graph-allele event"] += len(calls)
     for g in groups:
         ones = [int((gt_rows[i] == ord("1")).sum()) for i in g]
-        rep = g[max(range(len(g)), key=lambda k: (ones[k], -k))]
+        full = [k for k, i in enumerate(g) if i not in trunc]
+        pick = full or list(range(len(g)))
+        rep = g[max(pick, key=lambda k: (ones[k], -k))]
         v = variants[rep]
+        voters = [g[k] for k in full]
         st = [member_state(variants[i], pol_tab, min_panel_af) if pol_tab else ""
-              for i in g]
-        for i, s in zip(g, st):
+              for i in voters]
+        if not voters and pol_tab:
+            # truncated calls alone: the graph allele's own panel rows
+            e = trunc[g[0]]
+            st = [member_state(dict(chrom=v["chrom"], pos=gal[j]["pos"],
+                                    ref=gal[j]["ref"], alt=gal[j]["alt"]),
+                               pol_tab, min_panel_af) for j in ev_alleles[e]]
+        for i in g:
+            variants[i]["member_state"] = ""
+        for i, s in zip(voters, st):
             variants[i]["member_state"] = s
         n_alt, n_ref, n_none = st.count("ALT"), st.count("REF"), st.count("")
+        if v["cls"] in ("accessory_presence", "is6110"):
+            n_alt = n_ref = 0              # keeps its own polarity
         flag = ""
         if n_alt >= 2:
             v["polarity"], v["derived"], flag = "unpolarised", "ALT", "SPLIT_CONFLICT"
@@ -476,25 +730,33 @@ def merge_split_svs(variants, gt_rows, pol_tab, min_panel_af):
             v["polarity"], v["derived"] = "ref_ancestral_outgroup", "ALT"
             if n_none:
                 flag = "SPLIT_PARTIAL"
+        for why, tag in (("truncated_ambiguous", "TRUNC_AMBIGUOUS"),
+                         ("truncated_possible", "TRUNC_POSSIBLE")):
+            if any(variants[i].get("trunc", ("",))[0] == why for i in g):
+                flag = ",".join(x for x in (flag, tag) if x)
         n[f"SV events polarised: {v['polarity']}"] += 1
         if flag:
             n[f"SV events flagged {flag}"] += 1
         v["split_flag"] = flag
-        if len(g) < 2:
+        if len(g) < 2 and g[0] not in trunc and "trunc" not in v:
             continue
-        n["SV events merged from >= 2 records"] += 1
-        n["SV records merged away"] += len(g) - 1
-        gt_rows[rep] = merged_gt([gt_rows[i] for i in g])
-        members[rep] = [variants[i] for i in sorted(g, key=lambda i: variants[i]["pos"])]
+        if len(g) >= 2:
+            n["SV events merged from >= 2 records"] += 1
+            n["SV records merged away"] += len(g) - 1
+            gt_rows[rep] = merged_gt([gt_rows[i] for i in g])
+        order = sorted(g, key=lambda i: variants[i]["pos"])
+        members[rep] = [variants[i] for i in order]
         v["sv_members"] = len(g)
         v["sv_member_ids"] = ",".join(m["id"] for m in members[rep])
         v["_members"] = [dict(id=m["id"], pos=m["pos"], ref=m["ref"],
-                              alt=m["alt"], svtype=m["svtype"],
-                              net_len=sv_net_len(m), state=m["member_state"],
-                              n_alt=int((gt_rows[i] == ord("1")).sum()) if i != rep
-                              else ones[g.index(rep)])
-                         for m, i in ((variants[i], i) for i in
-                                      sorted(g, key=lambda i: variants[i]["pos"]))]
+                              alt=m["alt"], svtype=m["svtype"] or m["cls"],
+                              net_len=(int(m["acclen"]) if m["cls"] == "accessory_presence"
+                                       and m.get("acclen") else sv_net_len(m)),
+                              state=m["member_state"],
+                              n_alt=ones[g.index(i)],
+                              reason=m.get("trunc", ("same_event",))[0],
+                              graph_allele=m.get("trunc", ("", ""))[1])
+                         for m, i in ((variants[i], i) for i in order)]
         drop.update(i for i in g if i != rep)
     keep = [i for i in range(len(variants)) if i not in drop]
     variants = [variants[i] for i in keep]
@@ -651,6 +913,16 @@ def main():
                          "signal (analysis/graph_gt_check/README.md). With "
                          "this flag, SV records are also not polarised from "
                          "panel_polarity.tsv (presence_is_derived, as before)")
+    ap.add_argument("--graph-vcf", default="",
+                    help="the build's assets/graph_collapsed.vcf.gz. Its "
+                         "sequence-resolved insertions (>= 50 bp) are the "
+                         "graph alleles that truncated small-allele insertion "
+                         "calls are matched to (SPLIT-1 extension, "
+                         "truncated_assignments). Without it, truncated calls "
+                         "are not matched")
+    ap.add_argument("--h37rv-contig", default="NC_000962.3",
+                    help="H37Rv contig name; --graph-vcf contigs are matched "
+                         "on the part after the last '#' (PanSN)")
     ap.add_argument("--dedupe", choices=("fail", "first", "drop", "suffix"),
                     default="fail",
                     help="what to do when two records share a row key. A "
@@ -948,8 +1220,14 @@ def main():
     # units and stay separate counts. Polarity: merge_split_svs.
     n_split = collections.Counter()
     if not a.no_merge_split_sv and variants:
+        gal = read_graph_ins(a.graph_vcf, a.h37rv_contig) if a.graph_vcf else None
+        if gal is not None:
+            eprint(f"  graph insertions (>= 50 bp) from {a.graph_vcf}: {len(gal):,}")
+            if not gal:
+                sys.exit(f"FATAL: no insertions of >= 50 bp on {a.h37rv_contig} "
+                         f"in {a.graph_vcf}; wrong file or contig?")
         variants, gt_rows, n_split = merge_split_svs(
-            variants, gt_rows, pol_tab, a.min_panel_af)
+            variants, gt_rows, pol_tab, a.min_panel_af, gal)
         if n_split:
             eprint("  SV events (SPLIT-1), polarity from the members' "
                    "panel rows:")
@@ -1406,20 +1684,23 @@ def main():
                 # a merged event's panel change count is not any one
                 # member's: left blank (members in sv_merged.tsv)
                 "" if v.get("sv_members") else v.get("aa_changes", ""),
-                v.get("aa_source", ""), v.get("sv_members", 1)
-                if v["cls"] == "sv" else "", v.get("sv_member_ids", ""),
+                v.get("aa_source", ""),
+                v.get("sv_members", 1 if v["cls"] == "sv" else ""),
+                v.get("sv_member_ids", ""),
                 v.get("split_flag", ""))) + "\n")
     # SPLIT-1: every member of every merged SV event, traceable to its VCF ID
     with open(os.path.join(a.out, "sv_merged.tsv"), "w") as fh:
         fh.write("row_key\tevent_id\tmember_id\tpos\tsvtype\tnet_len\t"
-                 "n_alt\tmember_state\tevent_polarity\tsplit_flag\n")
+                 "n_alt\tmember_state\tevent_polarity\tsplit_flag\treason\t"
+                 "graph_allele\n")
         for v in variants:
             for m in v.get("_members", []):
                 fh.write("\t".join(str(x) for x in (
                     "|".join(str(p) for p in v["key"]), v["id"], m["id"],
                     m["pos"], m["svtype"], m["net_len"], m["n_alt"],
                     m["state"] or ".", v["polarity"],
-                    v.get("split_flag", ""))) + "\n")
+                    v.get("split_flag", ""), m["reason"],
+                    m["graph_allele"])) + "\n")
     with open(os.path.join(a.out, "nodes.tsv"), "w") as fh:
         fh.write("label\tparent\tedge_length\tis_leaf\tsupport\tn_leaves\n")
         n_leaves_under = [0] * n_n
@@ -1494,7 +1775,8 @@ def main():
                      f"merged into {n_split['SV events merged from >= 2 records']:,} "
                      f"events (SPLIT-1; members in sv_merged.tsv)")
         for k in sorted(n_split):
-            if k.startswith("SV events polarised") or k.startswith("SV events flagged"):
+            if k.startswith(("SV events polarised", "SV events flagged",
+                             "truncated calls")):
                 lines.append(f"  {k:<46s}{n_split[k]:>9,}")
     if mtbc_i is not None:
         lines.append(f"MTBC node {labels[mtbc_i]} pinned to AA where resolved: "
