@@ -727,6 +727,14 @@ similar length into one presence/absence event; keep copy-number series
   5 kb insertion, which carries a DEAD/DEAH-box helicase gene, plus an IS6110
   copy) stay a separate event ("keep them separate"). Takes effect when P0
   step `ancestral` is rerun on the build.
+- **Extension (user, 2026-10-14: "match them to the graph allele at the
+  site"):** HaplotypeCaller small-allele insertions are truncated (on
+  ctrl25_p200 130 of 136 right-site/wrong-length calls, median 24% of the
+  true length: 533 bp at 742,634 called 60-74 bp; 162 bp VNTR at 802,427 as
+  54 bp). A small-allele insertion whose sequence is contained in a longer
+  sequence-carrying allele at the same locus (unique candidate) joins that
+  allele's event (`truncated_to_graph_allele`); ambiguous cases stay separate
+  and flagged. Evidence: `analysis/foldback_mixed/ins_fp_diag.py`.
 
 - **Evidence:** `analysis/graph_gt_check/README.md` (P200 build): 419 loci
   where >= 2 SV records of one type lie within 50 bp with disjoint carriers.
