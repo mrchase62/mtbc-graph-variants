@@ -88,7 +88,14 @@ def main():
         tsnv = {(p, al) for p, r, al in tv if len(r) == len(al) == 1 and ok(p)}
         tind = [(p, len(al) - len(r)) for p, r, al in tv if not (len(r) == len(al) == 1) and abs(len(al) - len(r)) < 50 and ok(p)]
         tdel = [(p, p + len(r) - len(al)) for p, r, al in tv if len(r) - len(al) >= 50 and ok(p)]
-        tins = [(p, len(al) - len(r)) for p, r, al in tv if len(al) - len(r) >= 50 and ok(p)]
+        # insertion points often sit at the edge of a callable interval (the
+        # assembly alignment breaks there), so truth insertions are taken
+        # outside the repeat mask whether or not the point itself is callable
+        tins = [(p, len(al) - len(r)) for p, r, al in tv if len(al) - len(r) >= 50 and not gs.mask[p - 1]]
+        # a call just outside the mask can sit next to a truth insertion whose
+        # point is inside it (repeat edges); calls are matched against every
+        # truth insertion, the recall denominator stays unmasked ones
+        tins_all = [(p, len(al) - len(r)) for p, r, al in tv if len(al) - len(r) >= 50]
         n = collections.Counter()
         snv_state, ind_hit = {}, set()
         calls = []
@@ -135,10 +142,12 @@ def main():
         hit_t = set()
         site_t = set()
         for pos, L, cls in calls:
-            m = [k for k, (p, tl) in enumerate(tins) if abs(p - pos) <= 50 and min(L, tl) >= 0.8 * max(L, tl)]
-            site = [k for k, (p, tl) in enumerate(tins) if abs(p - pos) <= 50]
+            m = [k for k, (p, tl) in enumerate(tins_all) if abs(p - pos) <= 50 and min(L, tl) >= 0.8 * max(L, tl)]
+            site = [k for k, (p, tl) in enumerate(tins_all) if abs(p - pos) <= 50]
             n[f"ins_{cls}_{'tp' if m else 'site' if site else 'fp'}"] += 1
-            hit_t.update(m); site_t.update(site)
+            idx = {k for k, t in enumerate(tins_all) if t in set(tins)}
+            hit_t.update(tins.index(tins_all[k]) for k in m if k in idx)
+            site_t.update(tins.index(tins_all[k]) for k in site if k in idx)
         n["ins_truth_site_found"] = len(site_t)
         n["ins_truth_found"] = len(hit_t)
         n["ins_truth_is6110"] = sum(1300 <= tl <= 1420 for _, tl in tins)

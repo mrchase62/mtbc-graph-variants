@@ -1,0 +1,36 @@
+sample	group	pos	len	source	component	region	carriers	nearest_truth_ins_bp	nearest_truth_ins_len	seq_in_assembly
+mar_01_R1430	clean	279515	71	sv_caller	called		1	41824	1	
+mar_01_R1430	clean	1313134	56	small_allele		core	2	47743	1359	no
+mar_02_R0894	clean	1519822	70	small_allele		core	3	38873	3348	yes
+mar_02_R0894	clean	2545196	68	small_allele		core	3	7787	1	yes
+mar_02_R1708	clean	1519822	70	small_allele		core	3	38873	3347	yes
+mar_02_R1708	clean	2545196	68	small_allele		core	3	7787	1	yes
+mar_02_R1896	clean	1313134	56	small_allele		core	2	35264	1	no
+mar_02_R1896	clean	2372436	57	small_allele		core	16	14406	1	yes
+mar_M0014888_3	clean	1519822	70	small_allele		core	3	38873	1674	yes
+mar_M0014888_3	clean	2545196	68	small_allele		core	3	7787	1	yes
+mar_M0016737_0	clean	3674037	55	small_allele		core	1	64480	18	yes
+mar_N0072	chimeric	1718911	65	small_allele		core	1	4234	1	yes
+mar_N0072	chimeric	2185824	64	sv_caller	called		1	19921	72	
+mar_N0072	chimeric	2970016	56	small_allele		core	2	20569	55	yes
+mar_N0145	chimeric	2592310	952	sv_caller	inherited		2	904	952	
+mar_N0145	chimeric	3339822	303	sv_caller	called		1	38729	1358	
+mar_N1176	chimeric	2219418	127	small_allele		core	4	11826	1	yes
+mar_N1202	chimeric	149240	66	small_allele		core	1	9683	1	yes
+mar_N1202	chimeric	233528	330	sv_caller	called		1	969	2	
+mar_N1202	chimeric	2428495	213	sv_caller	called		1	6519	4	
+mar_N1202	chimeric	2687134	54	small_allele		core	4	17751	21	yes
+mar_N1202	chimeric	2970016	56	small_allele		core	2	20569	55	yes
+mar_N1272	chimeric	1389302	56	small,sv_caller	mixed		2	23464	2	
+mar_N1272	chimeric	2219418	127	small_allele		core	4	11826	1	yes
+mar_N1272	chimeric	2508817	231	sv_caller	called		1	7669	1	
+mar_N1272	chimeric	3046785	144	sv_caller	called		1	39512	1	
+mar_N1272	chimeric	4021402	65	sv_caller	called		1	15793	18	
+mar_N1274	chimeric	99525	96	sv_caller	called		1	512	1	
+mar_N1274	chimeric	1922034	252	sv_caller	called		1	27733	10	
+mar_N1274	chimeric	2824574	219	sv_caller	called		1	11721	24	
+mar_N1274	chimeric	3211211	257	sv_caller	called		1	16969	1	
+mar_RW_TB008	chimeric	1986663	54	small_allele		core	1	3542	390	yes
+mar_RW_TB008	chimeric	2703933	57	sv_caller	mixed		1	952	21	
+mar_RW_TB008	chimeric	3291504	57	sv_caller	called		1	104	171	
+mar_TB3368	clean	2627829	69	small_allele		core	1	35518	952	yes
