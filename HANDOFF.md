@@ -735,6 +735,25 @@ similar length into one presence/absence event; keep copy-number series
   sequence-carrying allele at the same locus (unique candidate) joins that
   allele's event (`truncated_to_graph_allele`); ambiguous cases stay separate
   and flagged. Evidence: `analysis/foldback_mixed/ins_fp_diag.py`.
+  **Implemented 2026-10-14** (`write_event_matrix.py --graph-vcf`, passed
+  the build's `graph_collapsed.vcf.gz` by `cohort_assoc_tail.sh`;
+  `truncated_assignments`). The graph's >= 50 bp insertions are grouped into
+  SPLIT-1 events. A small_allele INS call is matched to graph insertions
+  within 50 bp holding >= 90% of its 15-mers. Exactly one event, longer
+  than the call: it joins the cohort record of that event (an SV group, else
+  the nearest accessory_presence or IS6110 site of that length, else a new
+  event of the calls alone), reason `truncated_to_graph_allele`. Truncated
+  members do not vote on polarity and are not the representative; an
+  accessory/IS6110 target keeps its class and polarity. Several events:
+  left alone, flagged `TRUNC_POSSIBLE` (the call is itself a graph allele,
+  e.g. one VNTR unit) or `TRUNC_AMBIGUOUS` (it is not). On ctrl25_p200 (366
+  small_allele INS records): 12 merge (7 into IS6110 sites, 3 into
+  accessory loci incl. 742,634, 2 calls-only events), 217 TRUNC_POSSIBLE,
+  3 TRUNC_AMBIGUOUS. Against assembly truth the targets already carried 50
+  of 51 truth carriers; the merge removes 12 wrong-length duplicate events
+  and adds 3 false carrier cells. Of TRUNC_POSSIBLE carrier cells callable
+  in truth, 87 are the call's own length and 64 longer (truncated), so
+  they cannot be placed by sequence alone.
 
 - **Evidence:** `analysis/graph_gt_check/README.md` (P200 build): 419 loci
   where >= 2 SV records of one type lie within 50 bp with disjoint carriers.

@@ -155,6 +155,7 @@ _args_for() {   # the inputs of one product: key=path (checksummed), key==value
             printf '%s\n' "code=${HERE}/write_event_matrix.py" \
                 "tree=${t}.rooted.nwk" "outgroup_aln=${t}.combined.fasta" \
                 "polarity=${POLARITY}" "outgroup==${OUTGROUP}" \
+                "graph_vcf=${PANEL_VCF}" \
                 "mtbc_exclude==${MTBC_EXCLUDE}" \
                 "presence=${ACCPRES:-}" "node_locus=${NODELOCUS:-}" ;;
         *) echo "FATAL: no provenance inputs defined for $1" >&2; exit 1 ;;
@@ -273,7 +274,7 @@ if ! _current "assoc/${C}/events/summary.txt"; then
         --ref-sample H37Rv --outgroup-name "$OUTGROUP" \
         --outgroup-fasta "data/trees/${C}.combined.fasta" \
         --outgroup-sites "data/trees/${C}.combined.sites.tsv" \
-        --panel-polarity "$POLARITY" \
+        --panel-polarity "$POLARITY" --graph-vcf "$PANEL_VCF" \
         --pin-mtbc --mtbc-exclude "$MTBC_EXCLUDE" \
         ${ACCPRES:+--accessory-presence "$ACCPRES" --node-locus "$NODELOCUS"} \
         --dedupe suffix
