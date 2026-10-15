@@ -13,8 +13,10 @@ Per sample and class (H37Rv-frame records only):
                      no record)
   SV deletion        <DEL> record ALT vs truth deletions >= 50 bp,
                      reciprocal overlap >= 50%
-  SV insertion       INS record ALT vs truth insertions >= 50 bp, start within
-                     50 bp and length within 20%
+  insertion          an ALT call of any insertion-like class (SV INS record,
+                     IS6110 site, accessory presence; length SVLEN or ACCLEN)
+                     vs truth insertions >= 50 bp, start within 50 bp and
+                     length within 20%; recall over truth insertions
 Also the EV reasons of ABSENT / NOCALL cells, and inherited cells' states.
 
     ctrl25_p200_score.py --vcf <merged.vcf.gz> --out out/ctrl25_p200_score.tsv
@@ -22,6 +24,39 @@ Also the EV reasons of ABSENT / NOCALL cells, and inherited cells' states.
 import argparse, bisect, collections, gzip, os, statistics as S, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import grid_score as gs  # noqa: E402
+
+
+CAT = f"{gs.BUILD.replace('7713a8d71d8e-fix1', '3893a3762ed1')}/assets"
+
+
+def accessory_truth(s):
+    """{locus_id: True/False}: the locus representative sequence covered >= 0.8
+    (present) or < 0.2 (absent) in the sample's own assembly; partial and
+    copy_number loci are left out."""
+    import csv, subprocess, gzip as gz
+    fa = next(r["file"] for r in csv.DictReader(open(gs.TRUTH), delimiter="\t") if r["sample"] == s)
+    lens, name = {}, None
+    for l in open(f"{CAT}/accessory_catalogue.fasta"):
+        if l.startswith(">"): name = l[1:].split()[0]; lens[name] = 0
+        else: lens[name] += len(l.strip())
+    nov = {r["locus_id"]: r["novelty"] for r in csv.DictReader(open(f"{CAT}/accessory_catalogue.tsv"), delimiter="\t")}
+    r = subprocess.run([gs.MM2, "-c", "-x", "asm10", "--secondary=no", f"{gs.ASM}/{fa}",
+                        f"{CAT}/accessory_catalogue.fasta"], capture_output=True, text=True, check=True)
+    iv = collections.defaultdict(list)
+    for l in r.stdout.splitlines():
+        c = l.split("\t"); iv[c[0]].append((int(c[2]), int(c[3])))
+    out = {}
+    for k, L in lens.items():
+        if nov.get(k) == "copy_number" or not L: continue
+        n = last = 0
+        for a_, b_ in sorted(iv[k]):
+            a_ = max(a_, last)
+            if b_ > a_: n += b_ - a_
+            last = max(last, b_)
+        f = n / L
+        if f >= 0.8: out[k] = True
+        elif f < 0.2: out[k] = False
+    return out
 
 
 def main():
@@ -56,6 +91,8 @@ def main():
         tins = [(p, len(al) - len(r)) for p, r, al in tv if len(al) - len(r) >= 50 and ok(p)]
         n = collections.Counter()
         snv_state, ind_hit = {}, set()
+        calls = []
+        acc_truth = accessory_truth(s)
         for pos, ref, alt, info, cells in recs:
             c = cells[j]; stt = c.get("ST", "."); gt = c.get("GT", ".")
             cls = info.get("CLASS")
@@ -73,6 +110,12 @@ def main():
                     hit = next((k for k, (p, dl) in enumerate(tind) if dl == d and abs(p - pos) <= 10), None)
                     if hit is None: n["indel_fp"] += 1
                     else: ind_hit.add(hit)
+            elif cls == "accessory_presence" and info.get("ACCLOCUS") in acc_truth:
+                tr = acc_truth[info["ACCLOCUS"]]
+                if gt in ("0", "1"):
+                    n[f"acc_{'t' if (gt == '1') == tr else 'f'}{'p' if gt == '1' else 'n'}"] += 1
+                else:
+                    n["acc_nocall"] += 1
             elif cls == "sv" and info.get("SVTYPE") == "DEL" and "END" in info:
                 if gt != "1" or not ok(pos + 1): continue
                 e = int(info["END"]); b = pos + 1
@@ -80,11 +123,26 @@ def main():
                 n["del_tp" if m else "del_fp"] += 1
                 if info.get("COMPONENT") == "interval" and c.get("EV", "").startswith("inherited"):
                     n["del_inherited_" + ("tp" if m else "fp")] += 1
-            elif cls == "sv" and info.get("SVTYPE") == "INS":
-                if gt != "1" or not ok(pos): continue
+            elif gt == "1" and ok(pos) and (
+                    (cls == "sv" and info.get("SVTYPE") == "INS") or cls == "is6110"):
                 L = abs(int(info.get("SVLEN", "0") or 0))
-                m = any(abs(p - pos) <= 50 and min(L, tl) >= 0.8 * max(L, tl) for p, tl in tins)
-                n["ins_tp" if m else "ins_fp"] += 1
+                if L >= 50:
+                    calls.append((pos, L, cls))
+        # insertions: an ALT call of any class (H37Rv-frame or caller SV
+        # insertion, IS6110 site, accessory presence) matches a truth insertion
+        # with start within 50 bp and length within 20%; precision per call,
+        # recall per truth insertion (matched by a call of any class)
+        hit_t = set()
+        site_t = set()
+        for pos, L, cls in calls:
+            m = [k for k, (p, tl) in enumerate(tins) if abs(p - pos) <= 50 and min(L, tl) >= 0.8 * max(L, tl)]
+            site = [k for k, (p, tl) in enumerate(tins) if abs(p - pos) <= 50]
+            n[f"ins_{cls}_{'tp' if m else 'site' if site else 'fp'}"] += 1
+            hit_t.update(m); site_t.update(site)
+        n["ins_truth_site_found"] = len(site_t)
+        n["ins_truth_found"] = len(hit_t)
+        n["ins_truth_is6110"] = sum(1300 <= tl <= 1420 for _, tl in tins)
+        n["ins_truth_is6110_found"] = sum(1300 <= tins[k][1] <= 1420 for k in hit_t)
         for k, v in snv_state.items():
             n["snv_tp" if v == "ALT" else f"snv_fn_{v}"] += 1
         n["snv_fn_norecord"] = len(tsnv) - len(snv_state)
@@ -108,7 +166,18 @@ def main():
     print("indel " + pr(tot["indel_tp"], tot["indel_fp"], tot["indel_fn"]))
     print(f"SV DEL ALT cells: {tot['del_tp']:,} match a truth deletion, {tot['del_fp']:,} do not "
           f"(inherited-evidence cells {tot['del_inherited_tp']} / {tot['del_inherited_fp']}); truth deletions {tot['truth_del']}")
-    print(f"SV INS ALT cells: {tot['ins_tp']:,} match, {tot['ins_fp']:,} do not; truth insertions {tot['truth_ins']}")
+    print(f"INSERTIONS (>= 50 bp): truth {tot['truth_ins']}, found by some ALT call {tot['ins_truth_found']} "
+          f"(recall {tot['ins_truth_found'] / max(1, tot['truth_ins']):.3f}); IS6110-sized truth "
+          f"{tot['ins_truth_is6110']}, found {tot['ins_truth_is6110_found']}")
+    print(f"   site found (any length) {tot['ins_truth_site_found']} ({tot['ins_truth_site_found'] / max(1, tot['truth_ins']):.3f})")
+    for c in ("sv", "is6110"):
+        tp, si, fp = tot[f"ins_{c}_tp"], tot[f"ins_{c}_site"], tot[f"ins_{c}_fp"]
+        print(f"   {c:8s} ALT calls {tp + si + fp:,}: match {tp:,}, right site but length off by > 20% {si:,}, "
+              f"no truth insertion within 50 bp {fp:,}")
+    tp, fp, tn, fn = tot["acc_tp"], tot["acc_fp"], tot["acc_tn"], tot["acc_fn"]
+    print(f"ACCESSORY presence (locus sequence anywhere in the assembly, minimap2 asm10 coverage >= 0.8 present, "
+          f"< 0.2 absent; copy-number loci skipped): TP {tp:,} FP {fp:,} TN {tn:,} FN {fn:,} NOCALL {tot['acc_nocall']:,}; "
+          f"precision {tp / max(1, tp + fp):.3f} recall {tp / max(1, tp + fn):.3f}")
     print("ABSENT/NOCALL evidence (all regions):")
     for (stt, e), v in ev.most_common(15): print(f"   {stt:6s} {e:34s} {v:,}")
 
