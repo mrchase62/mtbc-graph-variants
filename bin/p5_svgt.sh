@@ -217,6 +217,22 @@ case "$STEP" in
     [[ -n "$REL" ]] || { echo "FATAL: ${S} not in ${CRAMTAB}" >&2; exit 1; }
     CRAM="${MTB_CRAM_ROOT:?MTB_CRAM_ROOT is unset}/${REL}"
     [[ -s "$CRAM" ]] || { echo "FATAL: ${S}: no CRAM at ${CRAM}" >&2; exit 1; }
+    TF_REF="${MTB_CRAM_REF:?MTB_CRAM_REF is unset}"
+    # A READ SOURCE THAT IS NOT AN H37Rv ALIGNMENT. Some cohorts' read source
+    # is an unaligned read BAM (the Marin controls: refbias/marinB63/reads),
+    # with no index and no @SQ lines, and the depth this step needs then fails
+    # (ctrl25_p200, 2026-10-14). P1's own H37Rv alignment of the same reads is
+    # the H37Rv frame the ABS-1/ABS-2 checks already read, so it is used
+    # instead, with the build's H37Rv; a collection CRAM is used as before.
+    if [[ ! -s "${CRAM}.crai" && ! -s "${CRAM}.bai" && ! -s "${CRAM%.*}.bai" ]] \
+       || ! "$MTB_SAMTOOLS" view -H "$CRAM" 2>/dev/null | grep -q '^@SQ'; then
+        P1BAM="${P1WORK:-refbias/work/p1}/${S}.h37rv.bam"
+        [[ -s "$P1BAM" && -s "${P1BAM}.bai" ]] || {
+            echo "FATAL: ${S}: read source ${CRAM} is not an indexed alignment, and" \
+                 "there is no P1 H37Rv BAM at ${P1BAM} to use instead" >&2; exit 1; }
+        echo "[P5svgt] ${S}: read source is not an indexed alignment; using ${P1BAM}"
+        CRAM="$P1BAM"; TF_REF="${BUILD}/refs/${H37RV_ACC:-GCF_000195955}.fasta"
+    fi
     # The IS-clean H37Rv alignment from pass p1g, for element-proximal
     # intervals: on plain H37Rv a read carrying element sequence has sixteen
     # places to align. Required, so a missing one cannot silently change the
@@ -230,7 +246,7 @@ case "$STEP" in
         exit 1
     fi
     "${MTB_PY_VT:-$MTB_PY}" sv2frame/bin/sv_twoframe.py --intervals "$IVTAB" \
-        --sample "$S" --cram "$CRAM" --h37rv-fasta "${MTB_CRAM_REF:?MTB_CRAM_REF is unset}" \
+        --sample "$S" --cram "$CRAM" --h37rv-fasta "$TF_REF" \
         "${TF_EXTRA[@]}" --out "${TF}.tmp.$$"
     mv -f "${TF}.tmp.$$" "$TF"
     exit 0 ;;
