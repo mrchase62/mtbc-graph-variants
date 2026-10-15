@@ -468,7 +468,13 @@ for p in "${RUN[@]}"; do
         # several times larger. The cohort-level steps get 8 GB: the heaviest
         # thing --pre runs, validation, peaked at 1.8 GB on gwas1000.
         JOB[p5keys]=$(submit p5keys bin/p5_merge.sh "${P5EX},P5STEP=--keys" "" "${JOB[p4]:-}" "-c 1 --mem=8G")
-        JOB[p5states]=$(submit p5states bin/p5_merge.sh "${P5EX},P5STEP=--states" "1-${N}" "${JOB[p5keys]:-}" "-c 2 --mem=4G")
+        # once per distinct reference before the per-sample states (the store
+        # is empty on a new build; new1k_p200 2026-10-15): odgi on 4 threads,
+        # a day's limit, since one reference took over 6 h
+        NREF="$(awk -F'\t' 'NR>1{print $5}' "$REFMAP" 2>/dev/null | sort -u | wc -l)"
+        [[ "$NREF" -gt 0 ]] || NREF="$N"
+        JOB[p5proj]=$(submit p5proj bin/p5_merge.sh "${P5EX},P5STEP=--project" "1-${NREF}" "${JOB[p5keys]:-}" "-c 4 --mem=4G -t 1-00:00")
+        JOB[p5states]=$(submit p5states bin/p5_merge.sh "${P5EX},P5STEP=--states" "1-${N}" "${JOB[p5proj]:-}" "-c 2 --mem=4G")
         # --pre only: matrix, validation, sanity, SV matrix, P6. The merged VCF
         # is pass p5vcf, after the two genotyping passes below.
         # --pre also builds sv_matrix.tsv from P4b, and p4 and p4b run in

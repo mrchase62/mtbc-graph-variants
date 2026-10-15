@@ -98,7 +98,7 @@ def main():
         # a carrier's own state in the key's frame, as is6110_write_vcf.py
         # decided it: ALT, or REF at a locus where H37Rv holds the element too
         # (audit P3IS-1). Two rows of one sample on one key used to be settled
-        # by row order (P3IS-5); the writer now refuses them, so one here
+        # by row order (P3IS-5); the writer now resolves them to one row, so one here
         # means a stale or hand-made table -- the same state is one cell,
         # different states stop the run.
         prev = observed.get((x["sample"], k))
@@ -134,7 +134,9 @@ def main():
             if st is None:
                 st, allele = "NOCALL", ""
             else:
-                allele = ALT if st == "ALT" else keys[k]["canonical_ref"]
+                # NOCALL can now be a carrier's own state (the writer's
+                # placement_conflict): no allele, as for a non-reporter
+                allele = ALT if st == "ALT" else "" if st == "NOCALL" else keys[k]["canonical_ref"]
             counts[st] += 1
             srows.append(dict(sample=s, key=k, state=st, allele=allele,
                               frame=keys[k]["frame"], region="is6110",

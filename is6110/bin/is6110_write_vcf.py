@@ -428,16 +428,43 @@ def main():
         sys.exit(f"FATAL: {len(unkeyed)} sites have no H37Rv position and no "
                  f"graph node (e.g. {ex}); was is6110_project_sites.py run with "
                  f"--all-stacks?")
-    # Two sites of one isolate on one key are two insertions merged into one
-    # record, and the readers kept whichever row came last (audit P3IS-5).
-    # cluster_keys never puts two sites of an isolate in one cluster, and a
-    # node visited once cannot hold two, so this is a defect upstream: stop.
-    seen = collections.Counter((k["sample"], k["key"]) for k in keys_rows if k["key"])
-    dup = [sk for sk, n in seen.items() if n > 1]
-    if dup:
-        ex = ", ".join(f"{s}@{k}" for s, k in dup[:5])
-        sys.exit(f"FATAL: {len(dup)} (sample, key) pairs hold more than one "
-                 f"site (e.g. {ex})")
+    # Two sites of one isolate on one key would be two insertions merged into
+    # one record, and the readers kept whichever row came last (audit P3IS-5).
+    # This used to stop the writer. new1k_p200 (2026-10-15) met it in two
+    # forms, both resolved here instead, with one row per (sample, key):
+    #   ADJACENT  the two sites lie within ADJ_BP of each other in the
+    #             isolate's reference: one insertion seen at both junctions (4
+    #             isolates, node:45162:0, 60 bp apart, one one-sided and one
+    #             two-sided). Keep one row, the better-supported one.
+    #   DISTANT   the sites lie far apart in the reference but both place on
+    #             one H37Rv position (SAMEA1117990: R 894,949 and 3,726,184
+    #             both at H37Rv 888,836). One placement is wrong and nothing
+    #             here says which, so the key becomes NOCALL for that isolate.
+    ADJ_BP = 100
+    rank = {"two_sided": 0, "one_sided": 1}
+    by = collections.defaultdict(list)
+    for i, k in enumerate(keys_rows):
+        if k["key"]:
+            by[(k["sample"], k["key"])].append(i)
+    drop, n_adj, n_far = set(), 0, 0
+    for (s, key), idx in by.items():
+        if len(idx) < 2:
+            continue
+        pos = [int(keys_rows[i]["r_pos"]) for i in idx]
+        keep = min(idx, key=lambda i: (rank.get(keys_rows[i]["evidence"], 9),
+                                       keys_rows[i]["state"] != "ALT", int(keys_rows[i]["r_pos"])))
+        drop.update(i for i in idx if i != keep)
+        if max(pos) - min(pos) <= ADJ_BP:
+            n_adj += 1
+        else:
+            n_far += 1
+            keys_rows[keep]["state"] = "NOCALL"
+            keys_rows[keep]["evidence"] = "placement_conflict"
+    if drop:
+        keys_rows = [k for i, k in enumerate(keys_rows) if i not in drop]
+        print(f"  {n_adj} (sample, key) pairs held two sites within {ADJ_BP} bp "
+              f"(one insertion at both junctions): one row kept; {n_far} held "
+              f"sites far apart in the reference: NOCALL placement_conflict")
 
     KEY_FIELDS = ["sample", "reference", "build_id", "evidence", "site_class",
                   "r_pos", "state", "frame", "key", "h37rv_pos", "h37rv_state",

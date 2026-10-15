@@ -124,15 +124,32 @@ case "$STEP" in
         --dir "$OUTDIR" --out "${OUTDIR}/matrix.tsv" \
         --sites-out "${OUTDIR}/sites.tsv" "${_dense[@]}"
     ;;
-  --states) ;;
-  *) echo "usage: $0 --keys | --states | --matrix   (or P5STEP=...)" >&2; exit 2 ;;
+  --states|--project) ;;
+  *) echo "usage: $0 --keys | --project | --states | --matrix   (or P5STEP=...)" >&2; exit 2 ;;
 esac
 
 [[ -s "$KEYS" ]] || { echo "FATAL: run --keys first" >&2; exit 1; }
 for f in "$NODE_PATHS" "$NODE_POSITIONS"; do
     [[ -s "$f" ]] || { echo "FATAL: no ${f}; run bin/p0_prepare.sh --step nodes" >&2; exit 1; }
 done
-if [[ $# -ge 2 ]]; then
+# --project: ONE TASK PER DISTINCT REFERENCE, before any --states task. On a
+# new build the projection store is empty, so every sample of a reference
+# projected the whole key set at once: new1k_p200 (2026-10-15) spent about
+# 1,060 CPU-hours here, 32 tasks timed out at 6 h re-projecting references
+# other tasks were also projecting. Task n takes the n-th reference of the
+# refmap (sorted) and projects it, reading through the first sample that uses
+# it; --states then finds the store full and only assembles its copy.
+if [[ "$STEP" == --project ]]; then
+    [[ -n "${SLURM_ARRAY_TASK_ID:-}${2:-}" ]] || { echo "FATAL: no SLURM_ARRAY_TASK_ID" >&2; exit 1; }
+    _ref="${2:-$(awk -F'\t' 'NR>1{print $5}' "$REFMAP" | sort -u | sed -n "${SLURM_ARRAY_TASK_ID}p")}"
+    # the array is sized at submission, possibly before the refmap existed
+    # (then to the sample count): a task past the last reference has nothing
+    # to do and must succeed, or it fails the afterok chain
+    [[ -n "$_ref" ]] || { echo "[P5] task ${SLURM_ARRAY_TASK_ID:-}: no reference this far down the refmap; nothing to project"; exit 0; }
+    SAMPLE="$(awk -F'\t' -v r="$_ref" 'NR>1 && $5==r{print $1; exit}' "$REFMAP")"
+    [[ -n "$SAMPLE" ]] || { echo "FATAL: no sample uses ${_ref}" >&2; exit 1; }
+    echo "[P5] projecting ${_ref} (through ${SAMPLE})"
+elif [[ $# -ge 2 ]]; then
     SAMPLE="$2"
 else
     [[ -n "${SLURM_ARRAY_TASK_ID:-}" ]] || { echo "FATAL: no SLURM_ARRAY_TASK_ID" >&2; exit 1; }
@@ -153,7 +170,7 @@ done
 # The sparse header carries the checksum of the key list it was written
 # against; compare it with keys.tsv and redo the sample on a mismatch.
 _st="${OUTDIR}/${SAMPLE}.states.tsv"
-if [[ -s "$_st" ]]; then
+if [[ "$STEP" != --project && -s "$_st" ]]; then
     _have="$(awk -F'\t' '$1=="#keys_sha1"{print $2; exit} !/^#/{exit}' "$_st")"
     _want="$("$MTB_PY" -c 'import csv,sys; sys.path.insert(0,"bin"); import p5_states_io as io; print(io.keys_sha1(list(csv.DictReader(open(sys.argv[1]),delimiter="\t"))))' "$KEYS")"
     # ...and with the ABSENT check (ABS-1, 2026-10-14): a file written before
@@ -297,6 +314,9 @@ else
         trap 'rm -f "${PROJ}.$$"' EXIT
     fi
     echo "[P5] ${SAMPLE}: ${REFID} projection assembled from the store"
+fi
+if [[ "$STEP" == --project ]]; then
+    echo "[P5] ${REFID}: projection in the store; done"; exit 0
 fi
 
 # THE ABSENT CHECK (HANDOFF ABS-1): an ABSENT that R's deletion explains is

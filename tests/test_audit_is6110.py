@@ -186,13 +186,26 @@ class Is6110RepeatedNode(unittest.TestCase, WriterFixture):
             self.assertNotEqual(r.returncode, 0)
             self.assertIn("node_occ", r.stderr)
 
-    def test_two_sites_of_one_isolate_on_one_key_stop_the_writer(self):
+    def test_two_sites_of_one_isolate_on_one_key_are_resolved(self):
+        # within 100 bp in the reference: one insertion at both junctions,
+        # one row kept; far apart but on one key: NOCALL placement_conflict
         with tempfile.TemporaryDirectory() as d:
             r = subprocess.run(self.build(d, [("B", 3000, EMPTY(500)),
-                                              ("B", 3100, EMPTY(500))]),
+                                              ("B", 3060, EMPTY(500))]),
                                capture_output=True, text=True)
-            self.assertNotEqual(r.returncode, 0)
-            self.assertIn("(sample, key) pairs", r.stderr)
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            rows = [x for x in rows_of(f"{d}/keys.tsv") if x["sample"] == "B"]
+            self.assertEqual(len(rows), 1)
+            self.assertNotEqual(rows[0]["state"], "NOCALL")
+        with tempfile.TemporaryDirectory() as d:
+            r = subprocess.run(self.build(d, [("B", 3000, EMPTY(500)),
+                                              ("B", 90000, EMPTY(500))]),
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            rows = [x for x in rows_of(f"{d}/keys.tsv") if x["sample"] == "B"]
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["state"], "NOCALL")
+            self.assertEqual(rows[0]["evidence"], "placement_conflict")
 
     def test_occurrence_count_from_odgi(self):
         with tempfile.TemporaryDirectory() as d:
