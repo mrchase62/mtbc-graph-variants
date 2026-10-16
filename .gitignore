@@ -52,3 +52,6 @@ analysis/foldback_mixed/controls_grid/*.log
 analysis/foldback_mixed/controls_grid/truth/
 analysis/graph_gt_check/kit/
 analysis/graph_gt_check/logs/
+analysis/sv_eval_1k/out/snps.fasta
+analysis/sv_eval_1k/out/old.pkl
+analysis/sv_eval_1k/out/new.pkl

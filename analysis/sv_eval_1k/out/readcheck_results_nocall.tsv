@@ -1,0 +1,31 @@
+class	old_idx	new_idx	sample	old_st	new_st	new_ev	sub_old	sub_new	pos	end	svlen	stratum	acclocus	siteclass	n_cells_group	chk_pos	chk_end	chk_len	verdict	why	L	depth_in	depth_in_mq0	depth_flank	ratio	alt_reads	ref_reads	right
+DEL	7016	1872	SAMEA112806208	ALT	NOCALL	no_coverage	interval_graph	small_allele	1189643	1189727	84	old_alt			2773	1189650	1189734	84	unclear	low_depth	84	3.5	3.5	1.5	2.422	0	3.0	unclear
+DEL	7252	2003	SAMEA112806000	ALT	NOCALL	no_coverage	interval_graph	small_allele	1217848	1218037	189	old_alt			2773	1217756	1218055	299	ALT	depth	299	0.6	0.6	17.4	0.037	0	1.5	old
+DEL	12412	3544	SAMEA2296973	ALT	NOCALL	no_coverage	interval_caller	small_allele	2088835	2088934	99	old_alt			2773	2088860	2088946	86	unclear	low_depth	86	0.0	0.0	0.4	0.0	0	0.0	unclear
+DEL	23882	7808	SAMEA3421121	ALT	NOCALL	no_coverage	small	small_allele	3930382	3930462	80	old_alt			2773	3930382	3930462	80	unclear	low_depth	80	0.0	0.0	0.0	0.0	0	0.0	unclear
+DEL	20092	6133	SAMN09914649	ALT	NOCALL	no_coverage	interval_graph	small_allele	3336620	3336739	119	old_alt			2773	3336621	3336763	142	unclear	repeat_mapq0	142	1.8	19.1	31.5	0.058	0	3.5	unclear
+DEL	24572	8423	SAMEA3444033	ALT	NOCALL	no_coverage	interval_graph	small_allele	3949795	3949867	72	old_alt			2773	3949775	3949856	81	unclear	low_depth	81	0.0	0.0	0.0		0	0.0	unclear
+DEL	7257	1998	SAMEA112800887	ALT	NOCALL	no_coverage	interval_graph	small_allele	1217840	1218152	312	old_alt			2773	1217885	1218093	208	ALT	depth	208	0.8	0.8	6.7	0.111	0	1.0	old
+DEL	22358	6893	SAMN09625657	ALT	NOCALL	no_coverage	interval_caller	small_allele	3730946	3731051	105	old_alt			2773	3730952	3731060	108	unclear	low_depth	108	0.0	0.4	0.2	0.0	0	0.0	unclear
+DEL	1845	522	SAMN03647614	ALT	NOCALL	no_coverage	interval_graph	small_allele	338344	338692	348	old_alt			2773	338270	338699	429	unclear	mixed	429	6.2	6.3	49.2	0.126	1	18.5	unclear
+DEL	7257	1998	SAMN09090547	ALT	NOCALL	no_coverage	interval_graph	small_allele	1217840	1218152	312	old_alt			2773	1217885	1218093	208	unclear	low_depth	208	1.9	1.9	2.0	0.929	0	1.0	unclear
+DEL	19551	5927	SAMN27520014	ALT	NOCALL	no_coverage	interval_graph	small_allele	3232703	3232815	112	old_alt			2773	3232698	3232866	168	REF	spanning_reads	168	43.5	49.0	53.3	0.817	0	18.5	new
+DEL	24537	8396	SAMEA1117984	ALT	NOCALL	no_coverage	small	small_allele	3949264	3949356	92	old_alt			2773	3949264	3949356	92	unclear	low_depth	92	0.0	4.8	0.9	0.0	0	0.0	unclear
+DEL	22358	6893	SAMN03648502	ALT	NOCALL	no_coverage	interval_caller	small_allele	3730946	3731051	105	old_alt			2773	3730952	3731060	108	REF	spanning_reads	108	117.4	125.1	100.1	1.173	0	82.0	new
+DEL	785	196	SAMEA2297005	ALT	NOCALL	no_coverage	interval_graph	small_allele	150520	150880	360	old_alt			2773	150509	150893	384	ALT	breakpoint_reads	384	0.2	0.2	22.7	0.008	8	0.0	old
+DEL	7016	1872	SAMEA3442735	ALT	NOCALL	no_coverage	interval_graph	small_allele	1189643	1189727	84	old_alt			2773	1189650	1189734	84	unclear	low_depth	84	0.0	0.0	0.0		0	0.0	unclear
+DEL	7254	1996	SAMN03653252	ALT	NOCALL	no_coverage	interval_caller	small_allele	1217776	1217851	75	old_alt			2773	1217786	1217861	75	unclear	low_depth	75	0.0	0.0	0.7	0.0	0	0.0	unclear
+DEL	7252	2003	SAMEA112803883	ALT	NOCALL	no_coverage	interval_graph	small_allele	1217848	1218037	189	old_alt			2773	1217756	1218055	299	ALT	depth	299	0.9	0.9	14.8	0.063	0	2.0	old
+DEL	24404	8279	SAMN07765885	ALT	NOCALL	no_coverage	interval_graph	small_allele	3947286	3947397	111	old_alt			2773	3947203	3947403	200	unclear	low_depth	200	0.5	0.7	1.7	0.315	0	1.0	unclear
+DEL	24572	8423	SAMEA104326196	ALT	NOCALL	no_coverage	interval_graph	small_allele	3949795	3949867	72	old_alt			2773	3949775	3949856	81	unclear	low_depth	81	0.1	0.1	0.1	1.411	0	0.0	unclear
+DEL	16262	4961	SAMEA4772795	ALT	NOCALL	no_coverage	interval_caller	small_allele	2693401	2693479	78	old_alt			2773	2693404	2693506	102	ALT	depth	102	0.0	0.0	13.0	0.002	0	0.0	old
+DEL	25116	8545	SAMN04633307	ALT	NOCALL	ambiguous_depth	interval_graph	interval_graph	4052970	4053414	444	old_alt			1837	4053025	4053549	524	unclear	repeat_mapq0	524	5.5	73.5	87.1	0.063	1	24.5	unclear
+DEL	24550	8404	SAMN08851352	ALT	NOCALL	ambiguous_depth	interval_caller	interval_graph	3949381	3949586	205	old_alt			1837	3949381	3949586	205	unclear	low_depth	205	1.1	1.1	0.2	5.5	0	1.0	unclear
+DEL	24379	8271	SAMEA112805368	ALT	NOCALL	ambiguous_depth	interval_graph	interval_graph	3947111	3948032	921	old_alt			1837	3947003	3948061	1058	unclear	repeat_mapq0	1058	2.7	9.1	2.5	1.063	0	1.0	unclear
+DEL	25115	8543	SAMN04633307	ALT	NOCALL	ambiguous_depth	interval_graph	interval_graph	4052970	4053081	111	old_alt			1837	4053025	4053081	56	unclear	repeat_mapq0	56	4.1	80.4	33.2	0.122	0	3.5	unclear
+DEL	25115	8543	SAMN13169612	ALT	NOCALL	ambiguous_depth	interval_graph	interval_graph	4052970	4053081	111	old_alt			1837	4053025	4053081	56	REF	spanning_reads	56	16.5	58.1	22.5	0.731	0	10.5	new
+DEL	4805	1186	SAMN05916308	ALT	NOCALL	ambiguous_depth	interval_caller	interval_graph	837182	837347	165	old_alt			1837	837247	837370	123	unclear	mixed	123	2.5	2.5	11.7	0.215	0	1.5	unclear
+DEL	4833	1214	SAMN01908789	ALT	NOCALL	ambiguous_depth	interval_graph	interval_graph	839083	839263	180	old_alt			1837	839088	839269	181	unclear	mixed	181	2.7	3.4	15.3	0.173	2	6.5	unclear
+DEL	4779	1166	SAMN08214903	ALT	NOCALL	ambiguous_depth	interval_graph	interval_graph	836342	836426	84	old_alt			1837	836344	836428	84	unclear	mixed	84	2.4	2.4	19.1	0.128	1	2.5	unclear
+DEL	5449	1501	SAMEA112804481	ALT	NOCALL	ambiguous_depth	interval_graph	interval_graph	929123	929243	120	old_alt			1837	929105	929243	138	ALT	depth	138	1.2	1.2	8.4	0.144	0	2.0	old
+DEL	12237	3496	SAMN08892422	ALT	NOCALL	ambiguous_depth	interval_graph	interval_graph	2061432	2061693	261	old_alt			1837	2061354	2061819	465	ALT	depth	465	2.5	2.5	36.2	0.068	0	1.0	old
