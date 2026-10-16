@@ -3,8 +3,8 @@
 #SBATCH -p shared
 #SBATCH -n 1
 #SBATCH -c 1
-#SBATCH --mem=500M
-#SBATCH -t 3-00:00
+#SBATCH --mem=200M
+#SBATCH -t 1-00:00
 #SBATCH -o slurm/chain_watch_%j.out
 #
 # Watch one cohort's chain while it runs, so lost run time is seen in minutes,

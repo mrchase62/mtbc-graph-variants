@@ -459,7 +459,7 @@ for p in "${RUN[@]}"; do
         # before the refmap existed, failed, and p5vcf never ran.
         JOB[p3acc]=$(submit p3acc accessory/bin/locus_presence_array.sh \
                 "OUTDIR=accessory/${COHORT_NAME},COHORT_TAG=${COHORT_NAME},CRAMTAB=${CRAMS}" \
-                "1-${N}" "${JOB[p1]:-}" "-c 1 --mem=4G") ;;
+                "1-${N}" "${JOB[p1]:-}" "-c 1 --mem=${P3ACC_MEM:-12G}") ;;   # 4 GB OOMed at ~3.9 GB with PRESENCE_VERSION 2 (new1k_p200, 2026-10-16)
       p4)
         EX="OUTDIR=${OUTROOT}/p4,WORK=${WORKPFX}p4"
         # 53% CPU efficiency on 4 cores, so 2
