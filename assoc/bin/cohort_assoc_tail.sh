@@ -78,6 +78,12 @@ lookup_cohort_table() {
 }
 
 C="${1:?usage: $0 <cohort> [phenotype.txt]}"
+# THE COHORT'S TREES LIVE WITH ITS ASSOCIATION, NOT IN data/trees (2026-10-16).
+# From runroot, data/ is the read-only MtbPangenome working tree's; nothing
+# new is written there. ASSOC_TREEDIR overrides (an older cohort whose trees
+# are already in data/trees can point back at them).
+TREEDIR="${ASSOC_TREEDIR:-assoc/${C}/trees}"
+mkdir -p "$TREEDIR"
 # LEVEL 1 presence tables for this cohort, if they exist. They make the
 # accessory arm's within-insert variation conditional on carrying the insert.
 ACCPRES="${ACCPRES:-accessory/${C}}"
@@ -147,7 +153,7 @@ _sha() {    # 16 hex of a file; of a directory, over its files' checksums
     else echo none; fi
 }
 _args_for() {   # the inputs of one product: key=path (checksummed), key==value
-    local t="data/trees/${C}"
+    local t="${TREEDIR}/${C}"
     case "$1" in
         "${t}.snps.fasta")
             printf '%s\n' "code=${REPO}/bin/vcf_to_alignment.py" ;;
@@ -212,12 +218,12 @@ if [[ -n "${MTB_CHAIN_PRINT_PROV:-}" ]]; then
 fi
 
 echo "=== 1. alignment"
-if ! _current "data/trees/${C}.snps.fasta"; then
+if ! _current "${TREEDIR}/${C}.snps.fasta"; then
     "$MTB_PY" "${REPO}/bin/vcf_to_alignment.py" --vcf "$VCF" \
-        --out "data/trees/${C}.snps.fasta" \
-        --sites-out "data/trees/${C}.sites.tsv" \
+        --out "${TREEDIR}/${C}.snps.fasta" \
+        --sites-out "${TREEDIR}/${C}.sites.tsv" \
         --ref-sample H37Rv --max-missing 0.10
-    _record "data/trees/${C}.snps.fasta"
+    _record "${TREEDIR}/${C}.snps.fasta"
 else echo "  already built"; fi
 
 echo "=== 2. combined alignment: the cohort plus every panel genome"
@@ -225,38 +231,38 @@ echo "=== 2. combined alignment: the cohort plus every panel genome"
 # tree places the deep branches from whatever lineages the cohort holds; the
 # panel genomes fix them. Every panel genome's row comes from add_outgroup.py's
 # allele rule, and the outgroup is one of those rows.
-if ! _current "data/trees/${C}.combined.fasta"; then
+if ! _current "${TREEDIR}/${C}.combined.fasta"; then
     "$MTB_PY" "${HERE}/combined_alignment.py" \
-        --cohort-alignment "data/trees/${C}.snps.fasta" \
-        --cohort-sites "data/trees/${C}.sites.tsv" \
+        --cohort-alignment "${TREEDIR}/${C}.snps.fasta" \
+        --cohort-sites "${TREEDIR}/${C}.sites.tsv" \
         --vcf "$VCF" --panel-vcf "$PANEL_VCF" --outgroup "$OUTGROUP" \
-        --out "data/trees/${C}.combined.fasta" \
-        --sites-out "data/trees/${C}.combined.sites.tsv"
-    _record "data/trees/${C}.combined.fasta"
+        --out "${TREEDIR}/${C}.combined.fasta" \
+        --sites-out "${TREEDIR}/${C}.combined.sites.tsv"
+    _record "${TREEDIR}/${C}.combined.fasta"
 else echo "  already built"; fi
 
 echo "=== 3. tree"
 # The tree is made by a job, so its record is written at submission as
 # .prov.pending and promoted when the tree is found on the next run.
-_tree="data/trees/${C}.combined.rooted.nwk"
+_tree="${TREEDIR}/${C}.combined.rooted.nwk"
 if [[ -e "$_tree" && ! -e "${_tree}.prov" && -s "${_tree}.prov.pending" ]] \
         && [[ "$(cat "${_tree}.prov.pending")" == "$(_prov "$_tree")" ]]; then
     mv -f "${_tree}.prov.pending" "${_tree}.prov"
 fi
 if ! _current "$_tree"; then
     _record "${_tree}"; mv -f "${_tree}.prov" "${_tree}.prov.pending"
-    J=$(sbatch --parsable "${REPO}/bin/build_snp_tree.sh" "data/trees/${C}.combined.fasta" \
-            "$OUTGROUP" "data/trees/${C}.combined")
+    J=$(sbatch --parsable "${REPO}/bin/build_snp_tree.sh" "${TREEDIR}/${C}.combined.fasta" \
+            "$OUTGROUP" "${TREEDIR}/${C}.combined")
     echo "  submitted ${J}; re-run this script when it finishes"
     exit 0
 else echo "  already built"; fi
 
 echo "=== 3b. prune the combined tree to the cohort, H37Rv and the outgroup"
-if ! _current "data/trees/${C}.rooted.nwk"; then
+if ! _current "${TREEDIR}/${C}.rooted.nwk"; then
     "$MTB_PY" "${HERE}/prune_for_cohort.py" --tree "$_tree" --vcf "$VCF" \
         --ref-sample H37Rv --outgroup "$OUTGROUP" \
-        --out "data/trees/${C}.rooted.nwk"
-    _record "data/trees/${C}.rooted.nwk"
+        --out "${TREEDIR}/${C}.rooted.nwk"
+    _record "${TREEDIR}/${C}.rooted.nwk"
 else echo "  already built"; fi
 
 # LEVEL 2 NEEDS THE NODE -> LOCUS TABLE, and it is this cohort's: P4 records
@@ -284,10 +290,10 @@ echo "=== 4. event matrix"
 # step 5 on a missing variants.tsv.
 if ! _current "assoc/${C}/events/summary.txt"; then
     "$MTB_PY_VT" "${HERE}/write_event_matrix.py" --vcf "$VCF" \
-        --tree "data/trees/${C}.rooted.nwk" --out "assoc/${C}/events" \
+        --tree "${TREEDIR}/${C}.rooted.nwk" --out "assoc/${C}/events" \
         --ref-sample H37Rv --outgroup-name "$OUTGROUP" \
-        --outgroup-fasta "data/trees/${C}.combined.fasta" \
-        --outgroup-sites "data/trees/${C}.combined.sites.tsv" \
+        --outgroup-fasta "${TREEDIR}/${C}.combined.fasta" \
+        --outgroup-sites "${TREEDIR}/${C}.combined.sites.tsv" \
         --panel-polarity "$POLARITY" --graph-vcf "$PANEL_VCF" \
         --pin-mtbc --mtbc-exclude "$MTBC_EXCLUDE" \
         ${ACCPRES:+--accessory-presence "$ACCPRES" --node-locus "$NODELOCUS"} \
