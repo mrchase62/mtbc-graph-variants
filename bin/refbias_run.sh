@@ -75,7 +75,7 @@ lookup() {  # cohort field -> value
         END{ if(!found) exit 3 }' "$REGISTRY"
 }
 
-COHORT_NAME="" FROM="" TO="" ONLY="" DRY=0 STATUS=0
+COHORT_NAME="" FROM="" TO="" ONLY="" DRY=0 STATUS=0 WATCH=1
 # How many array tasks of one pass may run at once, appended to the array spec
 # as sbatch's %N. Every pass here is embarrassingly parallel and short, so a
 # thousand-isolate cohort would otherwise queue a thousand tasks at once in
@@ -94,6 +94,10 @@ while [[ $# -gt 0 ]]; do
         --dry-run)  DRY=1; shift ;;
         --throttle) THROTTLE="$2"; shift 2 ;;
         --status)   STATUS=1; shift ;;
+        # bin/chain_watch.sh is submitted alongside every chain unless asked
+        # not to (2026-10-15): failures, wedged arrays and slow tasks are then
+        # reported within minutes and a failure stops the cohort's chain
+        --no-watch) WATCH=0; shift ;;
         # README and INPUTS.md document `--cohort <name>`; the positional form
         # is kept as well so existing invocations do not break.
         --cohort)   [[ -z "$COHORT_NAME" ]] || die "one cohort at a time"
@@ -410,6 +414,16 @@ if [[ "${IO_CHECK:-1}" != "0" && -s refbias/io_contract.tsv ]]; then
 fi
 
 echo
+# PROJECTION STORE PREFLIGHT (2026-10-15). On a new build the store is empty
+# and P5 must project every reference first (pass p5, step --project); say so
+# before submitting, with how many references it will have to do.
+if [[ " ${RUN[*]} " == *" p5 "* && -s "$REFMAP" ]]; then
+    _refs="$(awk -F'\t' 'NR>1{print $5}' "$REFMAP" | sort -u)"
+    _nref="$(printf '%s\n' "$_refs" | grep -c .)"
+    _have=0
+    while read -r _r; do [[ -n "$_r" && -d "${BUILD}/proj/${_r}" ]] && _have=$((_have + 1)); done <<< "$_refs"
+    echo "preflight: ${_have} of ${_nref} references already in the projection store; p5proj projects the other $(( _nref - _have )) once each"
+fi
 [[ "$DRY" -eq 1 ]] && echo "--dry-run: nothing will be submitted"
 declare -A JOB=()
 for p in "${RUN[@]}"; do
@@ -608,4 +622,14 @@ if [[ "$DRY" -eq 1 ]]; then
     echo "      supply a positional argument, so it is passed as P1STEP,"
     echo "      P2STEP, ... P5STEP. Each script reads its own, with \$1"
     echo "      winning if both are given."
+fi
+
+# THE WATCHDOG (2026-10-15). One small job per chain: failures and timeouts
+# reported as they happen and the chain stopped on the first one, wedged
+# arrays released, slow tasks named. --no-watch to submit without it.
+if [[ "$WATCH" -eq 1 && "$DRY" -eq 0 && "$STATUS" -eq 0 && ${#RUN[@]} -gt 0 ]]; then
+    _w="$(sbatch --parsable -J "watch_${COHORT_NAME}" -o "slurm/chain_watch_${COHORT_NAME}_%j.out" \
+          --export="ALL,CHAIN_WATCH_SINCE=$(date +%Y-%m-%dT%H:%M:%S)" \
+          bin/chain_watch.sh "$COHORT_NAME" --stop-on-fail 2>/dev/null || true)"
+    echo "  -> watchdog ${_w:-NOT SUBMITTED} (slurm/chain_watch_${COHORT_NAME}_${_w:-}.out)"
 fi

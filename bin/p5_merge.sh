@@ -257,6 +257,23 @@ else
     MISS="${PROJDIR}/${REFID}.${KSHA}.miss.$$"
     "$MTB_PY" bin/proj_store.py missing --store "$PROJSTORE" --ref "$REFID" \
         --need "$PANEL" --out "$MISS"
+    # FAIL FAST INSTEAD OF PROJECTING FOR HOURS (2026-10-15). --project fills
+    # the store once per reference before any --states task; a states task
+    # that still finds most positions missing means that step did not run or
+    # failed, and projecting inline here is the 6-hour, 1,060 CPU-hour failure
+    # of new1k_p200. A small remainder (positions with no equivalent in the
+    # path, which the store keeps asking for) is still projected here.
+    if [[ "$STEP" == --states && -s "$MISS" ]]; then
+        _nmiss="$(grep -vc '^#' "$MISS" || true)"
+        _max="${P5_INLINE_PROJ_MAX:-$(( NPOS / 50 > 2000 ? NPOS / 50 : 2000 ))}"
+        if [[ "$_nmiss" -gt "$_max" ]]; then
+            rm -f "$MISS"
+            echo "FATAL: ${SAMPLE}: ${_nmiss} of ${NPOS} positions are not yet projected into" \
+                 "${REFID} (limit ${_max}); run P5STEP=--project first (refbias_run.sh does)," \
+                 "or set P5_INLINE_PROJ_MAX to project inline on purpose" >&2
+            exit 1
+        fi
+    fi
     if [[ -s "$MISS" ]]; then
         "$ODGI" position -i "$OG" -F "$MISS" -r "$RPATH" -t "$NT" \
             2> "${WORK}/${SAMPLE}.odgi.log" \
