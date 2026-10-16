@@ -485,7 +485,10 @@ for p in "${RUN[@]}"; do
         # once per distinct reference before the per-sample states (the store
         # is empty on a new build; new1k_p200 2026-10-15): odgi on 4 threads,
         # a day's limit, since one reference took over 6 h
-        NREF="$(awk -F'\t' 'NR>1{print $5}' "$REFMAP" 2>/dev/null | sort -u | wc -l)"
+        # the refmap does not exist yet when P1 is in the same submission:
+        # under pipefail a failing awk here ended this script silently
+        # after p4b (marin36_p200, 2026-10-16), so it is guarded
+        NREF="$( { [[ -s "$REFMAP" ]] && awk -F'\t' 'NR>1{print $5}' "$REFMAP"; } | sort -u | wc -l || true)"
         [[ "$NREF" -gt 0 ]] || NREF="$N"
         JOB[p5proj]=$(submit p5proj bin/p5_merge.sh "${P5EX},P5STEP=--project" "1-${NREF}" "${JOB[p5keys]:-}" "-c 4 --mem=4G -t 1-00:00")
         JOB[p5states]=$(submit p5states bin/p5_merge.sh "${P5EX},P5STEP=--states" "1-${N}" "${JOB[p5proj]:-}" "-c 2 --mem=4G")

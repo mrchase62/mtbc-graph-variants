@@ -23,6 +23,14 @@ class ChainChecks(unittest.TestCase):
         self.assertIn('P5STEP=--project', src)
         self.assertIn('"${JOB[p5proj]:-}" "-c 2 --mem=4G"', src)
 
+    def test_reference_count_survives_a_missing_refmap(self):
+        # under pipefail an unguarded awk on a not-yet-written refmap ended
+        # refbias_run.sh silently after p4b (marin36_p200, 2026-10-16)
+        src = open(os.path.join(R, "bin/refbias_run.sh")).read()
+        line = next(l for l in src.splitlines() if l.strip().startswith('NREF="$('))
+        self.assertIn('[[ -s "$REFMAP" ]]', line)
+        self.assertIn("|| true", line)
+
     def test_watchdog_is_default_and_optional(self):
         src = open(os.path.join(R, "bin/refbias_run.sh")).read()
         self.assertIn("WATCH=1", src)
