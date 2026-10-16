@@ -64,23 +64,40 @@ for ext in tsv fasta; do
         echo "FATAL: ${CAT}.${ext}, which locus_presence.py reads, differs from build ${BUILD_ID}'s copy" >&2; exit 1; }
 done
 CAT_SHA="$(cat "${CAT}.tsv" "${CAT}.fasta" | sha256sum | cut -c1-16)"
+# THE CODE VERSION TOO (fix SV-EVAL-2, 2026-10-16). Version 2 measures each
+# locus over its H37Rv-unique positions and reads the loci H37Rv carries at
+# their anchor. A table of this build and catalogue made by older code holds
+# the same loci measured the old way, so it is made again in place, not
+# refused; one of another build or catalogue is still refused.
+# beside this script, or (under sbatch, which runs a spooled copy) under the
+# submit directory, as locus_presence_one.sh is found below
+_lp="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/locus_presence.py"
+[[ -s "$_lp" ]] || _lp="accessory/bin/locus_presence.py"
+CODE_VER="$(awk -F'"' '/^PRESENCE_VERSION = /{print $2; exit}' "$_lp")"
+[[ -n "$CODE_VER" ]] || { echo "FATAL: no PRESENCE_VERSION in ${_lp}" >&2; exit 1; }
 SIDE="${OUT}.build"
 if [[ -s "$OUT" ]]; then
     _b="$(mtb_kv "$SIDE" build_id)"; _c="$(mtb_kv "$SIDE" catalogue_sha)"
-    if [[ "$_b" == "$BUILD_ID" && "$_c" == "$CAT_SHA" ]]; then
-        echo "already done: $OUT (build ${BUILD_ID})"; exit 0
+    _v="$(mtb_kv "$SIDE" code_version)"
+    _same=0; [[ "$_b" == "$BUILD_ID" && "$_c" == "$CAT_SHA" ]] && _same=1
+    if [[ "$_same" -eq 1 && "$_v" == "$CODE_VER" ]]; then
+        echo "already done: $OUT (build ${BUILD_ID}, presence code ${CODE_VER})"; exit 0
+    fi
+    if [[ "$_same" -eq 1 ]]; then
+        echo "${OUT} was made by presence code '${_v:-1}', not ${CODE_VER}: making it again"
     fi
     # No sidecar (a task that died before writing it): made again. It was
     # adopted when newer than the catalogue; no output from before the
     # sidecars is adopted (D38).
-    if [[ -e "$SIDE" ]]; then
+    if [[ -e "$SIDE" && "$_same" -eq 0 ]]; then
         echo "FATAL: ${OUT} was made against build '${_b:-unrecorded}', catalogue" \
              "'${_c:-unrecorded}', not ${BUILD_ID}/${CAT_SHA}. Use a new OUTDIR or" \
              "move it aside." >&2
         exit 1
     fi
-    echo "no build record for ${OUT}: making it again"
+    [[ -e "$SIDE" ]] || echo "no build record for ${OUT}: making it again"
 fi
 OUTDIR="$OUTDIR" ACC_CATALOGUE="$CAT" bash accessory/bin/locus_presence_one.sh "$S" "$COHORT_TAG"
 [[ -s "$OUT" ]] || { echo "FATAL: no ${OUT} written" >&2; exit 1; }
-printf 'build_id\t%s\ncatalogue_sha\t%s\ncompleted\t%s\n' "$BUILD_ID" "$CAT_SHA" "$(date -Is)" > "$SIDE"
+printf 'build_id\t%s\ncatalogue_sha\t%s\ncode_version\t%s\ncompleted\t%s\n' \
+    "$BUILD_ID" "$CAT_SHA" "$CODE_VER" "$(date -Is)" > "$SIDE"

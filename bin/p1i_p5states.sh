@@ -106,6 +106,35 @@ OG="${OG:-$(awk -F'\t' '$1=="graph"{print $2}' "${BUILD}/build_info.tsv")}"
 STAGE2+=(--graph "$OG" --paths "${BUILD}/assets/paths.txt"
          --store "${BUILD}/proj_is6110")
 
+# THE OFF-PATH CHECK (fix SV-EVAL-1, 2026-10-16). A key whose projection lands
+# off a non-carrier's path was ABSENT from the graph alone, and wrong
+# site-wide (46 new1k_p200 sites ABSENT in >= 90% of isolates). It is now read
+# in the sample's own P1 alignment to H37Rv, so the per-sample steps need P1's
+# work directory (the runner's P1WORK) and the build's copy table, H37Rv,
+# repeat mask and node table. Missing inputs are FATAL here, not a silent
+# fall-back to the unchecked ABSENT; NO_ABSENT_CHECK=1 reproduces older output.
+if [[ "$P1ISSTEP" == "--sample" || "$P1ISSTEP" == "--all" ]]; then
+    if [[ "${NO_ABSENT_CHECK:-0}" == "1" ]]; then
+        STAGE2+=(--no-absent-check)
+    else
+        P1WORK="${P1WORK:?P1WORK is unset: the IS6110 ABSENT check reads <P1WORK>/<sample>.h37rv.bam; run through bin/refbias_run.sh or set NO_ABSENT_CHECK=1}"
+        [[ -d "$P1WORK" ]] || { echo "FATAL: no P1 work directory at ${P1WORK}" >&2; exit 1; }
+        STAGE2+=(--p1-work "$P1WORK")
+    fi
+    for _f in "${BUILD}/assets/is6110_elements.gff" "${BUILD}/refs/${H37RV_ACC}.fasta" \
+              "${BUILD}/assets/repeat_mask.bed" "${BUILD}/assets/node_paths.tsv" \
+              "${BUILD}/assets/panel_differences.tsv.gz" \
+              "${BUILD}/assets/graph_collapsed.vcf.gz"; do
+        [[ -s "$_f" ]] || { echo "FATAL: no ${_f}" >&2; exit 1; }
+    done
+    STAGE2+=(--is6110-gff "${BUILD}/assets/is6110_elements.gff"
+             --h37rv-fasta "${BUILD}/refs/${H37RV_ACC}.fasta"
+             --repeat-mask "${BUILD}/assets/repeat_mask.bed"
+             --node-paths "${BUILD}/assets/node_paths.tsv"
+             --panel-diffs "${BUILD}/assets/panel_differences.tsv.gz"
+             --graph-vcf "${BUILD}/assets/graph_collapsed.vcf.gz")
+fi
+
 case "$P1ISSTEP" in
   --project)
     "${STAGE2[@]}" --mode project --index "${SLURM_ARRAY_TASK_ID:?--project is an array step}" ;;

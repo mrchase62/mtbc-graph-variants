@@ -42,6 +42,16 @@ How each is decided:
           junctions do not decide, is NOCALL with its reason.
   NOCALL  nothing observed, or the evidence does not decide.
 
+R'S SV-SIZED ALLELES ARE NOT SMALL VARIANTS (2026-10-16, the 1K evaluation).
+An insertion or deletion of 50 bp or more that R carries -- read off R's
+reference block, or carried into the placed table by P4's inherited half --
+is NOCALL `r_large_insertion` / `r_large_deletion`, never ALT: the SV block
+genotypes those (P4b inherited, HANDOFF ABS-2), and stated ALT here they were
+written as HaplotypeCaller calls (486 insertions of 500 bp or more on
+new1k_p200). And a deletion of 50 bp or more the sample did not call, with no
+gVCF depth at its anchor, is read in the P1 H37Rv alignment
+(inherited_check.check_deletion) before it is written NOCALL `no_coverage`.
+
 EVERY ABSENT AND NOCALL CARRIES ITS REASON, written as a fourth column of the
 sparse state file and carried to FORMAT/EV of the merged VCF, so a consumer
 can tell a masked site from an unprojected one from a call that rests only on
@@ -76,6 +86,7 @@ import argparse, bisect, collections, csv, gzip, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mtb_norm import normalise, h37rv_key, node_key
 import mtb_norm
+from p5_keys import inherited_sv_allele
 
 import importlib.util as _ilu
 _gfs = _ilu.spec_from_file_location(
@@ -84,6 +95,13 @@ _gfs = _ilu.spec_from_file_location(
 graph_frame = _ilu.module_from_spec(_gfs); _gfs.loader.exec_module(graph_frame)
 
 COMP = str.maketrans("ACGTN", "TGCAN")
+
+# THE STATE-FILE VERSION, written as `#absent_check` and required by
+# p5_merge.sh's skip, so a file from older code is recomputed even when the
+# key set is unchanged. v1: ABS-1, the ABSENT check (2026-10-14). v2: the
+# deletion check on `no_coverage` deletions and R's SV-sized alleles left to
+# the SV block (2026-10-16).
+ABSENT_CHECK = "v2"
 
 
 def op(p):
@@ -493,10 +511,15 @@ def main():
                          "<directory of --h37rv>/<--reference>.fasta, which is "
                          "${BUILD}/refs where p5_merge.sh takes --h37rv from")
     ap.add_argument("--large-indel", type=int, default=50,
-                    help="a deletion R carries at least this long is NOCALL, "
-                         "not ALT, from a reference block alone: the block "
-                         "spans R's junction whether or not the sample has "
-                         "the sequence, and GATK cannot call it that long")
+                    help="a deletion or insertion R carries at least this "
+                         "long is NOCALL, not ALT, from a reference block "
+                         "alone: the SV block genotypes R's SV-sized "
+                         "differences (ABS-2), and a block over R's sequence "
+                         "is no evidence of the event at this anchor. R's "
+                         "inherited P4 rows of this size are not read as the "
+                         "sample's own; a deletion this long the sample did "
+                         "not call, with no gVCF depth at its anchor, is read "
+                         "in the H37Rv frame. Must equal p5_keys.py's")
     ap.add_argument("--min-dp", type=int, default=5)
     # THE ABSENT CHECK (HANDOFF ABS-1). No defaults: each is this sample's or
     # this build's, and p5_merge.sh passes them. --no-absent-check is the only
@@ -630,7 +653,15 @@ def main():
     # Re-derive each record's normalised key exactly as p5_keys.py did. The
     # record's own `key` field is position-based and no longer what the key set
     # uses.
+    # R's SV-sized differences (P4's inherited half, 50 bp or more) are not
+    # the sample's calls: p5_keys.py makes no key of them, and where another
+    # sample's call made one, this sample's cell is NOCALL with R's reason,
+    # below; the SV block genotypes them (P4b inherited, ABS-2). See
+    # p5_keys.py, SV_MIN. They still mark where R -- and so, by default, the
+    # sample -- carries another allele (other_at, ins_anchor), exactly as
+    # before: what changes is only that R's long allele is not stated ALT.
     by_key = {}
+    n_inh_sv = 0
     for x in placed:
         if x["frame"] == "h37rv":
             pos = int(x["h37rv_pos"])
@@ -707,6 +738,18 @@ def main():
             if len(canon) - len(kalt) >= a.large_indel:
                 n_other["r_carries_large_deletion"] += 1
                 return "NOCALL", "r_large_deletion"
+            # AND A LONG INSERTION IN R (2026-10-16, the 1K evaluation): a
+            # block over R's inserted sequence says the reads match R there,
+            # which in PE/PPE and repeat sequence -- where every such allele
+            # sits -- is not evidence that the sample carries R's insertion
+            # at this anchor. Stated ALT from the block, R's 2-3.5 kb alleles
+            # at 3,528,851-3,528,974 reached about 460 isolates each while
+            # their reads cross the anchor unbroken. The SV block genotypes
+            # R's SV-sized insertions in the matched frame (ABS-2), so here
+            # the cell is NOCALL and says why.
+            if len(kalt) - len(canon) >= a.large_indel:
+                n_other["r_carries_large_insertion"] += 1
+                return "NOCALL", "r_large_insertion"
             # R's whole allele must be covered, and for an indel the base
             # after it too, so the reads span the junction
             if not span_covered(p, strand,
@@ -748,11 +791,20 @@ def main():
     reversions = 0
     n_abs = collections.Counter()
     abs_rows = []
+    del_rows = []
     for k in keys:
         canon = k["canonical_ref"].upper()
         rec = by_key.get(k["key"])
         ev = ""
-        if rec is not None:
+        if rec is not None and inherited_sv_allele(rec, a.large_indel):
+            # R's own SV-sized allele, carried into this sample's placed table
+            # by P4's inherited half: not a call of the sample's. Was ALT.
+            n_inh_sv += 1
+            kalt = (k.get("canonical_alt") or "").upper()
+            state, allele = "NOCALL", ""
+            ev = ("r_large_insertion" if len(kalt) > len(canon)
+                  else "r_large_deletion")
+        elif rec is not None:
             alt = rec["alt"].upper()
             if alt == canon:
                 state, reversions = "REF", reversions + 1
@@ -887,6 +939,12 @@ def main():
                 st, ev = ref_state(pr[0], canon, pr[2], int(k["h37rv_pos"]), kalt)
                 state, allele = (st, canon if st == "REF" else
                                  kalt if st == "ALT" else "")
+                if (ev == "no_coverage"
+                        and len(canon) - len(kalt) >= a.large_indel):
+                    # no coverage at the anchor of a deletion the sample has
+                    # no call for: perhaps the deletion itself. Read in the
+                    # H37Rv frame below, before it is written NOCALL.
+                    del_rows.append(len(rows))
         rows.append(dict(sample=a.sample, key=k["key"], state=state,
                          allele=allele, frame=k["frame"],
                          region=k["region"], kind=k["kind"], evidence=ev))
@@ -902,12 +960,14 @@ def main():
     #   deleted_here  -> ABSENT stays, evidence `junction_joined`
     #   anything else -> NOCALL, the verdict as its reason (masked, mixed,
     #                    unresolved, r_no_genotype, no_r_deletion)
-    if abs_rows and not a.no_absent_check:
+    det = []
+    h37f = mask = None
+    if (abs_rows or del_rows) and not a.no_absent_check:
         import inherited_check as ic
-        diffs = ic.PanelDiffs(a.panel_diffs, a.reference, a.graph_vcf or None)
         mask = ic.Mask.from_bed(a.repeat_mask)
         h37f = ic.H37rvFrame(a.h37rv_bam, a.samtools, vcf=a.h37rv_vcf, h37=h37)
-        det = []
+    if abs_rows and not a.no_absent_check:
+        diffs = ic.PanelDiffs(a.panel_diffs, a.reference, a.graph_vcf or None)
         for i in abs_rows:
             r, k = rows[i], keys[i]
             canon = k["canonical_ref"].upper()
@@ -929,15 +989,8 @@ def main():
                         d[0] if d else "", d[1] if d else "",
                         jev.get("bridge_start", ""), jev.get("bridge_end", ""),
                         jev.get("clip_start", ""), jev.get("clip_end", ""),
-                        jev.get("joined", ""), v, r["state"], r["evidence"]])
-        if a.absent_detail:
-            with open(a.absent_detail + ".tmp", "w") as fh:
-                fh.write("sample\treference\tkey\tstart\tend\tr_del_start\t"
-                         "r_del_end\tbridge_start\tbridge_end\tclip_start\t"
-                         "clip_end\tjoined\tverdict\tstate\tevidence\n")
-                for x in det:
-                    fh.write("\t".join(map(str, x)) + "\n")
-            os.replace(a.absent_detail + ".tmp", a.absent_detail)
+                        jev.get("joined", ""), v, r["state"], r["evidence"],
+                        "", "", ""])
         print(f"  {a.sample}: ABSENT check on {len(abs_rows)} keys R's deletions "
               f"explain (median H37Rv depth {h37f.baseline:.0f}, bridging floor "
               f"{h37f.min_bridge:.0f} reads)")
@@ -946,6 +999,62 @@ def main():
     elif abs_rows:
         print(f"  NOTE --no-absent-check: {len(abs_rows)} ABSENT calls rest on "
               f"the reference alone (evidence `unchecked`)")
+
+    # ---- a deletion with no coverage at its anchor (2026-10-16) -----------
+    # ref_state() states NOCALL `no_coverage` when the sample's gVCF has no
+    # depth at the key's projected anchor. For a deletion of 50 bp or more the
+    # sample did not call, the missing coverage is often the deletion itself:
+    # the anchor's gVCF block reaches into the deleted bases, where depth is
+    # zero. In the 1K evaluation 2,773 cells the old build called ALT on
+    # such deletions (small alleles of 50 bp or more) were NOCALL
+    # `no_coverage`, and of 20 read-checked 5 looked like deletions with
+    # covered flanks (analysis/sv_eval_1k/README.md, problem 4). So each is
+    # read in the sample's P1 alignment to H37Rv
+    # (inherited_check.check_deletion): reads joining the two ends are ALT;
+    # covered flanks with no depth inside are ALT outside the repeat mask
+    # when the flanks carry a normal share of the sample's depth; reads
+    # across both ends with depth inside, outside the mask, are REF; flanks
+    # without coverage stay NOCALL `no_coverage`, and anything else is NOCALL
+    # with its reason. Depth alone does not decide in the mask or at
+    # low-coverage flanks (`del_depth_dropout`): on marin36_p200's assemblies
+    # every such depth-only ALT was REF (GC-rich PE_PGRS dropout), and all 20
+    # cells read-checked in the 1K evaluation were of that kind.
+    n_del = collections.Counter()
+    if del_rows and h37f is not None:
+        for i in del_rows:
+            r, k = rows[i], keys[i]
+            canon = k["canonical_ref"].upper()
+            kalt = (k.get("canonical_alt") or "").upper()
+            # normalised key: a shared first base, then the deleted bases
+            s0 = int(k["h37rv_pos"]) + len(kalt)
+            e0 = int(k["h37rv_pos"]) + len(canon) - 1
+            st, why, jev = ic.check_deletion(h37f, mask, s0, e0, a.min_dp)
+            r["state"], r["evidence"] = st, why
+            r["allele"] = kalt if st == "ALT" else canon if st == "REF" else ""
+            n_del[(why, st)] += 1
+            det.append([a.sample, a.reference, k["key"], s0, e0, "", "",
+                        jev.get("bridge_start", ""), jev.get("bridge_end", ""),
+                        jev.get("clip_start", ""), jev.get("clip_end", ""),
+                        jev.get("joined", ""), "deletion_check", st, why,
+                        jev.get("flank", ""), jev.get("inside", ""),
+                        jev.get("inside_mapq0", "")])
+        print(f"  {a.sample}: deletion check on {len(del_rows)} uncalled "
+              f"deletions of >= {a.large_indel} bp with no coverage at the anchor")
+        for (why, st), n in sorted(n_del.items()):
+            print(f"    {why:<24} -> {st:<7} {n:>7}")
+    elif del_rows:
+        print(f"  NOTE --no-absent-check: {len(del_rows)} uncalled deletions "
+              f"with no coverage at the anchor left NOCALL `no_coverage` "
+              f"without reading the H37Rv frame")
+    if a.absent_detail and h37f is not None:
+        with open(a.absent_detail + ".tmp", "w") as fh:
+            fh.write("sample\treference\tkey\tstart\tend\tr_del_start\t"
+                     "r_del_end\tbridge_start\tbridge_end\tclip_start\t"
+                     "clip_end\tjoined\tverdict\tstate\tevidence\t"
+                     "flank_depth\tinside_depth\tinside_depth_mapq0\n")
+            for x in det:
+                fh.write("\t".join(map(str, x)) + "\n")
+        os.replace(a.absent_detail + ".tmp", a.absent_detail)
     for r in rows:
         counts[r["state"]] += 1
 
@@ -968,7 +1077,7 @@ def main():
             fh.write(f"#format\tsparse-v1\n#sample\t{a.sample}\n"
                      f"#default\tREF\n#n_keys\t{len(keys)}\n"
                      f"#keys_sha1\t{h}\n"
-                     f"#absent_check\t{'no' if a.no_absent_check else 'v1'}\n")
+                     f"#absent_check\t{'no' if a.no_absent_check else ABSENT_CHECK}\n")
             # The fourth column is the evidence code, FORMAT/EV in the merged
             # VCF. A REF is written only when it has one: an ABSENT the check
             # turned into the sample's own REF.
@@ -985,13 +1094,16 @@ def main():
     print(f"  {a.sample}: {n} keys  " + "  ".join(
         f"{k} {v} ({100*v/n:.1f}%)" for k, v in counts.items()))
     print(f"    reversions resolved to REF rather than ALT: {reversions}")
+    print(f"    keys of R's own SV-sized alleles (inherited records of >= "
+          f"{a.large_indel} bp) not stated ALT: {n_inh_sv}")
     print(f"    not REF because the sample carries another allele there: "
           f"{n_other['placed_other_allele']} by placed record, "
           f"{n_other['gvcf_non_ref']} by its gVCF")
     for why, v in sorted(n_proj.items()):
         print(f"    projection: {why}: {v}")
     for why in ("r_carries_alt", "r_carries_alt_span_uncovered",
-                "r_carries_large_deletion", "r_carries_other_allele"):
+                "r_carries_large_deletion", "r_carries_large_insertion",
+                "r_carries_other_allele"):
         print(f"    {why.replace('_', ' ')}: {n_other[why]}")
 
     return 0

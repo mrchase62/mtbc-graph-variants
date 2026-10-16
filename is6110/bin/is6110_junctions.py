@@ -108,20 +108,32 @@ def fetch_junctions(aln, contig, position, min_flank=20, min_mapq=0,
             if end_pos != position or op not in _CLIP_OPS:
                 continue
             clips["START" if at_left else "END"] += 1
-
-            # the clipped end is the read's 3' end -- so the SA segment continues
-            # from it -- whenever the clip sits on the strand-facing far side
-            sa_follows = at_left == read.is_reverse
-            entries = read.get_tag("SA").split(";") if read.has_tag("SA") else []
-            for entry in filter(None, entries):
-                sa_contig, sa_pos, sa_strand, sa_cigar = entry.split(",")[:4]
-                sa_pos = int(sa_pos) - 1
-                if sa_follows != (sa_strand == "-"):
-                    junctions[sa_contig, sa_pos, "START"] += 1
-                else:
-                    junctions[sa_contig, sa_pos + _ref_len(sa_cigar) - 1, "END"] += 1
+            for far in far_sides(read, at_left):
+                junctions[far] += 1
 
     return JunctionSummary(clips, junctions, readthrough)
+
+
+def far_sides(read, at_left):
+    """[(contig, pos, 'START'/'END')], 0-based: where each SA segment of
+    `read` continues from its clipped end (the left end when `at_left`).
+
+    Split out of fetch_junctions so the stage-2 ABSENT check
+    (is6110_absent_check.py) attributes a clipped read's far side by exactly
+    this rule; fetch_junctions' counts, and so --selftest, are unchanged."""
+    # the clipped end is the read's 3' end -- so the SA segment continues
+    # from it -- whenever the clip sits on the strand-facing far side
+    sa_follows = at_left == read.is_reverse
+    entries = read.get_tag("SA").split(";") if read.has_tag("SA") else []
+    out = []
+    for entry in filter(None, entries):
+        sa_contig, sa_pos, sa_strand, sa_cigar = entry.split(",")[:4]
+        sa_pos = int(sa_pos) - 1
+        if sa_follows != (sa_strand == "-"):
+            out.append((sa_contig, sa_pos, "START"))
+        else:
+            out.append((sa_contig, sa_pos + _ref_len(sa_cigar) - 1, "END"))
+    return out
 
 
 def load_elements(gff):

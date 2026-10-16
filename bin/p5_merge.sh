@@ -173,10 +173,13 @@ _st="${OUTDIR}/${SAMPLE}.states.tsv"
 if [[ "$STEP" != --project && -s "$_st" ]]; then
     _have="$(awk -F'\t' '$1=="#keys_sha1"{print $2; exit} !/^#/{exit}' "$_st")"
     _want="$("$MTB_PY" -c 'import csv,sys; sys.path.insert(0,"bin"); import p5_states_io as io; print(io.keys_sha1(list(csv.DictReader(open(sys.argv[1]),delimiter="\t"))))' "$KEYS")"
-    # ...and with the ABSENT check (ABS-1, 2026-10-14): a file written before
-    # it states ABSENT on R's word alone and must be redone, keys unchanged
+    # ...and with the current state rules, named by the file's
+    # `#absent_check` version (p5_states.py ABSENT_CHECK): v1 the ABSENT
+    # check (ABS-1, 2026-10-14), v2 the deletion check of `no_coverage`
+    # deletions and R's SV-sized alleles left to the SV block (2026-10-16). A
+    # file of an older version is redone, keys unchanged.
     _abs="$(awk -F'\t' '$1=="#absent_check"{print $2; exit} !/^#/{exit}' "$_st")"
-    if [[ -n "$_have" && "$_have" == "$_want" && "$_abs" == v1 ]]; then
+    if [[ -n "$_have" && "$_have" == "$_want" && "$_abs" == v2 ]]; then
         echo "[P5] ${SAMPLE}: already done against this key set"; exit 0
     fi
     echo "[P5] ${SAMPLE}: states file is from a different key set" \

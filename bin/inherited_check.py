@@ -449,6 +449,91 @@ class H37rvFrame:
         return "NOCALL", "present_low_depth"
 
 
+# ---- a deletion the sample did not call (2026-10-16) -----------------------
+DEL_RATIO = 0.2         # depth inside / flanks below which nothing is inside
+DEL_MAX_BRIDGE = 2      # reads aligned across an end that a deletion allows
+DEL_REPEAT = 3.0        # MAPQ>=0 depth this many times MAPQ>=20: a repeat
+DEL_FLANK_REL = 0.25    # flanks below this x the sample's median: dropout
+
+
+def check_deletion(h37f, mask, s, e, min_dp):
+    """(state, evidence, junction counts) for H37Rv bases s..e, a deletion of
+    50 bp or more the sample has no call for and whose anchor its gVCF does
+    not cover (p5_states.py, `no_coverage`).
+
+    The rule is the read check that adjudicated the 1K evaluation's
+    disagreements (analysis/sv_eval_1k/readcheck.py check_del), in the
+    sample's P1 alignment to H37Rv at MAPQ >= 20:
+
+      flanks    mean depth over F = clamp(L, 100, 500) bases either side
+      inside    mean depth over s..e, at MAPQ >= 20 and at any MAPQ
+      junction  junction_reads(): reads aligned without a gap across each end
+                (bridging: the mean of the two ends) and reads joining the
+                two ends (joined)
+
+      flanks < min_dp                                NOCALL no_coverage
+          the flanks are not covered either, so nothing says the missing
+          depth is the deletion
+      joined >= 3, joined >= bridging                ALT del_junction_joined
+      inside < 0.2 x flanks, reads there only at
+      MAPQ 0 (a repeat)                              NOCALL del_repeat_mapq0
+      inside < 0.2 x flanks, but the site in the
+      repeat mask or the flanks below 0.25 x the
+      sample's median depth                          NOCALL del_depth_dropout
+      inside < 0.2 x flanks, bridging <= 2           ALT del_no_depth_inside
+      both ends bridged by >= the bridging floor,
+      joined < 3, inside >= 0.6 x flanks, unmasked   REF del_spanned_ref
+      anything else                                  NOCALL del_depth_unclear
+
+    "Not a repeat": the any-MAPQ depth inside is not above 3 x the MAPQ >= 20
+    depth (and 0.2 x the flanks), as readcheck.py has it.
+
+    DEPTH ALONE IS NOT A DELETION IN LOW-COVERAGE SEQUENCE. Measured on the
+    finished assemblies before this rule shipped: every depth-only ALT the
+    readcheck.py rule gave was inside the repeat mask with flanks at about a
+    tenth of the sample's median depth -- GC-rich PE_PGRS sequence, where depth
+    falls away in every isolate -- and on marin36_p200 all 6 such cells were
+    REF in the assembly (ctrl25_p200 had none). The 20 read-checked cells of
+    the 1K evaluation were all of that kind too: the 5 it called clear
+    deletions had flanks of 7-21x against medians of 87-94x. So depth alone
+    decides ALT only outside the mask and with flanks at a normal share of
+    the sample's depth; elsewhere reads must join the two ends. REF needs the
+    site outside the mask as well, where bridging reads can come from another
+    copy (THE END RULE STAYS, above)."""
+    import numpy as np
+    L = e - s + 1
+    F = int(min(500, max(100, L)))
+    d = h37f.depth
+    lo = d[max(1, s - F):s]
+    hi = d[e + 1:min(len(d) - 1, e + F + 1)]
+    flank = float(np.concatenate([lo, hi]).mean()) if len(lo) + len(hi) else 0.0
+    inside = float(d[s:e + 1].mean()) if e >= s else 0.0
+    _v, jev = h37f.junction(s, e)
+    jev = dict(jev, flank=round(flank, 1), inside=round(inside, 1))
+    if flank < min_dp:
+        return "NOCALL", "no_coverage", jev
+    joined = jev["joined"]
+    bridge = (jev["bridge_start"] + jev["bridge_end"]) / 2   # readcheck's mean
+    if joined >= MIN_JOIN and joined >= bridge:
+        return "ALT", "del_junction_joined", jev
+    if inside < DEL_RATIO * flank:
+        inside0 = _med_depth(h37f.bam, h37f.ctg, s - 1, e, 0, mean=True)
+        jev["inside_mapq0"] = round(inside0, 1)
+        repeat = inside0 > DEL_REPEAT * max(inside, 0.5) and inside0 > DEL_RATIO * flank
+        if repeat:
+            return "NOCALL", "del_repeat_mapq0", jev
+        if mask.overlaps(s, e) or flank < DEL_FLANK_REL * h37f.baseline:
+            return "NOCALL", "del_depth_dropout", jev
+        if bridge <= DEL_MAX_BRIDGE:
+            return "ALT", "del_no_depth_inside", jev
+        return "NOCALL", "del_depth_unclear", jev
+    if (min(jev["bridge_start"], jev["bridge_end"]) >= h37f.min_bridge
+            and joined < MIN_JOIN and inside >= 0.6 * flank
+            and not mask.overlaps(s, e)):
+        return "REF", "del_spanned_ref", jev
+    return "NOCALL", "del_depth_unclear", jev
+
+
 def check_absent(diffs, mask, h37f, s, e):
     """ABS-1 for a site spanning H37Rv s..e that P5 found absent from R.
 
@@ -576,7 +661,8 @@ def place_on_r(events, h37, r_fasta, minimap2, threads=1):
     return out
 
 
-def _med_depth(bam, ctg, s, e, minq):
+def _med_depth(bam, ctg, s, e, minq, mean=False):
+    """Median (or mean) depth over 0-based [s, e) at MAPQ >= minq."""
     if e <= s:
         return 0.0
     cov = bam.count_coverage(ctg, s, e, quality_threshold=0,
@@ -585,7 +671,9 @@ def _med_depth(bam, ctg, s, e, minq):
                                                       and not r.is_supplementary
                                                       and r.mapping_quality >= minq))
     tot = [sum(x) for x in zip(*cov)]
-    return float(statistics.median(tot)) if tot else 0.0
+    if not tot:
+        return 0.0
+    return float(statistics.mean(tot) if mean else statistics.median(tot))
 
 
 def matched_junction(bam, ctg, j, L):

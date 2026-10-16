@@ -463,9 +463,15 @@ class MergeInsertionsAndPresence(unittest.TestCase):
                  "--is6110-keys", f"{d}/is.tsv", "--out", f"{d}/o.vcf"],
                 capture_output=True, text=True)
             self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
-            ids = {l.split("\t")[2] for l in open(f"{d}/o.vcf")
-                   if not l.startswith("#")}
-        self.assertNotIn("acc:ACC_0010000", ids)    # P3IS-2: unmeasurable
+            recs = {l.split("\t")[2]: l.rstrip("\n").split("\t")
+                    for l in open(f"{d}/o.vcf") if not l.startswith("#")}
+            ids = set(recs)
+        # P3IS-2: unmeasurable by a table older than presence version 2, so
+        # never ABSENT; since SV-EVAL-2 the record is written, every cell
+        # NOCALL with its reason
+        self.assertIn("acc:ACC_0010000", ids)
+        self.assertEqual({c for c in recs["acc:ACC_0010000"][9:]},
+                         {".:NOCALL:read_route_blind"})
         self.assertIn("acc:ACC_0020000", ids)
         self.assertNotIn("sv:INS:20000:20000", ids)  # same event as the locus
         self.assertNotIn("sv:INS:30005:30005", ids)  # same event as IS6110

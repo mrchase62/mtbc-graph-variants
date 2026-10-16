@@ -6,7 +6,8 @@ nothing but leaves 94.7% of the IS6110 block uninformative. This asks each
 non-carrier's own element-free alignment whether it looked and found nothing.
 
     for each key, take a carrier's own (reference, position) as the source
-    project it onto the non-carrier's reference path            -> ABSENT if
+    project it onto the non-carrier's reference path            -> off the
+                                                                   path if
                                                                    dist != 0
     convert that reference position into the non-carrier's clean coordinate
     read depth there, and ask whether a junction candidate sits within --window
@@ -16,6 +17,26 @@ non-carrier's own element-free alignment whether it looked and found nothing.
                                                   the <INS> record cannot say
     a junction candidate is present      reported, NOT silently called ALT
     otherwise                            NOCALL
+
+OFF THE PATH IS NOT ABSENT (fix SV-EVAL-1, 2026-10-16). A key whose projection
+lands off the non-carrier's path used to be ABSENT, from the graph alone. On
+new1k_p200 that put 46 sites ABSENT in >= 90% of isolates (45,024 cells): at a
+ref_shared site the walk crosses the element the carrier's reference holds
+and stops ~1,355 bp on in every reference without it, which is the
+NON-carrier state. Now:
+
+    H37Rv-frame key   read in the sample's own P1 alignment to H37Rv
+                      (is6110_absent_check.py): IS6110 junction reads ->
+                      ALT, unbroken spanning reads -> REF (NOCALL
+                      absent_masked in the repeat mask), else NOCALL with
+                      the reason; at a copy H37Rv holds, NOCALL
+                      absent_occupied
+    node-frame key    ABSENT node_not_on_r where R's path does not carry the
+                      node (node_paths.tsv), as for small variants; NOCALL
+                      off_path_node_on_r where it does
+
+Every computed cell carries a compact code in the `ev` column, which
+bin/merge_cohort_vcf.py writes to FORMAT/EV.
 
 WHY THE PROJECTION GOES CARRIER -> TARGET AND NOT VIA H37Rv. 68 of the 170 keys
 are off the H37Rv path, so a route through H37Rv cannot carry them -- those are
@@ -322,26 +343,86 @@ def decide(a, s, R):
             if len(f) > 1 and f[0].endswith("_isclean"):
                 contig = f[0]; break
 
-    # pass one: resolve each row to either an immediate verdict or a position
+    # pass one: resolve each row to either an immediate verdict or a position.
+    # verdict values are (state, free-text evidence, EV code); the code is
+    # FORMAT/EV in the merged VCF.
+    occ = occupied(a)
     pending, verdict, want = {}, {}, set()
+    offpath_h, offpath_n = [], []
     for i, r in enumerate(rows):
         if r["state"] != "NOCALL":
             continue
         pos, dist = proj.get(short(r["key"]), (None, -1))
-        # ABSENT only from a projection that was actually made and landed off
-        # the target's path. No projection at all -- target or carrier path not
-        # in the graph, no carrier for the key, or odgi returned nothing -- is
-        # "not measured", which is NOCALL.
+        # No projection at all -- target or carrier path not in the graph, no
+        # carrier for the key, or odgi returned nothing -- is "not measured",
+        # which is NOCALL.
         if pos is None:
-            verdict[i] = ("NOCALL", "no projection")
+            verdict[i] = ("NOCALL", "no projection", "no_projection")
         elif dist != 0:
-            verdict[i] = ("ABSENT", f"off the path, dist {dist}")
+            # OFF R's PATH IS NOT ABSENT (fix SV-EVAL-1, 2026-10-16). It was
+            # written ABSENT, read off the graph alone, and was wrong
+            # site-wide: at a ref_shared site the carrier's position sits
+            # beside the element its own reference carries, so on every
+            # reference without the element the walk crosses it and stops
+            # ~1,355 bp on (4,230,303: dist 1,358 in all 997 non-carriers of
+            # new1k_p200, one of whom has 116x depth across the site); a
+            # dist of 1-10 is a SNP bubble beside the site. H37Rv-frame keys
+            # are now read in the sample's own P1 H37Rv alignment
+            # (is6110_absent_check.py); node-frame keys, which have no H37Rv
+            # position, are ABSENT only where R's path does not carry the
+            # node at all, as for small variants (bin/p5_states.py).
+            if short(r["key"]).startswith("h37rv:"):
+                offpath_h.append(i)
+            else:
+                offpath_n.append(i)
         elif cm is None or contig is None:
-            verdict[i] = ("NOCALL", "no crossmap or no element-free alignment")
+            verdict[i] = ("NOCALL", "no crossmap or no element-free alignment",
+                          "no_isclean")
         else:
             cpos = orig_to_clean(cm, pos)
             pending[i] = cpos
             want.add(cpos)
+
+    # pass 1b: the off-path keys
+    if offpath_h:
+        if a.no_absent_check:
+            for i in offpath_h:
+                verdict[i] = ("ABSENT", "off the path; not read (--no-absent-check)",
+                              "absent_unchecked")
+        else:
+            chk = absent_checker(a, s, R)
+            for i in offpath_h:
+                k = short(rows[i]["key"])
+                d = proj[k][1]
+                if k in occ:
+                    # H37Rv holds a copy here, so REF is "element present"
+                    # and a sample without it is neither REF nor the <INS>
+                    # allele; the junction test cannot tell either from a
+                    # read at the copy's boundary. Not measured.
+                    verdict[i] = ("NOCALL", f"off the path, dist {d}, at a copy "
+                                  f"H37Rv holds: not checked", "absent_occupied")
+                    continue
+                st, ev, j, sp = chk.check(int(k.split(":")[1]))
+                verdict[i] = (st, f"off the path, dist {d}; P1 H37Rv reads: {j} "
+                              f"IS6110 junction, {sp} spanning (floor "
+                              f"{chk.floor:.0f})", ev)
+    if offpath_n:
+        npaths = node_paths(a, {rows[i]["key"].split(":")[1] for i in offpath_n})
+        for i in offpath_n:
+            nd = rows[i]["key"].split(":")[1]
+            d = proj[short(rows[i]["key"])][1]
+            if nd not in npaths:
+                verdict[i] = ("NOCALL", f"off the path, dist {d}; node {nd} not "
+                              f"in the node table", "node_unknown")
+            elif R not in npaths[nd]:
+                # read off the graph alone, never off the sample's reads: one
+                # of the calls that rest only on the reference
+                verdict[i] = ("ABSENT", f"off the path, dist {d}; {R}'s path "
+                              f"does not carry node {nd}", "node_not_on_r")
+            else:
+                verdict[i] = ("NOCALL", f"off the path, dist {d}, though {R}'s "
+                              f"path carries node {nd}: not measured",
+                              "off_path_node_on_r")
 
     # pass two: ONE samtools call for every position this sample needs. It
     # used to be one `samtools depth -r` per position -- ~56,000 calls and 33
@@ -381,32 +462,74 @@ def decide(a, s, R):
     cand.sort()
 
     # pass three: decide
-    occ = occupied(a)
     out = []
     for i, r in enumerate(rows):
         if r["state"] != "NOCALL":
-            out.append(dict(r, evidence="reported by this sample"))
+            out.append(dict(r, evidence="reported by this sample", ev=""))
             continue
         if i in verdict:
-            st, ev = verdict[i]
+            st, ev, code = verdict[i]
         else:
             cpos = pending[i]
             j = bisect.bisect_left(cand, cpos - a.window)
             near = j < len(cand) and cand[j] <= cpos + a.window
             dp = depth.get(cpos, 0)
             if near:
-                st, ev = "NOCALL", f"a junction candidate sits within {a.window} bp"
+                st, ev, code = ("NOCALL", f"a junction candidate sits within "
+                                f"{a.window} bp", "junction_candidate")
             elif dp >= a.min_dp and short(r["key"]) in occ:
-                st, ev = "NOCALL", (f"depth {dp}, no junction candidate: lacks "
-                                    f"the element H37Rv holds here")
+                st, ev, code = ("NOCALL", f"depth {dp}, no junction candidate: "
+                                f"lacks the element H37Rv holds here",
+                                "lacks_h37rv_copy")
             elif dp >= a.min_dp:
-                st, ev = "REF", f"depth {dp}, no junction candidate"
+                st, ev, code = "REF", f"depth {dp}, no junction candidate", ""
             else:
-                st, ev = "NOCALL", f"depth {dp} below {a.min_dp}"
-        out.append(dict(r, state=st,
-                        allele=r["allele"] if st == r["state"] else "",
-                        evidence=ev))
-    return out, (list(rows[0]) + ["evidence"] if rows else None)
+                st, ev, code = "NOCALL", f"depth {dp} below {a.min_dp}", "low_depth"
+        # an ALT the read check found carries the element allele, as a
+        # reported one does
+        allele = (r.get("allele", "") if st == r["state"] else
+                  "<INS>" if st == "ALT" else "")
+        out.append(dict(r, state=st, allele=allele, evidence=ev, ev=code))
+    return out, (list(rows[0]) + ["evidence", "ev"] if rows else None)
+
+
+def absent_checker(a, s, R):
+    """The sample's P1 H37Rv alignment, opened for the off-path check."""
+    if not a.p1_work:
+        sys.exit("FATAL: --p1-work is needed to check an off-path IS6110 key "
+                 "against the sample's P1 H37Rv alignment (or pass "
+                 "--no-absent-check to reproduce older output)")
+    if not a.repeat_mask:
+        sys.exit("FATAL: --repeat-mask is needed by the IS6110 ABSENT check "
+                 "(<build>/assets/repeat_mask.bed)")
+    here = os.path.dirname(os.path.abspath(__file__))
+    sys.path.insert(0, here)
+    sys.path.insert(0, os.path.join(here, "..", "..", "bin"))
+    import inherited_check as ic
+    import is6110_absent_check as iac
+    if not a.panel_diffs:
+        sys.exit("FATAL: --panel-diffs is needed by the IS6110 ABSENT check "
+                 "(<build>/assets/panel_differences.tsv.gz)")
+    chk = iac.H37rvSiteCheck(os.path.join(a.p1_work, f"{s}.h37rv.bam"),
+                             a.is6110_gff, a.h37rv_fasta,
+                             ic.Mask.from_bed(a.repeat_mask))
+    # a site with no reads at all: ABS-1's region test (deleted_here)
+    chk.use_region_check(a.panel_diffs, R, a.samtools,
+                         a.graph_vcf or None)
+    return chk
+
+
+def node_paths(a, want):
+    """{node: set of panel paths} for the nodes in `want`, from the build's
+    node_paths.tsv (accessory/bin/node_path_membership.py)."""
+    if not a.node_paths or not os.path.exists(a.node_paths):
+        sys.exit(f"FATAL: no node table at {a.node_paths!r} (<build>/assets/"
+                 f"node_paths.tsv); an off-path node-frame IS6110 key needs it")
+    out = {}
+    for q in csv.DictReader(open(a.node_paths, newline=""), delimiter="\t"):
+        if q["node"] in want:
+            out[q["node"]] = set(q["paths"].split(",")) if q["paths"] else set()
+    return out
 
 
 def sample_path(a, s):
@@ -503,6 +626,33 @@ def main():
     ap.add_argument("--window", type=int, default=10)
     ap.add_argument("--workdir", default="refbias/p1i/p5stage2")
     ap.add_argument("--out", default="is6110/results/p5_is6110_states.stage2.tsv")
+    # THE OFF-PATH CHECK (fix SV-EVAL-1). No defaults: each is this sample's
+    # or the build's, and p1i_p5states.sh passes them. Needed only by a
+    # sample that has an off-path key.
+    ap.add_argument("--p1-work", default="",
+                    help="P1's work directory holding <sample>.h37rv.bam: an "
+                         "off-path H37Rv-frame key is read there")
+    ap.add_argument("--is6110-gff", default="",
+                    help="<build>/assets/is6110_elements.gff: H37Rv's copies, "
+                         "for the junction test")
+    ap.add_argument("--h37rv-fasta", default="",
+                    help="<build>/refs/GCF_000195955.fasta: the element's "
+                         "sequence, for the clipped-bases test")
+    ap.add_argument("--repeat-mask", default="",
+                    help="<build>/assets/repeat_mask.bed: a REF verdict there "
+                         "is NOCALL absent_masked")
+    ap.add_argument("--node-paths", default="",
+                    help="<build>/assets/node_paths.tsv: an off-path node-frame "
+                         "key is ABSENT only where R's path does not carry the node")
+    ap.add_argument("--panel-diffs", default="",
+                    help="<build>/assets/panel_differences.tsv.gz: R's deletion "
+                         "over a site with no reads, for ABS-1's junction test")
+    ap.add_argument("--graph-vcf", default="",
+                    help="<build>/assets/graph_collapsed.vcf.gz: when given, "
+                         "the panel table must have been made from it")
+    ap.add_argument("--no-absent-check", action="store_true",
+                    help="write an off-path H37Rv-frame key ABSENT from the "
+                         "graph alone, as before 2026-10-16 (EV absent_unchecked)")
     ap.add_argument("--store", default="",
                     help="projection store reused between runs, normally "
                          "<build>/proj_is6110; empty disables it. --mode seed "

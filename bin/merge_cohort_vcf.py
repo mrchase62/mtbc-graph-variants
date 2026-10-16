@@ -238,6 +238,9 @@ def _header_body(w):
       'mismapped copies of the element unless it is filtered">\n')
     w('##INFO=<ID=NODE,Number=1,Type=String,Description="Graph node, for '
       'node-frame records">\n')
+    w('##INFO=<ID=ACCIS6110,Number=0,Type=Flag,Description="An accessory '
+      'presence locus whose sequence is an IS6110 copy: the same event as the '
+      'IS6110 arm\'s insertion record at the site, so count one of the two">\n')
     w('##INFO=<ID=UNCATALOGUED,Number=0,Type=Flag,Description="A caller '
       'deletion no interval of the catalogue covers, so it is written '
       'presence-only from the caller matrix instead of being dropped">\n')
@@ -275,7 +278,10 @@ def _header_body(w):
       'cell, where the pipeline records one: why an ABSENT or NOCALL is what it '
       'is (e.g. masked, junction_joined, no_projection, frames_conflict, '
       'tandem), how an inherited SV was confirmed (two_frames, h37rv_only, '
-      'matched_only), and node_not_on_r / inherited_unchecked for calls that '
+      'matched_only), how an IS6110 site off the matched reference\'s path was '
+      'read in the sample\'s H37Rv alignment (absent_checked_alt, '
+      'absent_checked_ref, absent_masked, absent_low_depth), and '
+      'node_not_on_r / inherited_unchecked for calls that '
       'rest only on the matched reference. Trailing field: absent where none '
       'is recorded">\n')
     for line in _harm.HEADER:
@@ -485,6 +491,47 @@ def annotate_aa_source(recs, contig, pol):
         n[src] += 1
         out.append(rec[:5] + (info,) + tuple(rec[6:]))
     return out, n
+
+
+IS_COPY_LEN = (1300, 1420)      # harmonize_records.IS_LEN
+IS_COPY_K, IS_COPY_FRAC = 20, 0.9
+
+
+def is6110_copy_loci(catalogue, h37, gff, cat):
+    """Ids of the catalogue loci in `cat` whose sequence is an IS6110 copy:
+    IS_COPY_LEN long, with >= IS_COPY_FRAC of its 20-mers in H37Rv's first
+    annotated IS6110 copy (either strand). Read from the catalogue's FASTA
+    beside its TSV. Without the H37Rv FASTA, the IS6110 GFF or that FASTA,
+    nothing is flagged and that is said."""
+    fa = catalogue[:-4] + ".fasta" if catalogue.endswith(".tsv") else ""
+    if not (h37 and gff and fa and os.path.exists(fa)):
+        print("  NOTE level 1: no H37Rv FASTA, IS6110 GFF or catalogue FASTA; "
+              "IS6110-copy loci are not flagged ACCIS6110")
+        return set()
+    copies = _harm.read_is6110_copies(gff)
+    if not copies:
+        sys.exit(f"FATAL: no IS6110 copy in {gff}")
+    el = h37[copies[0][0] - 1:copies[0][1]]
+    rc = el.translate(str.maketrans("ACGTN", "TGCAN"))[::-1]
+    km = {s[i:i + IS_COPY_K] for s in (el, rc)
+          for i in range(len(s) - IS_COPY_K + 1)}
+    out, name, buf = set(), None, []
+
+    def judge(n, s):
+        if n in cat and IS_COPY_LEN[0] <= len(s) <= IS_COPY_LEN[1]:
+            ks = [s[i:i + IS_COPY_K] for i in range(len(s) - IS_COPY_K + 1)]
+            if ks and sum(k in km for k in ks) >= IS_COPY_FRAC * len(ks):
+                out.add(n)
+    for line in open(fa):
+        if line.startswith(">"):
+            if name:
+                judge(name, "".join(buf).upper())
+            name, buf = line[1:].split()[0], []
+        else:
+            buf.append(line.strip())
+    if name:
+        judge(name, "".join(buf).upper())
+    return out
 
 
 def _load_sv_intervals():
@@ -809,6 +856,7 @@ def main():
             del is_meta[k]; del is6110[k]
 
     n_promoted = collections.Counter()
+    is_cell_ev = collections.defaultdict(dict)
     if a.is6110_states and os.path.exists(a.is6110_states):
         for r in csv.DictReader(open(a.is6110_states), delimiter="\t"):
             k = arm_key(r["key"])
@@ -819,13 +867,19 @@ def main():
                 n_promoted["key not in the arm's table or not in this shard"] += 1
                 continue
             prev = is6110[k].get(r["sample"])
-            # Never overwrite a reported ALT with a computed absence; stage 2
-            # promotes nothing to ALT, so a disagreement here would mean the
-            # projection landed somewhere the arm had already called.
+            # Never overwrite a reported ALT with a computed state. Stage 2
+            # can now state ALT itself (fix SV-EVAL-1: an off-path key whose
+            # P1 H37Rv reads show IS6110 junctions, EV absent_checked_alt),
+            # but only for a cell the arm left NOCALL, so a disagreement here
+            # still means the projection landed somewhere the arm had called.
             if prev == "ALT" and r["state"] != "ALT":
                 n_promoted["ALT kept over a computed state"] += 1
                 continue
             is6110[k][r["sample"]] = r["state"]
+            # FORMAT/EV: the compact code stage 2 writes beside its free-text
+            # evidence (a table from before 2026-10-16 has none)
+            if r.get("ev"):
+                is_cell_ev[k][r["sample"]] = r["ev"]
             n_promoted[r["state"]] += 1
         print(f"  IS6110 stage-2 states from {a.is6110_states}: "
               + ", ".join(f"{k} {v:,}" for k, v in sorted(n_promoted.items())))
@@ -1098,23 +1152,36 @@ def main():
     # characters and the pipeline had been emitting only the second: variation
     # INSIDE the insert, which for a sample that does not have the insert is
     # neither reference nor unknown but INAPPLICABLE. The first character --
-    # whether the insert is there -- is stated for every sample the read route
-    # can measure.
+    # whether the insert is there -- is stated here, one record per locus.
     #
     # Polarity follows the coordinate frame. Carrying the insert is the
     # DERIVED state and gets the ALT allele; a convergence test then looks for
     # repeated independent gains of the insert, which is the event of
-    # interest. That reading holds for loci whose sequence H37Rv lacks. 604 of
-    # the 802 CX333 catalogue loci are not that: H37Rv carries 0.9 of the
-    # sequence at 95% identity or more (481 are IS6110 copies), which the read
-    # route cannot see (audit P3IS-2; review 2, R2-IS-1: the rule is
-    # locus_presence.read_route_blind, on h37rv_cov95). Their cells are unmeasured, so they are written missing
-    # whatever an older presence table says, and a record with no measured
-    # cell is not written.
+    # interest.
+    #
+    # EVERY CATALOGUE LOCUS IS WRITTEN (fix SV-EVAL-2, 2026-10-16). Loci whose
+    # sequence H37Rv carries (locus_presence.read_route_blind: 465 of the P200
+    # build's 564) used to be skipped as unmeasurable, and with them every
+    # record whose cells were all NOCALL, so new1k_p200's VCF held 99 loci.
+    # Presence tables from locus_presence.py version 2 (a `route` column)
+    # measure those loci at their H37Rv anchor; their states are written as
+    # measured. A table from before has no measurement for them, so their
+    # cells are NOCALL "read_route_blind" -- the same no-ABSENT guarantee as
+    # audit P3IS-2 -- but the record is still written. Every NOCALL carries
+    # its reason in FORMAT/EV: the table's evidence_code (version 2), else
+    # "uncertain" / "read_route_blind", and "no_presence_row" where the
+    # sample has no row for the locus.
+    #
+    # IS6110 COPIES. A locus whose sequence is IS6110 (is6110_copy_loci) is
+    # the same event as the IS6110 arm's insertion record at that site. It is
+    # written and flagged ACCIS6110 so a consumer can count it once; it is
+    # not dropped here, because the IS6110 arm keys its sites independently
+    # and a silent drop would lose any site only this block has (a decision
+    # left to the user; see HANDOFF SV-EVAL-2).
     #
     # Emitted BEFORE the caller SV rows so those rows can tell which insertion
     # events this block already states (audit P4P5-6).
-    n_l1 = n_l1_blind = n_l1_empty = 0
+    n_l1 = n_l1_blind = n_l1_norow = 0
     acc_emitted = []                 # (pos, length) of every level-1 record
     if a.accessory_presence:
         import importlib.util
@@ -1124,36 +1191,59 @@ def main():
                 "bin", "locus_presence.py"))
         _lp = importlib.util.module_from_spec(_spec)
         _spec.loader.exec_module(_lp)
-        cat = {r["locus_id"]: r for r in csv.DictReader(
-            open(a.accessory_catalogue, newline=""), delimiter="\t")
-            if (r.get("pos") or "").isdigit()
-            and in_shard(a.h37rv_contig, int(r["pos"]))}
-        pres = collections.defaultdict(dict)
+        cat_all = list(csv.DictReader(open(a.accessory_catalogue, newline=""),
+                                      delimiter="\t"))
+        if not cat_all or "locus_id" not in cat_all[0]:
+            sys.exit(f"FATAL: {a.accessory_catalogue} has no locus_id rows")
+        n_nopos = sum(1 for r in cat_all if not (r.get("pos") or "").isdigit())
+        cat = {r["locus_id"]: r for r in cat_all
+               if (r.get("pos") or "").isdigit()
+               and in_shard(a.h37rv_contig, int(r["pos"]))}
+        pres = collections.defaultdict(dict)   # locus -> sample -> (state, code, v2)
         pf = sorted(glob.glob(os.path.join(a.accessory_presence,
                                            "*.presence.tsv")))
+        n_v2 = n_old = 0
         for f in pf:
             with open(f, newline="") as fh:
-                for r in csv.DictReader(fh, delimiter="\t"):
+                rd = csv.DictReader(fh, delimiter="\t")
+                v2 = "route" in (rd.fieldnames or [])
+                n_v2 += v2
+                n_old += not v2
+                for r in rd:
                     if r["locus"] in cat:     # this shard's loci only
-                        pres[r["locus"]][r["sample"]] = r["state"]
+                        pres[r["locus"]][r["sample"]] = (
+                            r["state"], r.get("evidence_code") or "", v2)
         got = {s2 for d in pres.values() for s2 in d}
-        print(f"  level 1: {len(pf):,} presence tables, {len(pres):,} loci, "
+        print(f"  level 1: {len(pf):,} presence tables ({n_v2:,} version 2, "
+              f"{n_old:,} older), {len(pres):,} of {len(cat):,} loci, "
               f"{len(got):,} samples ({len(got & set(order)):,} in this cohort)")
-        # UNMEASURABLE (and anything unrecognised) is NOCALL
+        is_copy = is6110_copy_loci(a.accessory_catalogue, H37, a.is6110_gff, cat)
         L1 = {"PRESENT": "ALT", "ABSENT": "REF", "UNCERTAIN": "NOCALL"}
         n_st = collections.Counter()
-        for lid, per in sorted(pres.items()):
-            m = cat.get(lid)
-            if not m or not (m.get("pos") or "").isdigit():
-                continue
-            if _lp.read_route_blind(m):
-                n_l1_blind += 1
-                continue                  # every cell unmeasured
-            st = {s2: L1.get(per.get(s2, ""), "NOCALL") for s2 in order}
-            if all(v == "NOCALL" for v in st.values()):
-                n_l1_empty += 1
-                continue
-            n_st.update(st.values())
+        n_ev = collections.Counter()
+        for lid, m in sorted(cat.items(), key=lambda x: (int(x[1]["pos"]), x[0])):
+            per = pres.get(lid, {})
+            blind = _lp.read_route_blind(m)
+            cells, any_old_blind = [], False
+            for s2 in order:
+                hit = per.get(s2)
+                if hit is None:
+                    st, ev = "NOCALL", "no_presence_row"
+                else:
+                    raw, code, v2 = hit
+                    if not v2 and blind:
+                        # an older table cannot have measured it, whatever it says
+                        st, ev = "NOCALL", "read_route_blind"
+                        any_old_blind = True
+                    else:
+                        st = L1.get(raw, "NOCALL")
+                        ev = (code or raw.lower() or "no_state") if st == "NOCALL" else ""
+                n_st[st] += 1
+                if ev:
+                    n_ev[ev] += 1
+                cells.append(vcf_cell(st, ev))
+            n_l1_blind += any_old_blind
+            n_l1_norow += not per
             acc_len = int(m.get("graph_len") or m.get("rep_len") or 0)
             info = ["CLASS=accessory_presence", "COMPONENT=level1",
                     f"ACCLOCUS={lid}",
@@ -1162,18 +1252,28 @@ def main():
                     f"PANELCARRIERS={m.get('graph_carriers') or m.get('carriers_any') or 0}"]
             if str(m.get("route", "")):
                 info.append(f"ACCROUTE={m['route']}")
-            cell = "\t".join(f'{STATE_GT[st[s2]]}:{st[s2]}' for s2 in order)
+            if lid in is_copy:
+                info.append("ACCIS6110")
             add((a.h37rv_contig, int(m["pos"]), f"acc:{lid}",
-                 h37_base(int(m["pos"])), ["<INS>"], info, cell))
+                 h37_base(int(m["pos"])), ["<INS>"], info, "\t".join(cells)))
             acc_emitted.append((int(m["pos"]), acc_len))
             n_l1 += 1
         t = sum(n_st.values()) or 1
-        print(f"  {n_l1:,} level-1 records: "
+        print(f"  {n_l1:,} level-1 records ({len(is_copy):,} flagged ACCIS6110): "
               + "  ".join(f"{k} {v:,} ({v/t:.1%})"
                           for k, v in sorted(n_st.items())))
-        print(f"    not written: {n_l1_blind:,} loci whose sequence H37Rv "
-              f"carries (the read route cannot measure them), {n_l1_empty:,} "
-              f"with no measured cell")
+        if n_ev:
+            print("    NOCALL reasons: " + ", ".join(
+                f"{k} {v:,}" for k, v in sorted(n_ev.items())))
+        if n_l1_blind:
+            print(f"    {n_l1_blind:,} loci whose sequence H37Rv carries, read "
+                  f"from tables older than presence version 2: written NOCALL "
+                  f"read_route_blind; rerun the presence step to measure them")
+        if n_l1_norow:
+            print(f"    {n_l1_norow:,} loci no presence table has a row for")
+        if n_nopos and a.shard <= 0:
+            print(f"    {n_nopos:,} catalogue loci have no H37Rv position and "
+                  f"cannot be written")
     acc_emitted.sort()
     acc_starts = [x[0] for x in acc_emitted]
 
@@ -1288,9 +1388,10 @@ def main():
         if m.get("frame") == "node":
             info.append(f"NODE={m.get('node','')}")
         cell = []
+        evk = is_cell_ev.get(k, {})
         for s in order:
             st = per.get(s) or "NOCALL"
-            cell.append(f'{STATE_GT.get(st, ".")}:{st}')
+            cell.append(vcf_cell(st, evk.get(s, "")))
         ref_b = h37_base(pos) if chrom == a.h37rv_contig else "N"
         add((chrom, pos, k, ref_b, ["<INS:ME:IS6110>"], info,
              "\t".join(cell)))
