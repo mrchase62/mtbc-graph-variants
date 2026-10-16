@@ -692,7 +692,7 @@ class P5StatesAbsentCheck(unittest.TestCase):
             self.assertEqual(p.returncode, 0, p.stderr + p.stdout)
             self.assertEqual(cells(f"{d}/new.tsv"),
                              [["0", "REF", h[2099], "present_here_ref"]])
-            self.assertIn("#absent_check\tv1", open(f"{d}/new.tsv").read())
+            self.assertIn("#absent_check\tv2", open(f"{d}/new.tsv").read())
             # and the evidence reaches the states array
             io = load("p5_states_io", "bin/p5_states_io.py")
             os.makedirs(f"{d}/st")

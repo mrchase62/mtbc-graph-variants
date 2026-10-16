@@ -566,10 +566,24 @@ class PresenceGuard(unittest.TestCase):
     def test_table_of_this_build_kept(self):
         write(self.out, "locus_id\tcall\n")
         cs = hashlib.sha256(b"locus_id\nACC_1\n>ACC_1\nAC\n").hexdigest()[:16]
-        write(self.out + ".build", f"build_id\tnewbuild\ncatalogue_sha\t{cs}\n")
+        # and by this presence code (SV-EVAL-2): an older code version's
+        # table of the same build is made again, not kept
+        ver = [l.split('"')[1] for l in open(os.path.join(
+            ROOT, "accessory/bin/locus_presence.py")) if l.startswith("PRESENCE_VERSION = ")][0]
+        write(self.out + ".build", f"build_id\tnewbuild\ncatalogue_sha\t{cs}\n"
+                                   f"code_version\t{ver}\n")
         r = self.arr()
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("already done", r.stdout)
+
+    def test_table_of_older_presence_code_made_again(self):
+        write(self.out, "locus_id\tcall\n")
+        cs = hashlib.sha256(b"locus_id\nACC_1\n>ACC_1\nAC\n").hexdigest()[:16]
+        write(self.out + ".build", f"build_id\tnewbuild\ncatalogue_sha\t{cs}\n")
+        r = self.arr()
+        self.assertIn("making it again", r.stdout)
+        self.assertNotIn("already done", r.stdout)
+        self.assertNotIn("was made against build", r.stderr)
 
     def test_catalogue_not_the_builds_refused(self):
         write(os.path.join(self.d, "accessory", "assets", "accessory_catalogue.tsv"),

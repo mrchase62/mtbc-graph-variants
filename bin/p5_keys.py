@@ -26,6 +26,42 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mtb_norm import normalise, h37rv_key, node_key
 
 
+# AN SV-SIZED ALLELE R CARRIES IS THE SV BLOCK'S, NOT A SMALL VARIANT
+# (2026-10-16, the 1K evaluation, analysis/sv_eval_1k/README.md problem 3).
+# P4's composed arm adds R's own differences from H37Rv to every sample matched
+# to R (the "inherited half", masked and PE/PPE sequence only), whatever their
+# size, straight from the graph VCF. 66,683 new1k_p200 placed rows were such
+# alleles of 50 bp or more -- every one of the 21,110 placed rows of 500 bp or
+# more, up to 3,501 bp, while no HaplotypeCaller call (direct or composed
+# `called`) reached 500 bp. They became keys, every sample whose R carries the
+# allele was then ALT from its reference block (p5_states.py, r_carries_alt),
+# and harmonize_records.py rule 2 relabelled them CLASS=sv SVSOURCE=small_allele:
+# 486 insertions of 500 bp or more, 21,459 ALT cells, written as if
+# HaplotypeCaller had called them. Five near-identical 2,143 bp alleles at
+# 3,528,974 had about 460 carriers each, where the reads cross the anchor
+# unbroken and the rearrangement lies 300-700 bp away.
+#
+# The same alleles already reach the VCF through the route built for them:
+# P4b turns every R-carried graph record of 50 bp or more into an inherited SV
+# row, and P5 genotypes it in both frames (HANDOFF ABS-2; masked inherited
+# insertions are NOCALL `masked`, the user's decision of 2026-10-14). The small
+# route bypassed all of that, so it no longer carries them: an inherited row of
+# SV size makes no key here, and p5_states.py neither reads it as the sample's
+# own record nor states ALT from R's reference block for an SV-sized key.
+# Alleles the sample's own HaplotypeCaller call produced (component `called`)
+# are kept at every size.
+SV_MIN = 50
+
+
+def inherited_sv_allele(x, min_len=SV_MIN):
+    """Is this P4 placed row an SV-sized difference of R's that the sample
+    inherits rather than called? Net length change, as harmonize_records.py
+    rule 2 measures it, of at least `min_len` bp."""
+    if (x.get("component") or "") != "inherited":
+        return False
+    return abs(len(x.get("alt") or "") - len(x.get("ref") or "")) >= min_len
+
+
 def rd(p):
     return list(csv.DictReader(open(p, newline=""), delimiter="\t"))
 
@@ -48,6 +84,11 @@ def main():
     ap.add_argument("--dir", default="refbias/p4")
     ap.add_argument("--h37rv", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--large-indel", type=int, default=SV_MIN,
+                    help="an inherited (R's own) allele whose length changes "
+                         "by at least this much makes no key: it is the SV "
+                         "block's (P4b inherited, HANDOFF ABS-2). Must equal "
+                         "p5_states.py --large-indel")
     a = ap.parse_args()
 
     h37 = load_fasta_one(a.h37rv)
@@ -57,13 +98,16 @@ def main():
     keys = {}
     ref_disagree = 0
     ref_variants = collections.defaultdict(set)
-    n_rec = 0
+    n_rec = n_inh_sv = 0
     for r in rd(a.refmap):
         p = os.path.join(a.dir, f"{r['sample']}.placed.tsv")
         if not os.path.exists(p):
             continue
         for x in rd(p):
             n_rec += 1
+            if inherited_sv_allele(x, a.large_indel):
+                n_inh_sv += 1
+                continue
             if x["frame"] == "h37rv":
                 pos = int(x["h37rv_pos"])
                 # compose against H37Rv's own base, then normalise; the key is a
@@ -115,6 +159,8 @@ def main():
     byframe = collections.Counter(r["frame"] for r in rows)
     byregion = collections.Counter(r["region"] for r in rows)
     print(f"  {n_rec} records -> {len(rows)} distinct keys")
+    print(f"  {n_inh_sv} inherited records of >= {a.large_indel} bp make no "
+          f"key: R's SV-sized differences are the SV block's (P4b, ABS-2)")
     for k, n in byframe.most_common():
         print(f"    frame {k:<7s}{n:>7d}")
     for k, n in byregion.most_common():
