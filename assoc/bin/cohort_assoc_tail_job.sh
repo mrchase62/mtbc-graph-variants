@@ -16,6 +16,8 @@ set -uo pipefail
 cd "${SLURM_SUBMIT_DIR:-.}"
 C="${1:?usage: $0 <cohort> <phenotype>}"; PH="${2:?phenotype}"
 REPO=/n/boslfs02/LABS/sfortune_lab/Lab/mchase/mtbc-graph-variants
+# a new cohort's trees stay in the run root, not the read-only data/trees
+export ASSOC_TREEDIR="${ASSOC_TREEDIR:-assoc/${C}/trees}"
 log="$(mktemp)"
 bash "${REPO}/assoc/bin/cohort_assoc_tail.sh" "$C" "$PH" 2>&1 | tee "$log"
 rc=${PIPESTATUS[0]}

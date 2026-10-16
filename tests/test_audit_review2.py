@@ -179,8 +179,8 @@ class ChainUsesTheCombinedTree(unittest.TestCase):
         txt = open("assoc/bin/cohort_assoc_tail.sh").read()
         self.assertIn("combined_alignment.py", txt)
         self.assertIn("prune_for_cohort.py", txt)
-        self.assertIn('build_snp_tree.sh" "data/trees/${C}.combined.fasta"', txt)
-        self.assertIn('--outgroup-fasta "data/trees/${C}.combined.fasta"', txt)
+        self.assertIn('build_snp_tree.sh" "${TREEDIR}/${C}.combined.fasta"', txt)
+        self.assertIn('--outgroup-fasta "${TREEDIR}/${C}.combined.fasta"', txt)
         self.assertNotIn("og.fasta", txt)
 
 

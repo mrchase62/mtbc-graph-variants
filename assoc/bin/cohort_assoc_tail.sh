@@ -78,11 +78,12 @@ lookup_cohort_table() {
 }
 
 C="${1:?usage: $0 <cohort> [phenotype.txt]}"
-# THE COHORT'S TREES LIVE WITH ITS ASSOCIATION, NOT IN data/trees (2026-10-16).
-# From runroot, data/ is the read-only MtbPangenome working tree's; nothing
-# new is written there. ASSOC_TREEDIR overrides (an older cohort whose trees
-# are already in data/trees can point back at them).
-TREEDIR="${ASSOC_TREEDIR:-assoc/${C}/trees}"
+# WHERE THE COHORT'S TREES GO (2026-10-16). From runroot, data/ is the
+# MtbPangenome working tree's, which is read-only for new work; set
+# ASSOC_TREEDIR (assoc/cohort_assoc_tail_job.sh sets assoc/<cohort>/trees)
+# to keep a new cohort's trees in the repository's run root. The default
+# stays data/trees for the cohorts whose trees are already there.
+TREEDIR="${ASSOC_TREEDIR:-data/trees}"
 mkdir -p "$TREEDIR"
 # LEVEL 1 presence tables for this cohort, if they exist. They make the
 # accessory arm's within-insert variation conditional on carrying the insert.
