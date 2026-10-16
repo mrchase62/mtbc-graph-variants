@@ -34,6 +34,15 @@ per-branch ratio does not depend on the variant, so it is computed once for the
 whole tree and every permutation becomes the mean of k sampled values. The
 scan below checks itself against phyoverlap2 on a sample of variants and
 reports the agreement rather than asserting it.
+
+ONE TEST PER PATTERN, NOT PER RECORD (2026-10-16). Records whose state rows
+are identical at every node, with the same applicability, are one test unit:
+tested once and counted once in BH, every member still written with the
+unit's result (collapse_units; --no-collapse-identical turns it off). And
+--exclude-acc-is6110 removes the accessory records that are IS6110 copies,
+for the sensitivity scan the tail runs beside the full one (read_acc_is6110,
+scan_compare.py). Both are recorded in <out stem>.run.tsv; unit membership
+is in <out stem>.units.tsv.
 """
 import argparse, collections, csv, glob, os, sys
 import numpy as np
@@ -223,6 +232,169 @@ def bh(p):
     return q
 
 
+# ---- IDENTICAL-PATTERN COLLAPSE (user, 2026-10-16: "add both options to the
+# association step"). The same biological event can reach the scan as two or
+# more records: an IS6110 insertion written once as CLASS=is6110 and again as
+# the CLASS=accessory_presence record of the catalogue locus that IS the copy
+# (INFO/ACCIS6110), a split SV event and a small-allele call of it, a catalogued
+# deletion and its caller record. Each was tested and each was counted in the
+# Benjamini-Hochberg family, so one event spent two or more tests and, where it
+# was real, reported itself twice.
+#
+# WHAT "IDENTICAL" MEANS HERE, precisely. Two tested records form one test unit
+# when
+#   1. their rows of the event matrix's STATE stream (<events>/ancestor) are
+#      identical at every node -- every leaf AND every internal node, each
+#      0 ancestral, 1 derived or 2 unknown. The leaves are the carrier vector
+#      after the writer's own missing handling (--absent, the reference and
+#      outgroup tips, inapplicable isolates of a conditional record); the
+#      internal nodes are its reconstruction. The event branches are a
+#      function of the state row, so identical rows are identical tests.
+#      Requiring the internal nodes too (not just the leaves) keeps apart two
+#      records with the same carriers whose reconstructions differ -- the MTBC
+#      pin applies only where AA resolved, so one can be pinned and the other
+#      not -- because those are not the same test.
+#   2. they have the same APPLICABILITY: both unconditional, or both
+#      conditional on the same carrier set (the level-2 presence set of their
+#      accessory locus; the locus id when no presence tables are given). An
+#      unknown leaf that is unknown because the isolate lacks the insert is a
+#      different missingness treatment from a no-call, and the level-2 null
+#      reads it differently.
+# Nothing else -- not class, not region, not position -- enters the key.
+#
+# WHAT THE UNIT DOES. It is tested once, on its REPRESENTATIVE's ladder of
+# region pools and its level-2 carrier set, and it is ONE entry in the BH
+# family of the representative's fine region. Its branches enter each region
+# pool once, not once per member. Every member keeps its own row in the
+# output, carrying the unit's p- and q-values, so no feature disappears and
+# the chain audit still finds every tested record; `unit_rep` marks the one
+# row per unit to count. The representative is the member of lowest class
+# rank -- small, sv, is6110, accessory_presence -- then the first in
+# variants.tsv order, so an IS6110 insertion and its ACCIS6110 catalogue copy
+# are tested as the insertion. A unit whose members sit in different regions
+# is flagged in its rows (`unit_regions`) because its region null is the
+# representative's.
+#
+# WHAT IT DOES NOT DO. It does not merge features, change any record's
+# carriers, or touch the merged VCF; hierarchical cases (an IS6110 insertion
+# inside an accessory locus, whose carrier sets differ) are NOT identical and
+# stay separate tests. --no-collapse-identical restores one test per record,
+# bit for bit the scan before this option.
+CLASS_RANK = {"small": 0, "sv": 1, "is6110": 2, "accessory_presence": 3}
+
+
+def collapse_units(rows, sig_of):
+    """Group `rows` into test units by `sig_of(row)` (a hashable pattern key,
+    or None to keep the row alone). Returns a list of units, each a list of
+    indices into `rows` with the representative first; units are ordered by
+    their first member's index, so with no collapse the order is `rows`'s."""
+    groups, order = {}, []
+    for i, r in enumerate(rows):
+        k = sig_of(r)
+        if k is None:
+            order.append([i])
+            continue
+        if k not in groups:
+            groups[k] = []
+            order.append(groups[k])
+        groups[k].append(i)
+    units = []
+    for g in order:
+        rep = min(g, key=lambda i: (CLASS_RANK.get(rows[i]["class"], 9), i))
+        units.append([rep] + [i for i in g if i != rep])
+    return units
+
+
+# ---- THE IS6110 SENSITIVITY SET (same instruction). The catalogue loci whose
+# sequence is an IS6110 copy are written by merge_cohort_vcf.py as
+# accessory_presence records flagged ACCIS6110, beside the IS6110 arm's own
+# insertion records at the same sites. How a copy should be counted against an
+# insertion that sits ON an accessory locus is not decided (HANDOFF SV-EVAL,
+# decision a), so the tail runs the scan twice -- once on everything, once
+# with every flagged record removed -- and compares the two; an association
+# that appears in only one of them is the one the decision would move.
+def read_acc_is6110(path):
+    """The IDs of the accessory_presence records flagged ACCIS6110.
+
+    `path` is the merged VCF (.vcf or .vcf.gz), whose INFO/ACCIS6110 flag is
+    read, or a text file of IDs one per line (`#` comments), for a cohort
+    whose VCF predates the flag. A VCF without the flag's ##INFO header cannot
+    say which loci are copies and is refused rather than read as `none`."""
+    if not os.path.exists(path):
+        sys.exit(f"FATAL: --exclude-acc-is6110 {path} does not exist")
+    ids = set()
+    if path.endswith((".vcf", ".vcf.gz")):
+        import gzip
+        op = gzip.open if path.endswith(".gz") else open
+        header = False
+        with op(path, "rt") as fh:
+            for line in fh:
+                if line.startswith("##"):
+                    if line.startswith("##INFO=<ID=ACCIS6110,"):
+                        header = True
+                    continue
+                if line.startswith("#"):
+                    if not header:
+                        sys.exit(f"FATAL: --exclude-acc-is6110 {path} has no "
+                                 f"##INFO ACCIS6110 header; it predates the "
+                                 f"flag and cannot say which accessory loci "
+                                 f"are IS6110 copies")
+                    continue
+                f = line.rstrip("\n").split("\t", 8)
+                info = f[7].split(";")
+                if "ACCIS6110" in info and "CLASS=accessory_presence" in info:
+                    ids.add(f[2])
+        return ids
+    for line in open(path):
+        s = line.split("#", 1)[0].strip()
+        if s:
+            ids.add(s)
+    return ids
+
+
+SCAN_FIELDS = [
+    "row_key", "id", "cls", "region", "region_pool", "region_level",
+    "pos", "gains", "carriers",
+    "obs", "obs_cond", "acc_locus", "cond_carriers",
+    "cond_carriers_pheno", "p_cond", "q_cond",
+    "p_branch", "q_branch", "p_region", "q_region",
+    "p_lineage", "q_lineage", "null_pool", "refined",
+    # the identical-pattern collapse: the unit this row was tested in, its
+    # size, 1 on the one row per unit to count, the BH family it was tested
+    # in, the members' fine regions where they differ, and its members' IDs
+    "unit_id", "unit_size", "unit_rep", "unit_region", "unit_regions",
+    "unit_classes", "unit_members"]
+
+
+def survives(o):
+    """THE SURVIVOR RULE (see the note at its use in main). `o` holds floats,
+    or the strings a scan.tsv row carries ('nan' for a null not run)."""
+    o = {k: (float(o[k]) if o.get(k) not in (None, "") else float("nan"))
+         for k in ("q_lineage", "q_cond", "q_region", "q_branch")}
+    lineage_ok = o["q_lineage"] == o["q_lineage"] and o["q_lineage"] < 0.05
+    if o["q_cond"] == o["q_cond"]:
+        return (o["q_cond"] < 0.05 and o["q_branch"] < 0.05
+                and lineage_ok)
+    return (o["q_region"] == o["q_region"] and o["q_region"] < 0.05
+            and o["q_branch"] < 0.05 and lineage_ok)
+
+
+def sha16(path):
+    """16 hex of a file's sha256, read in blocks (a cohort VCF can be large)."""
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for b in iter(lambda: fh.read(1 << 20), b""):
+            h.update(b)
+    return h.hexdigest()[:16]
+
+
+def side_path(out, tag):
+    """<out stem>.<tag>.tsv beside a scan output."""
+    stem = out[:-4] if out.endswith(".tsv") else out
+    return f"{stem}.{tag}.tsv"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--events", default="assoc/scale200/events")
@@ -301,10 +473,31 @@ def main():
     ap.add_argument("--check", type=int, default=12,
                     help="variants to re-test with phyoverlap2 itself")
     ap.add_argument("--phyoverlap2", default="")
+    ap.add_argument("--no-collapse-identical", action="store_true",
+                    help="test every record on its own, as before 2026-10-16. "
+                         "By default records whose state rows in "
+                         "<events>/ancestor are identical at every node, with "
+                         "the same applicability, are ONE test unit: tested "
+                         "once and counted once in BH (see collapse_units). "
+                         "Members are listed in <out stem>.units.tsv.")
+    ap.add_argument("--exclude-acc-is6110", default="",
+                    help="the IS6110 sensitivity run: remove every "
+                         "accessory_presence record flagged ACCIS6110 before "
+                         "anything else -- from the tests, the region pools "
+                         "and the BH families. The merged VCF (its INFO flag "
+                         "is read) or a file of IDs. The tail runs this as a "
+                         "second scan beside the full one.")
     ap.add_argument("--out", required=True)
     ap.add_argument("--seed", type=int, default=20260925)
     a = ap.parse_args()
     rng = np.random.default_rng(a.seed)
+    run_rec = [("events", a.events), ("phenotype", a.phenotype),
+               ("classes", a.classes), ("permutations", a.permutations),
+               ("refine_permutations", a.refine_permutations),
+               ("seed", a.seed),
+               ("collapse_identical",
+                "off (--no-collapse-identical)" if a.no_collapse_identical
+                else "on")]
 
     T = tree_frame(os.path.join(a.events, "labelled.nwk"))
     li = {l: j for j, l in enumerate(T["leaves"])}
@@ -450,9 +643,42 @@ def main():
     w = el / el.sum() if el.sum() > 0 else np.full(T["n"], 1 / T["n"])
 
     want = {c for c in a.classes.split(",") if c}
-    allrows = [r for r in csv.DictReader(
-        open(os.path.join(a.events, "variants.tsv")), delimiter="\t")
-        if r["class"] in want]
+    everyrow = list(csv.DictReader(
+        open(os.path.join(a.events, "variants.tsv")), delimiter="\t"))
+    allrows = [r for r in everyrow if r["class"] in want]
+    if a.exclude_acc_is6110:
+        # Every listed ID must be an accessory_presence record of THIS event
+        # matrix. An ID it does not hold means the list (or VCF) is from
+        # another cohort or build, and an ID of another class means the list
+        # is not what the option says -- either way a silent partial
+        # exclusion would be read as the sensitivity result.
+        xid = read_acc_is6110(a.exclude_acc_is6110)
+        cls_of = {}
+        for r in everyrow:
+            cls_of.setdefault(r["id"], set()).add(r["class"])
+        absent = sorted(x for x in xid if x not in cls_of)
+        wrong = sorted(x for x in xid if x in cls_of
+                       and cls_of[x] != {"accessory_presence"})
+        if absent:
+            sys.exit(f"FATAL: {len(absent):,} of {len(xid):,} ACCIS6110 IDs "
+                     f"from {a.exclude_acc_is6110} are not in "
+                     f"{a.events}/variants.tsv, e.g. {absent[:3]}; the list "
+                     f"is not from this cohort's VCF")
+        if wrong:
+            sys.exit(f"FATAL: {len(wrong):,} IDs from {a.exclude_acc_is6110} "
+                     f"are not accessory_presence records, e.g. {wrong[:3]}")
+        n0 = len(allrows)
+        allrows = [r for r in allrows if r["id"] not in xid]
+        print(f"  IS6110 sensitivity: {len(xid):,} accessory_presence records "
+              f"flagged ACCIS6110 excluded ({n0 - len(allrows):,} of them in "
+              f"the scanned classes)")
+        run_rec += [("exclude_acc_is6110", a.exclude_acc_is6110),
+                    ("exclude_acc_is6110_sha16",
+                     sha16(a.exclude_acc_is6110)),
+                    ("acc_is6110_ids", len(xid)),
+                    ("acc_is6110_rows_excluded", n0 - len(allrows))]
+    else:
+        run_rec.append(("exclude_acc_is6110", "none"))
     nbranch = T["n"] - 1
     for r in allrows:
         # THE CALLABILITY FLOOR HAS TO BE RELATIVE TO WHAT IS APPLICABLE.
@@ -537,6 +763,82 @@ def main():
                  f"matrix row, e.g. {missing[:3]}")
     rows = keep
     print(f"  {len(rows):,} of them resolved to event branches")
+
+    # ---- the identical-pattern collapse (collapse_units, above) -----------
+    # The state rows come from the writer's STATE stream, in the tree's node
+    # order (looked up by label, not assumed to share the event stream's).
+    if a.no_collapse_identical:
+        units = [[i] for i in range(len(rows))]
+        n_leaf_units = n_gain_units = len(rows)
+    else:
+        anc_dir = os.path.join(a.events, "ancestor")
+        if not os.path.isdir(anc_dir):
+            sys.exit(f"FATAL: no {anc_dir}; the identical-pattern collapse "
+                     f"reads each record's state row from it. Pass "
+                     f"--no-collapse-identical to test every record alone")
+        an = CallBytestream(anc_dir)
+        acol = {c: i for i, c in enumerate(np.asarray(an.calls.col))}
+        nolab = [l for l in T["labels"] if l not in acol]
+        if nolab:
+            sys.exit(f"FATAL: {len(nolab):,} tree nodes have no column in "
+                     f"{anc_dir}, e.g. {nolab[:3]}; it is not this tree's "
+                     f"state matrix")
+        node_cols = np.asarray([acol[l] for l in T["labels"]])
+        leaf_mask = np.asarray(T["is_leaf"], dtype=bool)
+        _app_sig = {}
+
+        def applicability(r):
+            lid = r.get("acc_locus") or ""
+            if not lid:
+                return b"unconditional"
+            if lid not in _app_sig:
+                A = cond_carriers.get(lid)
+                _app_sig[lid] = (b"carriers:" + np.packbits(A).tobytes()
+                                 if A is not None else b"locus:" + lid.encode())
+            return _app_sig[lid]
+
+        sig_full, sig_leaf, sig_gain = {}, {}, {}
+        for r in rows:
+            try:
+                st = np.asarray(an.calls.loc[event_key(r["row_key"])],
+                                dtype=np.uint8)[node_cols]
+            except Exception:
+                sys.exit(f"FATAL: {r['row_key']} has an event row but no state "
+                         f"row in {anc_dir}; the two streams are not one "
+                         f"matrix")
+            app = applicability(r)
+            sig_full[r["row_key"]] = (st.tobytes(), app)
+            # two diagnostics, NOT used to collapse: how many units a looser
+            # key would give (leaves only; the gain branches only)
+            sig_leaf[r["row_key"]] = (st[leaf_mask].tobytes(), app)
+            sig_gain[r["row_key"]] = (np.sort(ev_of[r["row_key"]]).tobytes(),
+                                      app)
+        an.close()
+        units = collapse_units(rows, lambda r: sig_full[r["row_key"]])
+        n_leaf_units = len(set(sig_leaf.values()))
+        n_gain_units = len(set(sig_gain.values()))
+    multi = [u for u in units if len(u) > 1]
+    print(f"  identical-pattern collapse: "
+          + ("OFF (--no-collapse-identical); " if a.no_collapse_identical
+             else "")
+          + f"{len(rows):,} records -> {len(units):,} test units "
+          f"({len(rows) - len(units):,} tests removed; {len(multi):,} units "
+          f"of >= 2 records)")
+    if multi:
+        byc = collections.Counter(
+            "+".join(sorted({rows[i]["class"] for i in u})) for u in multi)
+        print("    multi-record units by classes: " + ", ".join(
+            f"{k} {v:,}" for k, v in byc.most_common()))
+    if not a.no_collapse_identical:
+        print(f"    (diagnostic, not applied: keyed on the leaves alone "
+              f"{n_leaf_units:,} units; on the gain branches alone "
+              f"{n_gain_units:,})")
+    run_rec += [("records_tested", len(rows)), ("test_units", len(units)),
+                ("tests_removed_by_collapse", len(rows) - len(units)),
+                ("multi_record_units", len(multi)),
+                ("units_if_keyed_on_leaves_only", n_leaf_units),
+                ("units_if_keyed_on_gain_branches_only", n_gain_units)]
+    reps = [rows[u[0]] for u in units]
 
     import bisect as _bi
     _g = []
@@ -698,9 +1000,11 @@ def main():
                 out2.append(x)
         return out2
 
+    # One entry per TEST UNIT: a unit's branches enter each pool once, through
+    # its representative's ladder (with the collapse off, one per record).
     pool = collections.defaultdict(list)
     n_var = collections.Counter()
-    for r in rows:
+    for r in reps:
         ev = ev_of[r["row_key"]].tolist()
         for rung in ladder(r):
             pool[rung].extend(ev)
@@ -712,7 +1016,7 @@ def main():
 
     P = a.permutations
     out, aux = [], []
-    for r in rows:
+    for r in reps:
         br = ev_of[r["row_key"]]
         k = len(br)
         obs = float(ov[br].mean())
@@ -827,18 +1131,69 @@ def main():
         o.setdefault("q_lineage", float("nan"))
         o.setdefault("q_cond", float("nan"))
 
+    # ---- ONE ROW PER RECORD, THE UNIT'S RESULT ON EVERY MEMBER ROW. `out`
+    # holds one entry per test unit, in `units` order, and everything above --
+    # the tests, the pools, BH -- saw only those. Each member gets a copy of
+    # its unit's result under its own row_key, id, class, fine region,
+    # position and locus, so every tested feature is still in the file (and
+    # the chain audit's per-stratum reconciliation still holds); `unit_rep`
+    # is 1 on the row to count. A member's own fine region can differ from
+    # the unit's, whose BH family it was tested in (`unit_region`).
+    members_out = []
+    for k, (o, u) in enumerate(zip(out, units)):
+        o["_unit"] = k
+        rep = rows[u[0]]
+        uid = f"u:{rep['row_key']}"
+        regs = list(dict.fromkeys(regkey(rows[i]) for i in u))
+        o.update(unit_id=uid, unit_size=len(u), unit_rep=1,
+                 unit_region=o["region"],
+                 unit_regions=",".join(regs) if len(regs) > 1 else "",
+                 unit_classes=",".join(sorted({rows[i]["class"] for i in u})),
+                 unit_members=";".join(rows[i]["id"] for i in u))
+        for i in u[1:]:
+            r = rows[i]
+            m = dict(o)
+            m.update(row_key=r["row_key"], id=r["id"], cls=r["class"],
+                     region=regkey(r), pos=r["pos"],
+                     carriers=r["n_derived_leaves"],
+                     acc_locus=r.get("acc_locus", ""), unit_rep=0)
+            members_out.append(m)
+    allout = out + members_out
+    allout.sort(key=lambda o: (o["q_region"] if o["q_region"] == o["q_region"]
+                               else 9, o["p_branch"], o["_unit"],
+                               -o["unit_rep"]))
     out.sort(key=lambda o: (o["q_region"] if o["q_region"] == o["q_region"]
                             else 9, o["p_branch"]))
     with open(a.out, "w", newline="") as fh:
-        w2 = csv.DictWriter(fh, delimiter="\t", fieldnames=[
-            "row_key", "id", "cls", "region", "region_pool", "region_level",
-            "pos", "gains", "carriers",
-            "obs", "obs_cond", "acc_locus", "cond_carriers",
-            "cond_carriers_pheno", "p_cond", "q_cond",
-            "p_branch", "q_branch", "p_region", "q_region",
-            "p_lineage", "q_lineage", "null_pool", "refined"])
+        w2 = csv.DictWriter(fh, delimiter="\t", extrasaction="ignore",
+                            fieldnames=SCAN_FIELDS)
         w2.writeheader()
-        w2.writerows(out)
+        w2.writerows(allout)
+    # the membership table: one line per record, every unit
+    with open(side_path(a.out, "units"), "w") as fh:
+        fh.write("unit_id\tunit_size\tis_rep\trow_key\tid\tclass\tregion\t"
+                 "acc_locus\tunit_region\n")
+        for u in units:
+            uid = f"u:{rows[u[0]]['row_key']}"
+            ureg = regkey(rows[u[0]])
+            for j, i in enumerate(u):
+                r = rows[i]
+                fh.write(f"{uid}\t{len(u)}\t{int(j == 0)}\t{r['row_key']}\t"
+                         f"{r['id']}\t{r['class']}\t{regkey(r)}\t"
+                         f"{r.get('acc_locus', '')}\t{ureg}\n")
+    n_mixed = sum(1 for o in out if o["unit_regions"])
+    run_rec += [("units_spanning_regions", n_mixed),
+                ("survivors_units", sum(1 for o in out if survives(o))),
+                ("survivors_rows", sum(1 for o in allout if survives(o)))]
+    with open(side_path(a.out, "run"), "w") as fh:
+        fh.write("key\tvalue\n")
+        for k, v in run_rec:
+            fh.write(f"{k}\t{v}\n")
+    print(f"  -> {side_path(a.out, 'units')} (unit membership), "
+          f"{side_path(a.out, 'run')} (options and counts)")
+    if n_mixed:
+        print(f"  {n_mixed:,} units hold records of more than one region; "
+              f"each was tested on its representative's region null")
 
     print(f"\n  significant at q < 0.05, by region and by which null:")
     print(f"  {'region':<34}{'tested':>8}{'branch':>9}{'region':>9}"
@@ -888,13 +1243,9 @@ def main():
     # never run (q_lineage blank) as a pass, so it matched `all three` only
     # while every row had a lineage null and every region pass was also a
     # branch pass. A null that did not run is now `not tested`, never a pass.
-    def survives(o):
-        lineage_ok = o["q_lineage"] == o["q_lineage"] and o["q_lineage"] < 0.05
-        if o["q_cond"] == o["q_cond"]:
-            return (o["q_cond"] < 0.05 and o["q_branch"] < 0.05
-                    and lineage_ok)
-        return (o["q_region"] == o["q_region"] and o["q_region"] < 0.05
-                and o["q_branch"] < 0.05 and lineage_ok)
+    # The rule is survives(), at module level, so scan_compare.py applies the
+    # same one. Counted in TEST UNITS: a unit of several records is one
+    # association, however many rows carry it.
     surv = [o for o in out if survives(o)]
     if surv:
         print(f"\n  the {len(surv)} that survive all three nulls:")

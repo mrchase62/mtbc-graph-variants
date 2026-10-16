@@ -26,6 +26,19 @@
 #   4  the event matrix: per-branch gains, the input every test reads (with
 #      presence tables, after the cohort's node -> accessory locus table)
 #   5  the tests -- variant-level scan, then IS6110 collapsed to genes
+#
+# TWO SCAN OPTIONS, BOTH ON BY DEFAULT (user, 2026-10-16), set by environment
+# and recorded in assoc/<cohort>/assoc_options.tsv and each scan's .run.tsv:
+#   ASSOC_COLLAPSE_IDENTICAL=1   records with identical state rows (same
+#                                carriers after the writer's missing handling,
+#                                same reconstruction, same applicability) are
+#                                one test unit, tested and BH-counted once
+#                                (assoc_scan.py; 0 passes --no-collapse-identical)
+#   ASSOC_IS6110_SENSITIVITY=1   a second scan with every accessory_presence
+#                                record flagged ACCIS6110 excluded
+#                                (scan.no_accis6110.tsv), and the associations
+#                                found by one and not the other
+#                                (scan.is6110_sensitivity.tsv); 0 skips it
 set -euo pipefail
 _mtb_env=""
 for _c in "${MTB_ENV_FILE:-}" \
@@ -51,6 +64,7 @@ fi
 for _s in "${HERE}/add_outgroup.py" "${HERE}/combined_alignment.py" \
           "${HERE}/prune_for_cohort.py" "${HERE}/write_event_matrix.py" \
           "${HERE}/assoc_scan.py" "${HERE}/is6110_gene_burden.py" \
+          "${HERE}/scan_compare.py" \
           "${REPO}/accessory/bin/node_locus_from_p4.py" \
           "${REPO}/bin/vcf_to_alignment.py" "${REPO}/bin/build_snp_tree.sh" \
           "${REPO}/bin/retier_intervals.py" "${REPO}/bin/audit_chain.py"; do
@@ -326,11 +340,59 @@ done
 # gwas1000's 2026-10-02 scan ran that way: cond_carriers and p_cond were blank
 # for every accessory variant, and the audit flagged 6 records with two or more
 # origins that the floor had dropped.
-"$MTB_PY_VT" "${HERE}/assoc_scan.py" --events "assoc/${C}/events" \
-    --phenotype "$PHENO" --lineages "$LINTAB" \
-    ${ACCPRES:+--accessory-presence "$ACCPRES"} \
-    --sv-intervals "$SVTIERS" \
+#
+# THE TWO OPTIONS (see the header). Anything but 0 or 1 is refused rather
+# than read as one of them, so a typo cannot silently turn an option off.
+COLLAPSE="${ASSOC_COLLAPSE_IDENTICAL:-1}"
+IS_SENS="${ASSOC_IS6110_SENSITIVITY:-1}"
+for _o in "ASSOC_COLLAPSE_IDENTICAL=${COLLAPSE}" "ASSOC_IS6110_SENSITIVITY=${IS_SENS}"; do
+    [[ "${_o#*=}" == 0 || "${_o#*=}" == 1 ]] || {
+        echo "FATAL: ${_o}; must be 0 or 1" >&2; exit 1; }
+done
+SCAN_ARGS=(--events "assoc/${C}/events" --phenotype "$PHENO"
+           --lineages "$LINTAB" ${ACCPRES:+--accessory-presence "$ACCPRES"}
+           --sv-intervals "$SVTIERS")
+[[ "$COLLAPSE" == 0 ]] && SCAN_ARGS+=(--no-collapse-identical)
+"$MTB_PY_VT" "${HERE}/assoc_scan.py" "${SCAN_ARGS[@]}" \
     --out "assoc/${C}/scan.tsv"
+# THE IS6110 SENSITIVITY RUN. Needs the VCF's ACCIS6110 flag: a VCF from
+# before the flag (2026-10-16) cannot say which accessory loci are IS6110
+# copies, and one holding no flagged record would repeat the first scan, so
+# both are skipped with the reason recorded. A skipped or disabled run
+# removes the previous run's sensitivity files, which would otherwise read as
+# this run's.
+SENS_STATE="off (ASSOC_IS6110_SENSITIVITY=0)"
+N_ACCIS=0
+if [[ "$IS_SENS" == 1 ]]; then
+    _hdr="$( (gzip -cd "$VCF" 2>/dev/null || true) \
+        | awk '/^#CHROM/{exit} /^##INFO=<ID=ACCIS6110,/{f=1} END{print f+0}')"
+    if [[ "$_hdr" != 1 ]]; then
+        SENS_STATE="skipped: ${VCF} has no ACCIS6110 header (predates the flag)"
+    else
+        N_ACCIS="$( (gzip -cd "$VCF" 2>/dev/null || true) | awk -F'\t' \
+            '!/^#/ && $8 ~ /(^|;)ACCIS6110(;|$)/ {n++} END{print n+0}')"
+        if [[ "$N_ACCIS" == 0 ]]; then
+            SENS_STATE="skipped: no record of ${VCF} is flagged ACCIS6110"
+        else
+            SENS_STATE="on"
+        fi
+    fi
+fi
+if [[ "$SENS_STATE" == on ]]; then
+    echo "=== 5a'. IS6110 sensitivity: the scan without the ${N_ACCIS} ACCIS6110 records"
+    "$MTB_PY_VT" "${HERE}/assoc_scan.py" "${SCAN_ARGS[@]}" \
+        --exclude-acc-is6110 "$VCF" --out "assoc/${C}/scan.no_accis6110.tsv"
+    "$MTB_PY" "${HERE}/scan_compare.py" --full "assoc/${C}/scan.tsv" \
+        --sens "assoc/${C}/scan.no_accis6110.tsv" \
+        --out "assoc/${C}/scan.is6110_sensitivity.tsv"
+else
+    echo "  IS6110 sensitivity run ${SENS_STATE}"
+    rm -f "assoc/${C}/scan.no_accis6110".{tsv,units.tsv,run.tsv} \
+          "assoc/${C}/scan.is6110_sensitivity".{tsv,summary.txt}
+fi
+printf 'key\tvalue\nvcf\t%s\nvcf_sha\t%s\ncollapse_identical\t%s\nis6110_sensitivity\t%s\naccis6110_records\t%s\n' \
+    "$VCF" "$VCF_SHA" "$([[ "$COLLAPSE" == 1 ]] && echo on || echo 'off (ASSOC_COLLAPSE_IDENTICAL=0)')" \
+    "$SENS_STATE" "$N_ACCIS" > "assoc/${C}/assoc_options.tsv"
 echo "=== 5b. IS6110, collapsed to genes"
 # The burden takes the same lineage table as the scan. Without it the lineage
 # null is skipped and p_lineage is written blank, which gwas1000 and scale200

@@ -116,6 +116,25 @@ def make_events(d, variants):
                 und, len(gains))) + "\n")
     with open(os.path.join(ev, "event", "fake.json"), "w") as fh:
         json.dump({"cols": cols, "rows": rows}, fh)
+    # the STATE stream the identical-pattern collapse reads: a node is derived
+    # when it or an ancestor is a gain branch, so distinct gain sets give
+    # distinct state rows and these fixtures' records stay one unit each
+    T_par = T["parent"]
+    srows = {}
+    for key, v in rows.items():
+        st = []
+        for i in range(len(cols)):
+            j, der = i, 0
+            while j is not None:
+                if v[j] == 1:
+                    der = 1
+                    break
+                j = T_par[j]
+            st.append(der)
+        srows[key] = st
+    os.makedirs(os.path.join(ev, "ancestor"), exist_ok=True)
+    with open(os.path.join(ev, "ancestor", "fake.json"), "w") as fh:
+        json.dump({"cols": cols, "rows": srows}, fh)
     with open(os.path.join(d, "pheno.txt"), "w") as fh:
         fh.write("\n".join(CARRIERS) + "\n")
     with open(os.path.join(d, "lin.tsv"), "w") as fh:
