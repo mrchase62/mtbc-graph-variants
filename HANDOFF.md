@@ -727,6 +727,17 @@ splits association signal. Fix: merge same-site records of one type and
 similar length into one presence/absence event; keep copy-number series
 (VNTRs, gene duplications) as counts.
 
+**SV-EVAL-1..4: problems found in the 1K SV evaluation** (2026-10-16,
+`analysis/sv_eval_1k/README.md`; user: "fix 1-4"). Being fixed (agent
+worktree), before the 10K:
+1. IS6110 ABSENT never read-checked and set site-wide (46 sites ABSENT in
+   >= 90% of isolates; 4,230,303 ABSENT in 997 though SAMD00089643 has 116x).
+2. Accessory presence: 43% NOCALL with no EV; only 99 of 564 loci written.
+3. 486 'small_allele' insertions >= 500 bp are misplaced graph alleles.
+4. Real deletions NOCALL 'no_coverage' where the gap is the deletion.
+Also found: SPLIT-1 cuts tests but not homoplasy (merged records sit in
+different clades).
+
 **SPLIT-1: merge split SV records into one event** (added 2026-10-14, user:
 "yes, add the merge to the fix list"). Before P5 on new1k_p200.
 - **Merged 2026-10-14 (with AA-1).** User decisions 2026-10-14: SV events take
