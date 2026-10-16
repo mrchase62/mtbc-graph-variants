@@ -1,0 +1,28 @@
+new1k_p200 merged VCF: 1000 isolates, 109,253 H37Rv-frame SNP keys (92,972 outside the mask)
+  no-call share per isolate (unmasked SNP keys): median 0.0060, p99 0.0109, max 0.0274
+
+A. Merged VCF vs each isolate's own P1 H37Rv-frame calls (unmasked SNPs)
+  ALT in both 1,201,486; merged only 5,038 (0.418% of merged ALT); P1 only 0 (0.000% of P1 ALT): of those NOCALL in merged 0, REF 0, no merged key 0
+  per isolate: merged-only median 5 (p99 8); P1-only median 0 (p99 0)
+  worst isolates (sample, both, merged-only, P1-only): [('SAMEA1403576', 804, 10, 0), ('SAMN06579108', 1797, 10, 0), ('SAMEA1119324', 1203, 9, 0), ('SAMEA112806523', 787, 9, 0), ('SAMEA7525367', 1181, 9, 0)]
+
+B. TB-Profiler DR SNPs (freq >= 0.9) found as ALT in the merged VCF
+  2,343 of 2,345 (99.915%)
+    rpoB     ALT 505, NOCALL 1, noKEY 1
+    katG     ALT 426
+    embB     ALT 351
+    pncA     ALT 221
+    inhA     ALT 188
+    rpsL     ALT 182
+    gyrA     ALT 131
+    rrs      ALT 125
+    embA     ALT 44
+    gid      ALT 33
+    eis      ALT 31
+    ethA     ALT 28
+  examples not ALT: [('SAMEA3444111', 'rpoB', 761140, 'C', 'NOCALL', ''), ('SAMEA3444111', 'rpoB', 761142, 'C', 'noKEY', '')]
+  RRDR, cohort draw label x merged VCF (any ALT in rpoB 761082-761162): label1&vcf1 497, label1&vcf0 3, label0&vcf1 6, label0&vcf0 494
+
+C. Old build (gwas1000, CX333 graph) vs new build, shared isolates
+  shared isolates 525; unmasked SNP keys in both VCFs 58,955 (only in new 34,017, only in old 55,430)
+  cells called in both 30,732,332: agree 99.9957%; ALT only in new 1,310, ALT only in old 0
