@@ -727,6 +727,14 @@ splits association signal. Fix: merge same-site records of one type and
 similar length into one presence/absence event; keep copy-number series
 (VNTRs, gene duplications) as counts.
 
+**Cohort gate (2026-10-16, user: "add the gate").** `bin/cohort_gate.py`,
+pass `p5gate` after `p5vcf` (`bin/p5_gate.sh`): classes present, accessory
+loci written vs catalogue, per-class NOCALL share, site-wide ABSENT/NOCALL
+(H37Rv frame, outside the mask), no small_allele SV > 400 bp, per-isolate
+SNP no-call, DR SNP recovery (GATE_TBPROFILER), optional baseline. It fails
+the pre-fix new1k_p200 VCF on all four SV-EVAL problems. Thresholds for the
+sv site-wide count to be calibrated on the fixed rerun.
+
 **SV-EVAL-1..4: problems found in the 1K SV evaluation** (2026-10-16,
 `analysis/sv_eval_1k/README.md`; user: "fix 1-4"). Being fixed (agent
 worktree), before the 10K:
@@ -735,6 +743,22 @@ worktree), before the 10K:
 2. Accessory presence: 43% NOCALL with no EV; only 99 of 564 loci written.
 3. 486 'small_allele' insertions >= 500 bp are misplaced graph alleles.
 4. Real deletions NOCALL 'no_coverage' where the gap is the deletion.
+**Merged 2026-10-16.** User decisions: (a) IS6110-copy accessory loci are NOT
+folded into IS6110 records: "the association is hierarchical in cases where
+there is an IS6110 insertion on top of an existing accessory genome that we
+will want to account for in associations too that I haven't thought through
+how to do yet" -- kept written and flagged ACCIS6110; open design question
+for the association (how to count an IS6110 insertion inside an accessory
+locus). (b) depth-only deletion ALTs stay off inside the mask and at
+low-coverage flanks (truth: those gaps were dropout). (c) IS6110 thresholds
+as implemented (masked REF -> NOCALL; ALT needs >= 50% junction reads).
+**RD-1..5 (2026-10-16, `analysis/rd_ancestry_1k/README.md`), to fix:**
+1. RD182 (6.5 kb, L4.1.2.1) has no deletion record (carriers ABSENT inside it).
+2. Nested/overlapping deletions coded inconsistently (ALT vs NOCALL, not ABSENT).
+3. Independent alleles at RD516, N-RD25, RD511/RD724 merged into one record.
+4. 829 of 948 deletion interval records have no AA_STATE (incl. RD239, RD750).
+5. Masked deletion interval calls noisy per isolate (median 5, max 154
+   private calls): filter or exclude noisy isolates before association.
 Also found: SPLIT-1 cuts tests but not homoplasy (merged records sit in
 different clades).
 

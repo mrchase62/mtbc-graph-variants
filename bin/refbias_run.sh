@@ -61,7 +61,7 @@ BUILD_ROOT="${BUILD_ROOT:-refbias/build}"
 # and before any deletion had been genotyped for absence. p5 now stops after
 # the tables (`--pre`); p1is earns the IS6110 REFs, p5svgt measures deletion
 # absence, and p5vcf builds the VCF last, depending on all three.
-ORDER=(p1 p2 p3 p4 p4b p5 p1g p1i p1iv p1is p5svgt p5vcf)
+ORDER=(p1 p2 p3 p4 p4b p5 p1g p1i p1iv p1is p5svgt p5vcf p5gate)
 
 die() { echo "FATAL: $*" >&2; exit 1; }
 
@@ -597,6 +597,13 @@ for p in "${RUN[@]}"; do
             JOB[p5vcf]=$(submit p5vcf bin/p5_finish.sh "${P5EX},P5FSTEP=--merge" "" \
                     "$_up" "-c 1 --mem=4G")
         fi ;;
+      p5gate)
+        # the cohort acceptance gate (bin/cohort_gate.py, 2026-10-16), after
+        # the merged VCF; a FAIL ends the chain here, before association or
+        # the next batch. GATE_BASELINE / GATE_TBPROFILER / GATE_ARGS pass
+        # through from the environment.
+        JOB[p5gate]=$(submit p5gate bin/p5_gate.sh "OUTDIR=${OUTROOT}/p5,GATE_BASELINE=${GATE_BASELINE:-},GATE_TBPROFILER=${GATE_TBPROFILER:-},GATE_ARGS=${GATE_ARGS:-}" "" \
+                "${JOB[p5vcf]:-}" "-c 1 --mem=8G") ;;
       archive|restore)
         # Not part of the default chain: run with --only archive after a
         # cohort finishes, and --only restore before rerunning P3, SV
