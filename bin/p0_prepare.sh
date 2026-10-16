@@ -200,7 +200,7 @@ if [[ "$LIST" == 1 ]]; then
     echo "build id : $BUILD_ID"
     echo "build dir: $BUILD"
     for s in stamp paths accessions gff refs frames assets catalogue nodes panel_diffs \
-             is6110_intervals ancestral manifest; do
+             is6110_intervals ancestral manifest projections; do
         if [[ -s "${BUILD}/logs/$s.done" ]]; then
             printf "  %-16s done   %s\n" "$s" "$(head -1 "${BUILD}/logs/$s.done")"
         else printf "  %-16s MISSING\n" "$s"; fi
@@ -857,6 +857,94 @@ step_manifest() {
     _inputs; _mark manifest
 }
 
+# --- step: projections ---------------------------------------------------------
+# PROJECT EVERY PANEL GENOME BEFORE A LARGE COHORT (user, 2026-10-15: "make sure
+# that we have all the projections done before starting the 10K"). P5 states
+# and SV genotyping both read the build's projection store (proj/<ref>/, keyed
+# by H37Rv position; bin/proj_store.py). On a new build it is empty, and
+# new1k_p200 lost about 10 hours filling it inside the per-sample tasks. This
+# step fills it once per genome, ahead of time:
+#   - every graph-VCF record position on the H37Rv path (the panel's own
+#     variation, which most cohort keys share);
+#   - any further position lists in PROJ_EXTRA (comma list): a cohort's
+#     p5/keys.tsv (its h37rv_pos column) or an SV probe list
+#     (path,0-based pos,+ lines), e.g. a finished cohort of the same build.
+# A later cohort then projects only its own new positions, once per reference
+# (refbias_run.sh's p5proj and p5svgtproj steps).
+#   PROJ_EXTRA=refbias/new1k_p200/p5/keys.tsv,refbias/work/new1k_p200_p5svgt/probes.iv.txt \
+#     sbatch -c 4 -t 0-06:00 --array=1-$(wc -l < <build>/assets/accessions.txt) \
+#     bin/p0_prepare.sh --step projections        # one task per panel genome
+#   bash bin/p0_prepare.sh --step projections     # then: check all, mark done
+# Measured on P200 (4 cores): ~126,000 positions take 30-50 min per genome.
+# Not in the default run: about 200-250 CPU-hours for 200 genomes.
+step_projections() {
+    local list="${BUILD}/assets/accessions.txt" need="${BUILD}/assets/proj_positions.txt"
+    local store="${PROJSTORE:-${BUILD}/proj}" mk="${BUILD}/logs/projections"
+    mkdir -p "$store" "$mk"
+    _have accessions || { echo "FATAL: step 'projections' needs step 'accessions' done first" >&2; return 1; }
+    _have assets || { echo "FATAL: step 'projections' needs step 'assets' done first" >&2; return 1; }
+    # the position list, built once and shared by every task (mv -n: the first
+    # complete copy wins, as P5's shared files do)
+    if [[ ! -s "$need" ]]; then
+        local tmp="${need}.tmp.$$" f
+        {
+            "$MTB_BCFTOOLS" query -f '%CHROM\t%POS\n' "${BUILD}/assets/graph_collapsed.vcf.gz" \
+              | awk -F'\t' -v c="${H37RV_PATH##*#}" -v p="$H37RV_PATH" '{n=split($1,a,"#")} a[n]==c {print p","($2-1)",+"}'
+            IFS=',' read -r -a _ex <<< "${PROJ_EXTRA:-}"
+            for f in "${_ex[@]}"; do
+                [[ -n "$f" ]] || continue
+                mtb_require_file "$f" || return 1
+                if head -1 "$f" | grep -q $'\th37rv_pos'; then
+                    awk -F'\t' -v p="$H37RV_PATH" 'NR==1{for(i=1;i<=NF;i++) if($i=="h37rv_pos") c=i; next}
+                         $c ~ /^[0-9]+$/ {print p","($c-1)",+"}' "$f"
+                else
+                    grep -v '^#' "$f"
+                fi
+            done
+        } | sort -u > "${tmp}.raw"
+        # the store is keyed in the panel frame, as p5_merge.sh keys it; on
+        # H37Rv the two frames coincide (graph_frame_offsets: offset 0)
+        "$MTB_PY" graphframe/bin/frame_convert.py to-panel < "${tmp}.raw" > "$tmp"
+        rm -f "${tmp}.raw"
+        mv -n "$tmp" "$need" || true; rm -f "$tmp"
+    fi
+    local sha; sha="$(sha256sum "$need" | cut -c1-16)"
+    if [[ -n "${SLURM_ARRAY_TASK_ID:-}" ]]; then
+        local acc rpath miss nt="${SLURM_CPUS_PER_TASK:-4}"
+        acc="$(awk -v n="$SLURM_ARRAY_TASK_ID" 'NR==n' "$list")"
+        [[ -n "$acc" ]] || { _say "projections: task ${SLURM_ARRAY_TASK_ID} past the last genome"; return 0; }
+        if [[ "$(mtb_kv "${mk}/${acc}.done" positions_sha 2>/dev/null)" == "$sha" ]]; then
+            _say "projections: ${acc} already done for this position list"; return 0
+        fi
+        rpath="$(grep -m1 "^${acc}#" "${BUILD}/assets/paths.txt" || true)"
+        [[ -n "$rpath" ]] || { echo "FATAL: ${acc} is not a graph path" >&2; return 1; }
+        miss="${mk}/${acc}.miss.$$"
+        "$MTB_PY" bin/proj_store.py missing --store "$store" --ref "$acc" --need "$need" --out "$miss"
+        if [[ -s "$miss" ]]; then
+            _say "projections: ${acc}: $(grep -vc '^#' "$miss") of $(wc -l < "$need") positions to project"
+            "$MTB_ODGI" position -i "$OG" -F "$miss" -r "$rpath" -t "$nt" 2> "${mk}/${acc}.odgi.log" \
+              | "$MTB_PY" graphframe/bin/frame_convert.py from-panel > "${miss}.pos"
+            # odgi returning nothing for positions with no equivalent in the path
+            # is not a failure (the remainder bin/proj_store.py documents)
+            [[ -s "${miss}.pos" ]] && "$MTB_PY" bin/proj_store.py add --store "$store" --ref "$acc" --result "${miss}.pos"
+            rm -f "${miss}.pos"
+        fi
+        rm -f "$miss"
+        printf 'completed\t%s\npositions_sha\t%s\n' "$(date -Is)" "$sha" > "${mk}/${acc}.done"
+        _say "projections: ${acc} done"
+        return 0
+    fi
+    # without a task id: every genome must be done for this position list
+    local n_all n_ok=0 acc
+    n_all="$(grep -c . "$list")"
+    while read -r acc; do
+        [[ "$(mtb_kv "${mk}/${acc}.done" positions_sha 2>/dev/null)" == "$sha" ]] && n_ok=$((n_ok + 1))
+    done < "$list"
+    _say "projections: ${n_ok} of ${n_all} genomes projected for $(wc -l < "$need") positions"
+    [[ "$n_ok" -eq "$n_all" ]] || { echo "[P0] step 'projections' NOT marked done; submit the array" >&2; return 1; }
+    _inputs positions_sha256 "$need"; _mark projections
+}
+
 _run() { _STEP_KEYS=(); "step_$1"; }
 if [[ -n "$STEP" ]]; then
     _run "$STEP"
@@ -872,4 +960,6 @@ else
     _say "      MTB_BUILD_DIR=${BUILD} bash is6110/bin/p1i_build_matched.sh"
     _say "  ANC_TREE=.. ANC_OUTGROUPS=.. [ANC_KIT=.. ANC_KIT_EVENTS=..] bash bin/p0_prepare.sh --step ancestral   # docs/PANEL_TREE.md"
     _say "  bash bin/p0_prepare.sh --step manifest"
+    _say "  before a large cohort, project every genome (docs: step_projections):"
+    _say "      PROJ_EXTRA=<keys.tsv,probes> sbatch -c 4 -t 0-06:00 --array=1-\$(wc -l < ${BUILD}/assets/accessions.txt) bin/p0_prepare.sh --step projections"
 fi

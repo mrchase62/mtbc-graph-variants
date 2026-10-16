@@ -159,6 +159,14 @@ vcf_decompose.sh 8 on shared; vg_deconstruct.sh 8; t2_validate_accessory.sh
   4. Adopt only if discordance and splits drop with no loss of variants.
      Switching cost: P0 expects a pggb .og (small adapter; odgi/vg read
      MC's GFA), then P0 and every cohort pass rerun on the new build.
+- **Before the 10K: run P0 step `projections` on build 3893a3762ed1** (added
+  2026-10-15, user: "make sure that we have all the projections done before
+  starting the 10K"; "add the P0 step but don't run it now"). Not run yet.
+  ~200-250 CPU-hours, 2-3 h wall. From runroot, once new1k_p200 is final:
+  `PROJ_EXTRA=refbias/new1k_p200/p5/keys.tsv,refbias/work/new1k_p200_p5svgt/probes.iv.txt
+  sbatch -c 4 -t 0-06:00 --array=1-200 bin/p0_prepare.sh --step projections`
+  (with the build's OG and env as in the P0 entry), then
+  `bash bin/p0_prepare.sh --step projections` to check and mark it done.
 - **P0 done on P200 (2026-10-14): build `runroot/refbias/build/3893a3762ed1`.**
   Graph 200 genomes, 603 CPU-h. Build env overrides: MTB_DATA, MTB_FASTAS,
   MTB_GRAPHS -> `runroot/panel/P200`; MTB_OUTGROUP=GCF_022870265;

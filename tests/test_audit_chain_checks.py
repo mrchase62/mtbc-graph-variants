@@ -37,5 +37,16 @@ class ChainChecks(unittest.TestCase):
         self.assertNotIn("FAILURE", r.stdout)
 
 
+class P0Projections(unittest.TestCase):
+    def test_step_exists_and_is_not_in_the_default_run(self):
+        src = open(os.path.join(R, "bin/p0_prepare.sh")).read()
+        self.assertIn("step_projections()", src)
+        default = src[src.rindex('if [[ -n "$STEP" ]]; then'):]
+        self.assertNotIn("_run projections", default)
+        self.assertIn("PROJ_EXTRA", src)
+        # per-genome completion is tied to the position list it was made for
+        self.assertIn("positions_sha", src)
+
+
 if __name__ == "__main__":
     unittest.main()
