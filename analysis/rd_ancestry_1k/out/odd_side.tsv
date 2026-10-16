@@ -1,0 +1,11 @@
+class	component	in_mask	ALT_side(false_ALT?)	REF_side(false_REF?)	unclear
+ACC	level1	1	4	0	14
+DEL	called	0	1	0	0
+DEL	interval	0	7	0	0
+DEL	interval	1	998	23	828
+DEL	small_allele	1	18	0	5
+INS	called	1	0	0	1
+INS	small_allele	0	29	0	5
+INS	small_allele	1	14	0	8
+IS6110	.	0	9	0	1
+IS6110_node	.	0	2	0	0
