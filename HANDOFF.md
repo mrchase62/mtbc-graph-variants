@@ -1,8 +1,66 @@
 # Handoff: one rerun to bring production data up to date
 
-Updated 2026-10-12 (see "Start here (2026-10-12)"; older sections kept below). Repository `mtbc-graph-variants`, branch `main`
+Updated 2026-10-16 (see "Start here (2026-10-16)"; older sections kept below). Repository `mtbc-graph-variants`, branch `main`
 (protected: no force-push, no deletion). `analysis/` and the paper PDF are
 untracked; `analysis/` lives on durable storage with the repository.
+
+## Start here (2026-10-16): the 1K on the new graph, and a pipeline review
+
+**The user's instruction (2026-10-16), in force:** "Get the 1K to the end so I
+can figure out what is going wrong and how to fix things more efficiently."
+Make NO pipeline changes on the fly. If a step fails, report what failed and
+why, and wait. Next deliverable: a step-by-step description of the whole
+pipeline in simple terms (for each step: what it does, how, inputs/outputs,
+and what has actually been checked, with the evidence file), so the user can
+review section by section before anything further (including the 10K).
+
+**Where things stand**
+- **New graph P200** (200 genomes, demand-chosen from 33,364 isolates):
+  build `runroot/refbias/build/3893a3762ed1`; graph
+  `runroot/panel/P200/graphs/P200.s10k.k23.K15`. Build env: MTB_DATA,
+  MTB_FASTAS, MTB_GRAPHS -> `runroot/panel/P200`; MTB_OUTGROUP=GCF_022870265;
+  ASM_DIR, ACCESSORY_DIR, PANEL_FASTA under `runroot/panel/P200`; submit as
+  `MTB_BUILD_DIR=refbias/build/3893a3762ed1 bash bin/refbias_run.sh <cohort>`
+  from runroot.
+- **new1k_p200** (1,000 L1-4 isolates, fold-back <= 2.5): full chain done;
+  merged VCF `runroot/refbias/new1k_p200/p5/merged.vcf.gz` passes the cohort
+  gate (`p5/gate.tsv`, 17 checks, 0 FAIL). **Association running** (job
+  53459718 via `assoc/bin/cohort_assoc_tail_job.sh`; tree then tests; phenotype
+  RRDR carriers `runroot/assoc/new1k_p200/rrdr_carriers.txt`). Report the DR
+  positive controls first when it finishes.
+- **Truth cohorts on the same build:** `ctrl25_p200` (25 in-panel Marin
+  controls) and `marin36_p200` (35 non-control Marin isolates with hybrid
+  assemblies). Scores: `analysis/foldback_mixed/ctrl25_p200_score.py`;
+  combined after-fix VCFs scored by the SV-EVAL agent (numbers in the SV-EVAL
+  entry). marin36's own chain finished; re-run its P5 tail on the current
+  code before scoring it as final.
+- **Validation of new1k so far:** SNPs (P1 frame all recovered, DR SNPs
+  2,343/2,345, old-build agreement 99.996%): `analysis/new1k_validation/`.
+  SVs/insertions: `analysis/sv_eval_1k/`; RDs and near-identical pairs:
+  `analysis/rd_ancestry_1k/`.
+
+**Merged this week (main, pushed through b60feae; later commits local):**
+parsimony polarity (option A); AA-1; SPLIT-1 (+ truncated-insertion
+extension); ABS-1/ABS-2; SV-EVAL-1..4; P5 per-reference projection;
+IS6110 duplicate-site resolution; chain watchdog (`bin/chain_watch.sh`,
+default with every chain); P5 fail-fast; projection preflight; P0 step
+`projections` (not run); cohort gate (`bin/cohort_gate.py`, pass `p5gate`);
+association identical-pattern collapse + IS6110 sensitivity run; association
+trees under `assoc/<cohort>/trees` via the job wrapper. 532 tests pass.
+
+**Open problems (not fixed):** RD-1..5 (below, in the SV-EVAL entry);
+caller-only SVs (insertions, and deletions in one isolate) are genotyped only
+where a caller found them, NOCALL elsewhere with no EV (gate reports them
+apart; singletons only associate through binning); hierarchical IS6110-on-
+accessory association (undecided); OUT-1 route B; NAME-1.
+
+**Costs this rebuild (CPU-hours):** graph 603; new1k P1-P4b ~690; P5 first
+attempt ~1,060 (lost to the projection design, fixed); P5 tail reruns ~330;
+controls/Marin ~100; analyses ~30.
+
+**Lessons the user asked to be applied:** run a changed step on ~20 isolates
+before a full array (memory/time); the chain watchdog and gate are the
+acceptance tests; report failures, do not patch on the fly.
 
 ## Start here (2026-10-12): SV pipeline wrap-up, fold-back work
 
